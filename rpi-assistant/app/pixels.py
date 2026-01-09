@@ -12,8 +12,9 @@ from .led_pattern import LedPattern
 class Pixels:
     PIXELS_N = 12
 
-    def __init__(self, pattern=LedPattern):
-        self.pattern = pattern(show=self.show)
+    def __init__(self, pattern=LedPattern, num_pixels=None):
+        self.PIXELS_N = num_pixels if num_pixels is not None else self.PIXELS_N
+        self.pattern = pattern(show=self.show, number=self.PIXELS_N)
 
         self.dev = APA102(num_led=self.PIXELS_N)
         

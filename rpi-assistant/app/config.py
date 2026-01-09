@@ -25,6 +25,7 @@ class WakeWordConfig:
     """Wake word detection configuration."""
     threshold: float = 0.5
     cooldown_seconds: float = 1.0
+    models: Optional[list[str]] = None  # None = load all default models
 
 
 @dataclass
@@ -59,6 +60,12 @@ class AudioOutputConfig:
 
 
 @dataclass
+class LEDConfig:
+    """LED configuration."""
+    count: int = 12  # Number of LEDs (12 for ReSpeaker 4-Mic, 3 for 2-Mic pHAT)
+
+
+@dataclass
 class LoggingConfig:
     """Logging configuration."""
     log_file: str = "openai_interactions.log"
@@ -73,6 +80,7 @@ class Config:
     recording: RecordingConfig
     openai: OpenAIConfig
     audio_output: AudioOutputConfig
+    led: LEDConfig
     logging: LoggingConfig
 
 
@@ -143,9 +151,16 @@ def load_config(config_path: Optional[str] = None) -> Config:
     )
     
     # Load Wake Word Configuration
+    models_str = get_value("wakeword", "models", "WAKEWORD_MODELS", None, str)
+    models_list = None
+    if models_str:
+        # Parse comma-separated list of models
+        models_list = [m.strip() for m in models_str.split(",") if m.strip()]
+    
     wake_word = WakeWordConfig(
         threshold=get_value("wakeword", "threshold", "WAKEWORD_THRESHOLD", 0.5, float),
         cooldown_seconds=get_value("wakeword", "cooldown_seconds", "WAKEWORD_COOLDOWN", 1.0, float),
+        models=models_list,
     )
     
     # Load Recording Configuration
@@ -184,6 +199,11 @@ def load_config(config_path: Optional[str] = None) -> Config:
         tts_output_path=get_value("audio_output", "tts_output_path", "TTS_OUTPUT_PATH", "/tmp/response.mp3", str),
     )
     
+    # Load LED Configuration
+    led_config = LEDConfig(
+        count=get_value("led", "count", "LED_COUNT", 12, int),
+    )
+    
     # Load Logging Configuration
     logging_config = LoggingConfig(
         log_file=get_value("logging", "log_file", "LOG_FILE", "openai_interactions.log", str),
@@ -196,5 +216,6 @@ def load_config(config_path: Optional[str] = None) -> Config:
         recording=recording,
         openai=openai_config,
         audio_output=audio_output,
+        led=led_config,
         logging=logging_config,
     )

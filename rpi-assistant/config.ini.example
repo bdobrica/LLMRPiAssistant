@@ -15,6 +15,13 @@ device_match = seeed            # Substring to match audio device name
 threshold = 0.5                 # Detection threshold (0.0-1.0, higher = less sensitive)
 cooldown_seconds = 1.0          # Minimum time between wake word detections
 
+# Comma-separated list of wake word models to load
+# Leave empty or comment out to load all default models
+# Example models: hey_jarvis, alexa, hey_mycroft, hey_rhasspy
+# Use fewer models to reduce memory usage on limited devices
+# models = hey_jarvis
+models =
+
 [recording]
 # Voice recording settings
 max_duration_seconds = 10.0     # Maximum recording length
@@ -42,6 +49,10 @@ temperature = 0.7               # Response creativity (0.0-2.0)
 # System prompt for the assistant
 system_prompt = You are a helpful voice assistant running on a Raspberry Pi. 
     Provide concise, friendly responses suitable for voice interaction.
+
+[led]
+# LED configuration
+count = 12                      # Number of LEDs (12 for ReSpeaker 4-Mic Array, 3 for 2-Mic pHAT)
 
 [logging]
 # Logging configuration

@@ -58,8 +58,8 @@ def main():
         # Initialize LED pixels if available
         if PIXELS_AVAILABLE:
             try:
-                pixels = Pixels()
-                print("✨ LED pixels initialized")
+                pixels = Pixels(num_pixels=config.led.count)
+                print(f"✨ LED pixels initialized ({config.led.count} LEDs)")
             except Exception as e:
                 print(f"⚠️  Could not initialize pixels: {e}")
                 pixels = None

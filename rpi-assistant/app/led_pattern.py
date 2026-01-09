@@ -120,4 +120,4 @@ class LedPattern(object):
             time.sleep(0.03)
 
     def off(self):
-        self.show([0] * 4 * 12)
+        self.show([0] * 4 * self.pixels_number)

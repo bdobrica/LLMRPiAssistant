@@ -93,7 +93,10 @@ class WakeWordRecorder:
         self.pixels = pixels
         
         # Initialize wake word model
-        self.model = Model()
+        if wake_word_config.models:
+            self.model = Model(wakeword_models=wake_word_config.models)
+        else:
+            self.model = Model()  # Load all default models
         
         # State management
         self.state = "LISTEN_WAKE"
