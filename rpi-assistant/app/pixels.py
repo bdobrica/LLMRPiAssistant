@@ -1,11 +1,13 @@
 
-from .apa102 import APA102
-import time
-import threading
-from gpiozero import LED
 import queue
+import threading
+import time
 
+from gpiozero import LED
+
+from .apa102 import APA102
 from .led_pattern import LedPattern
+
 
 class Pixels:
     PIXELS_N = 12

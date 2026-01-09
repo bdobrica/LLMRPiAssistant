@@ -24,7 +24,7 @@ setup: install-deps create-venv install-voicecard install-assistant reboot-promp
 install-deps:
 	@echo "=== Installing system dependencies ==="
 	sudo apt-get update
-	sudo apt-get install -y python3-venv python3-pip libportaudio2 portaudio19-dev alsa-utils git
+	sudo apt-get install -y python3-venv python3-pip libportaudio2 portaudio19-dev alsa-utils git ffmpeg
 
 # Create Python virtual environment
 create-venv:

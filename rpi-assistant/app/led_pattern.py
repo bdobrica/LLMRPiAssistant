@@ -3,6 +3,7 @@
 import math
 import time
 
+
 class LedPattern(object):
     def __init__(self, show=None, number=12):
         self.pixels_number = number

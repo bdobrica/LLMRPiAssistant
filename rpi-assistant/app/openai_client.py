@@ -92,6 +92,29 @@ class OpenAIClient:
         except Exception as e:
             raise Exception(f"Chat completion failed: {e}")
     
+    def generate_speech(self, text: str, output_path: str, voice: str = "alloy") -> None:
+        """Generate speech from text using OpenAI TTS.
+        
+        Args:
+            text: Text to convert to speech.
+            output_path: Path to save the audio file (MP3).
+            voice: Voice to use (alloy, echo, fable, onyx, nova, shimmer).
+        
+        Raises:
+            Exception: If TTS generation fails.
+        """
+        try:
+            response = self.client.audio.speech.create(
+                model=self.config.tts_model,
+                voice=voice,
+                input=text,
+            )
+            
+            # Stream to file
+            response.stream_to_file(output_path)
+        except Exception as e:
+            raise Exception(f"TTS generation failed: {e}")
+    
     def process_voice_command(self, audio_file_path: str) -> tuple[str, str, dict]:
         """Complete pipeline: transcribe audio and get chat response.
         

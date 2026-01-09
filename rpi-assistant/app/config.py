@@ -43,9 +43,19 @@ class OpenAIConfig:
     api_key: str
     whisper_model: str = "whisper-1"
     chat_model: str = "gpt-4o-mini"
+    tts_model: str = "tts-1"
+    tts_voice: str = "alloy"  # alloy, echo, fable, onyx, nova, shimmer
     system_prompt: str = "You are a helpful voice assistant."
     max_tokens: int = 500
     temperature: float = 0.7
+
+
+@dataclass
+class AudioOutputConfig:
+    """Audio output configuration for TTS."""
+    enabled: bool = True
+    device: str = "hw:0,0"  # ALSA device for playback
+    tts_output_path: str = "/tmp/response.mp3"
 
 
 @dataclass
@@ -62,6 +72,7 @@ class Config:
     wake_word: WakeWordConfig
     recording: RecordingConfig
     openai: OpenAIConfig
+    audio_output: AudioOutputConfig
     logging: LoggingConfig
 
 
@@ -158,10 +169,19 @@ def load_config(config_path: Optional[str] = None) -> Config:
         api_key=api_key,
         whisper_model=get_value("openai", "whisper_model", "OPENAI_WHISPER_MODEL", "whisper-1", str),
         chat_model=get_value("openai", "chat_model", "OPENAI_CHAT_MODEL", "gpt-4o-mini", str),
+        tts_model=get_value("openai", "tts_model", "OPENAI_TTS_MODEL", "tts-1", str),
+        tts_voice=get_value("openai", "tts_voice", "OPENAI_TTS_VOICE", "alloy", str),
         system_prompt=get_value("openai", "system_prompt", "OPENAI_SYSTEM_PROMPT", 
                                 "You are a helpful voice assistant.", str),
         max_tokens=get_value("openai", "max_tokens", "OPENAI_MAX_TOKENS", 500, int),
         temperature=get_value("openai", "temperature", "OPENAI_TEMPERATURE", 0.7, float),
+    )
+    
+    # Load Audio Output Configuration
+    audio_output = AudioOutputConfig(
+        enabled=get_value("audio_output", "enabled", "AUDIO_OUTPUT_ENABLED", True, bool),
+        device=get_value("audio_output", "device", "AUDIO_OUTPUT_DEVICE", "hw:0,0", str),
+        tts_output_path=get_value("audio_output", "tts_output_path", "TTS_OUTPUT_PATH", "/tmp/response.mp3", str),
     )
     
     # Load Logging Configuration
@@ -175,5 +195,6 @@ def load_config(config_path: Optional[str] = None) -> Config:
         wake_word=wake_word,
         recording=recording,
         openai=openai_config,
+        audio_output=audio_output,
         logging=logging_config,
     )

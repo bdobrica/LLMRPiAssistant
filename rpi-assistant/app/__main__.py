@@ -4,8 +4,10 @@ A voice-controlled assistant using:
 - OpenWakeWord for wake word detection
 - OpenAI Whisper for speech transcription
 - OpenAI GPT for intelligent responses
+- OpenAI TTS for voice responses
 """
 import signal
+import subprocess
 import sys
 from pathlib import Path
 
@@ -96,6 +98,52 @@ def main():
                 print(f"\n📊 Tokens: {usage['total_tokens']} "
                       f"(prompt: {usage['prompt_tokens']}, "
                       f"completion: {usage['completion_tokens']})")
+                
+                # Generate and play TTS response
+                if config.audio_output.enabled:
+                    try:
+                        print("\n🔊 Generating speech...")
+                        if pixels:
+                            pixels.speak()
+                        
+                        # Generate TTS as MP3
+                        mp3_path = config.audio_output.tts_output_path
+                        wav_path = mp3_path.replace('.mp3', '.wav')
+                        
+                        openai_client.generate_speech(
+                            text=response,
+                            output_path=mp3_path,
+                            voice=config.openai.tts_voice,
+                        )
+                        
+                        # Convert MP3 to WAV with correct sample rate using ffmpeg
+                        print("Converting audio format...")
+                        subprocess.run(
+                            [
+                                "ffmpeg", "-y", "-i", mp3_path,
+                                "-ar", "48000",  # Resample to 48kHz (common for audio output)
+                                "-ac", "2",       # Stereo
+                                "-sample_fmt", "s16",  # 16-bit signed
+                                wav_path
+                            ],
+                            check=True,
+                            capture_output=True,
+                        )
+                        
+                        # Play the WAV audio using aplay
+                        subprocess.run(
+                            ["aplay", "-D", config.audio_output.device, wav_path],
+                            check=True,
+                            capture_output=True,
+                        )
+                        
+                        if pixels:
+                            pixels.listen()
+                    except Exception as e:
+                        print(f"\n⚠️  TTS playback error: {e}")
+                        if pixels:
+                            pixels.listen()
+                
                 print("\n" + "=" * 60)
                 print("Listening for wake word...\n")
                 
