@@ -241,9 +241,18 @@ class WakeWordRecorder:
             
             # Auto-transition from PROCESSING to LISTEN_WAKE after drain period
             if current_state == "PROCESSING" and time.time() >= self.resume_listening_at:
+                # Clear queue one more time right before resuming to ensure fresh audio
+                cleared = 0
+                while not self.audio_queue.empty():
+                    try:
+                        self.audio_queue.get_nowait()
+                        cleared += 1
+                    except queue.Empty:
+                        break
+                
                 self.state = "LISTEN_WAKE"
                 current_state = "LISTEN_WAKE"
-                print("\nResuming wake word detection.\n")
+                print(f"\nResuming wake word detection (cleared {cleared} chunks accumulated during wait).\n")
             
             # Always maintain pre-roll buffer (but only when not processing)
             if current_state != "PROCESSING":
@@ -264,6 +273,7 @@ class WakeWordRecorder:
         with self.lock:
             if not self.running:
                 return
+            queue_size = self.audio_queue.qsize()
         
         # openwakeword requires INT16 input (no lock needed for read-only operation)
         mono_i16 = float_to_int16(mono)
@@ -275,7 +285,7 @@ class WakeWordRecorder:
                 with self.lock:
                     if (now - self.last_wake) > self.wake_word_config.cooldown_seconds:
                         self.last_wake = now
-                        print(f"\n🔥 Wakeword: {name} ({score:.3f}) -> recording...")
+                        print(f"\n🔥 Wakeword: {name} ({score:.3f}) [queue: {queue_size}] -> recording...")
                         self._start_recording(mono)
                         break
     
@@ -366,24 +376,22 @@ class WakeWordRecorder:
         self._reset_model_state()
         
         # Clear the audio queue to drop all buffered overflow chunks
+        cleared = 0
+        while not self.audio_queue.empty():
+            try:
+                self.audio_queue.get_nowait()
+                cleared += 1
+            except queue.Empty:
+                break
+        
+        print(f"Cleared {cleared} buffered audio chunks from queue.")
+        
         with self.lock:
             if self.running:
-                # Drain the queue completely
-                cleared = 0
-                while not self.audio_queue.empty():
-                    try:
-                        self.audio_queue.get_nowait()
-                        cleared += 1
-                    except queue.Empty:
-                        break
-                
-                # Stay in PROCESSING state for 2 seconds for any final drain
-                # State will auto-transition back to LISTEN_WAKE in _process_chunk
-                self.resume_listening_at = time.time() + 2.0
+                # Stay in PROCESSING state for 3 seconds
+                # This gives time for a few fresh chunks to accumulate
+                self.resume_listening_at = time.time() + 3.0
                 self.last_wake = time.time()
-                
-                if cleared > 0:
-                    print(f"Cleared {cleared} buffered audio chunks.")
         
         # Visual indicator
-        print("Waiting for fresh audio...\n")
+        print("Waiting 3 seconds for fresh audio...\n")
