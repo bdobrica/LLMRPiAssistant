@@ -75,6 +75,7 @@ class WakeWordRecorder:
         wake_word_config: WakeWordConfig,
         recording_config: RecordingConfig,
         on_recording_complete: Optional[Callable[[str], None]] = None,
+        pixels = None,
     ):
         """Initialize wake word recorder.
         
@@ -83,11 +84,13 @@ class WakeWordRecorder:
             wake_word_config: Wake word detection configuration.
             recording_config: Recording behavior configuration.
             on_recording_complete: Callback when recording is saved. Receives file path.
+            pixels: Optional Pixels instance for LED feedback.
         """
         self.audio_config = audio_config
         self.wake_word_config = wake_word_config
         self.recording_config = recording_config
         self.on_recording_complete = on_recording_complete
+        self.pixels = pixels
         
         # Initialize wake word model
         self.model = Model()
@@ -96,6 +99,7 @@ class WakeWordRecorder:
         self.state = "LISTEN_WAKE"
         self.last_wake = 0.0
         self.resume_listening_at = 0.0  # Timestamp when to resume listening after processing
+        self.skip_chunks = 0  # Number of chunks to skip feeding to model after resuming
         
         # Thread-safe audio queue for callback -> processing thread
         self.audio_queue = queue.Queue()
@@ -136,6 +140,9 @@ class WakeWordRecorder:
         print(f"Wake threshold: {self.wake_word_config.threshold}")
         print(f"Silence threshold (RMS): {self.recording_config.silence_rms_threshold}")
         print("Listening... Ctrl+C to stop.\n")
+        
+        if self.pixels:
+            self.pixels.listen()
         
         self.running = True
         
@@ -197,6 +204,10 @@ class WakeWordRecorder:
                 self.audio_queue.get_nowait()
             except queue.Empty:
                 break
+        
+        # Turn off LEDs
+        if self.pixels:
+            self.pixels.off()
     
     def _reset_model_state(self) -> None:
         """Reset openwakeword model internal state to clear buffers."""
@@ -252,7 +263,12 @@ class WakeWordRecorder:
                 
                 self.state = "LISTEN_WAKE"
                 current_state = "LISTEN_WAKE"
-                print(f"\nResuming wake word detection (cleared {cleared} chunks accumulated during wait).\n")
+                # Skip feeding 30 chunks to model to flush its internal prediction buffers
+                # This allows the model's sliding window state to fill with fresh audio
+                self.skip_chunks = 30
+                print(f"\nResuming wake word detection (cleared {cleared} chunks, skipping next 30 for model flush).\n")
+                if self.pixels:
+                    self.pixels.listen()
             
             # Always maintain pre-roll buffer (but only when not processing)
             if current_state != "PROCESSING":
@@ -273,6 +289,16 @@ class WakeWordRecorder:
         with self.lock:
             if not self.running:
                 return
+            
+            # Skip checking wake word for first N chunks after resuming
+            # This lets the model's internal state flush with fresh audio
+            if self.skip_chunks > 0:
+                self.skip_chunks -= 1
+                # Still feed to model to flush its state, but ignore predictions
+                mono_i16 = float_to_int16(mono)
+                self.model.predict(mono_i16)
+                return
+            
             queue_size = self.audio_queue.qsize()
         
         # openwakeword requires INT16 input (no lock needed for read-only operation)
@@ -286,6 +312,8 @@ class WakeWordRecorder:
                     if (now - self.last_wake) > self.wake_word_config.cooldown_seconds:
                         self.last_wake = now
                         print(f"\n🔥 Wakeword: {name} ({score:.3f}) [queue: {queue_size}] -> recording...")
+                        if self.pixels:
+                            self.pixels.wakeup()
                         self._start_recording(mono)
                         break
     
@@ -362,6 +390,10 @@ class WakeWordRecorder:
         
         duration = len(audio) / self.audio_config.sample_rate
         print(f"\n✅ Saved {self.recording_config.output_path} ({duration:.2f}s, stop={reason})\n")
+        
+        # Show processing/thinking animation
+        if self.pixels:
+            self.pixels.think()
         
         # Trigger callback if provided (only if still running)
         # This may take several seconds (OpenAI API call)

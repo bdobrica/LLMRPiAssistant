@@ -14,16 +14,26 @@ from .config import load_config
 from .logger import InteractionLogger
 from .openai_client import OpenAIClient
 
+try:
+    from .pixels import Pixels
+    PIXELS_AVAILABLE = True
+except ImportError:
+    PIXELS_AVAILABLE = False
+    print("Warning: Pixels library not available (requires apa102, gpiozero)")
+
 
 def main():
     """Main application entry point."""
     recorder = None
+    pixels = None
     
     def cleanup():
         """Cleanup resources before exit."""
         if recorder is not None:
             print("\n🧹 Cleaning up audio resources...")
             recorder.stop()
+        if pixels is not None:
+            pixels.off()
     
     def signal_handler(signum, frame):
         """Handle termination signals."""
@@ -42,6 +52,15 @@ def main():
         # Initialize components
         logger = InteractionLogger(config.logging)
         openai_client = OpenAIClient(config.openai)
+        
+        # Initialize LED pixels if available
+        if PIXELS_AVAILABLE:
+            try:
+                pixels = Pixels()
+                print("✨ LED pixels initialized")
+            except Exception as e:
+                print(f"⚠️  Could not initialize pixels: {e}")
+                pixels = None
         
         print("=" * 60)
         print("🤖 RPI Voice Assistant")
@@ -91,6 +110,7 @@ def main():
             config.wake_word,
             config.recording,
             on_recording_complete=on_recording_complete,
+            pixels=pixels,
         )
         
         recorder.start()

@@ -2,3 +2,5 @@ numpy
 openai
 openwakeword
 sounddevice
+gpiozero
+spidev
