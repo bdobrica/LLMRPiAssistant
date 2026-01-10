@@ -1,12 +1,13 @@
 .PHONY: setup install-deps create-venv install-voicecard install-assistant reboot-prompt help
 
 # Variables
+SHELL_PWD := $(shell pwd)
 VENV_DIR := /opt/venvs/rpi-assistant
 PYTHON := $(VENV_DIR)/bin/python3
 PIP := $(VENV_DIR)/bin/pip
-APP_DIR := $(shell pwd)/rpi-assistant
-VOICECARD_DIR := $(shell pwd)/seeed-voicecard
-PATCH_FILE := $(shell pwd)/seeed-voicecard.patch
+APP_DIR := $(SHELL_PWD)/rpi-assistant
+VOICECARD_DIR := $(SHELL_PWD)/seeed-voicecard
+PATCH_FILE := $(SHELL_PWD)/seeed-voicecard.patch
 
 # Default target
 help:
@@ -45,7 +46,7 @@ install-voicecard:
 		echo "seeed-voicecard directory already exists"; \
 	fi
 	@echo "Applying patch..."
-	cd seeed-voicecard && git apply $(PATCH_FILE) || echo "Patch may already be applied"
+	cd seeed-voicecard && git checkout v6.14 && git apply $(PATCH_FILE) || echo "Patch may already be applied"
 	@echo "Running seeed-voicecard install script..."
 	cd seeed-voicecard && sudo ./install.sh
 
@@ -53,6 +54,7 @@ install-voicecard:
 install-assistant:
 	@echo "=== Installing rpi-assistant CLI command ==="
 	@echo '#!/bin/bash' | sudo tee /usr/local/bin/rpi-assistant > /dev/null
+	@echo 'cd ${APP_DIR}' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
 	@echo 'exec $(PYTHON) -m app "$$@"' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
 	sudo chmod +x /usr/local/bin/rpi-assistant
 	@echo "rpi-assistant command installed successfully"
