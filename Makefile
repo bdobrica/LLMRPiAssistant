@@ -1,4 +1,4 @@
-.PHONY: setup install-deps create-venv install-voicecard install-assistant reboot-prompt help
+.PHONY: setup install-deps create-venv install-voicecard install-assistant patch-openwakeword reboot-prompt help
 
 # Variables
 SHELL_PWD := $(shell pwd)
@@ -7,7 +7,8 @@ PYTHON := $(VENV_DIR)/bin/python3
 PIP := $(VENV_DIR)/bin/pip
 APP_DIR := $(SHELL_PWD)/rpi-assistant
 VOICECARD_DIR := $(SHELL_PWD)/seeed-voicecard
-PATCH_FILE := $(SHELL_PWD)/seeed-voicecard.patch
+VOICECARD_PATCH := $(SHELL_PWD)/seeed-voicecard.patch
+OPENWAKEWORD_PATCH := $(SHELL_PWD)/openwakeword.patch
 
 # Default target
 help:
@@ -17,9 +18,10 @@ help:
 	@echo "  make create-venv    - Create Python virtual environment"
 	@echo "  make install-voicecard - Install and patch seeed-voicecard"
 	@echo "  make install-assistant - Install rpi-assistant as CLI command"
+	@echo "  make patch-openwakeword - Apply openwakeword bug fix patch"
 
 # Complete setup
-setup: install-deps create-venv install-voicecard install-assistant reboot-prompt
+setup: install-deps create-venv install-voicecard patch-openwakeword install-assistant reboot-prompt
 
 # Install system dependencies
 install-deps:
@@ -46,7 +48,7 @@ install-voicecard:
 		echo "seeed-voicecard directory already exists"; \
 	fi
 	@echo "Applying patch..."
-	cd seeed-voicecard && git checkout v6.14 && git apply $(PATCH_FILE) || echo "Patch may already be applied"
+	cd seeed-voicecard && git checkout v6.14 && git apply $(VOICECARD_PATCH) || echo "Patch may already be applied"
 	@echo "Running seeed-voicecard install script..."
 	cd seeed-voicecard && sudo ./install.sh
 
@@ -58,6 +60,25 @@ install-assistant:
 	@echo 'exec $(PYTHON) -m app "$$@"' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
 	sudo chmod +x /usr/local/bin/rpi-assistant
 	@echo "rpi-assistant command installed successfully"
+
+# Apply openwakeword bug fix patch
+patch-openwakeword:
+	@echo "=== Applying openwakeword bug fix patch ==="
+	@OPENWAKEWORD_MODEL=$$(find $(VENV_DIR)/lib -name "model.py" -path "*/openwakeword/model.py" 2>/dev/null | head -n1); \
+	if [ -z "$$OPENWAKEWORD_MODEL" ]; then \
+		echo "⚠️  Warning: openwakeword model.py not found. Skipping patch."; \
+		echo "   Run 'make patch-openwakeword' after installing openwakeword."; \
+	else \
+		echo "Found openwakeword at: $$OPENWAKEWORD_MODEL"; \
+		if grep -q "Fix kwargs for AudioFeatures" "$$OPENWAKEWORD_MODEL"; then \
+			echo "✅ Patch already applied"; \
+		else \
+			echo "Applying patch..."; \
+			cd "$$(dirname $$OPENWAKEWORD_MODEL)" && sudo patch -p1 < $(OPENWAKEWORD_PATCH) && \
+			echo "✅ Patch applied successfully" || \
+			echo "❌ Failed to apply patch"; \
+		fi \
+	fi
 
 # Prompt for reboot
 reboot-prompt:

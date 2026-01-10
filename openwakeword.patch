@@ -1,0 +1,11 @@
+--- a/model.py
++++ b/model.py
+@@ -135,6 +135,9 @@
+         if vad_threshold > 0:
+             self.vad = openwakeword.VAD()
+
++        # Fix kwargs for AudioFeatures
++        _ = kwargs.pop("wakeword_models", None)
++
+         # Create AudioFeatures object
+         self.preprocessor = AudioFeatures(**kwargs)
