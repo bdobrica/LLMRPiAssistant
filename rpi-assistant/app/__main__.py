@@ -108,7 +108,6 @@ def main():
                         
                         # Generate TTS as MP3
                         mp3_path = config.audio_output.tts_output_path
-                        wav_path = mp3_path.replace('.mp3', '.wav')
                         
                         openai_client.generate_speech(
                             text=response,
@@ -116,26 +115,17 @@ def main():
                             voice=config.openai.tts_voice,
                         )
                         
-                        # Convert MP3 to WAV with correct sample rate using ffmpeg
-                        print("Converting audio format...")
-                        subprocess.run(
-                            [
-                                "ffmpeg", "-y", "-i", mp3_path,
-                                "-ar", "48000",  # Resample to 48kHz (common for audio output)
-                                "-ac", "2",       # Stereo
-                                "-sample_fmt", "s16",  # 16-bit signed
-                                wav_path
-                            ],
-                            check=True,
+                        # Play the MP3 audio using mpg123
+                        result = subprocess.run(
+                            ["mpg123", "-a", config.audio_output.device, mp3_path],
                             capture_output=True,
+                            text=True,
                         )
                         
-                        # Play the WAV audio using aplay
-                        subprocess.run(
-                            ["aplay", "-D", config.audio_output.device, wav_path],
-                            check=True,
-                            capture_output=True,
-                        )
+                        if result.returncode != 0:
+                            print(f"mpg123 stderr: {result.stderr}")
+                            print(f"mpg123 stdout: {result.stdout}")
+                            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
                         
                         if pixels:
                             pixels.listen()
