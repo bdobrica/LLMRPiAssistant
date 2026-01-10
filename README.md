@@ -18,9 +18,9 @@ LLMRPiAssistant is a fully-featured voice assistant that brings Alexa-like funct
 
 ### Hardware Requirements
 
-- **Raspberry Pi** (3B+, 4, or 5 recommended)
+- **Raspberry Pi** (Zero 2 W, 3A+, 4, or 5 recommended)
 - **SeeedStudio reSpeaker HAT** (2-Mic or 4-Mic Array)
-- **Speaker** (3.5mm audio jack or USB/Bluetooth speaker)
+- **Speaker** (3.5mm audio jack, directly connected speaker or USB speaker; Bluetooth should work with BlueZ but haven't tried)
 - Internet connection for OpenAI API access
 
 ### Software Dependencies
