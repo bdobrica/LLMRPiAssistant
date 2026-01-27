@@ -1,0 +1,13 @@
+[Unit]
+Description=Pi WiFi Manager (Client/AP fallback)
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/piwifi-manager.sh
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

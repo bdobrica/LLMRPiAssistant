@@ -1,0 +1,15 @@
+[Unit]
+Description=Pi WiFi Provisioning Flask UI
+After=network.target NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+# WorkingDirectory and ExecStart will be set via override.conf during installation
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
