@@ -6,8 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/bogdan/GitHub/LLMRPiAssistant/rpi-assistant
-ExecStart=/opt/venvs/rpi-assistant/bin/python -m app
+# WorkingDirectory and ExecStart will be set during installation via sed
+# WorkingDirectory=/path/to/LLMRPiAssistant
+# ExecStart=/opt/venvs/rpi-assistant/bin/python -m rpi_assistant.app
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

@@ -27,29 +27,81 @@ echo "  Flask Port:  $FLASK_PORT"
 echo "  Interface:   $IFACE"
 echo ""
 
-echo "[1/7] Installing NetworkManager..."
+echo "[1/8] Installing NetworkManager..."
 sudo apt-get update
 sudo apt-get install -y network-manager
 
-echo "[2/7] Enabling NetworkManager..."
+echo "[2/8] Enabling NetworkManager..."
 sudo systemctl enable --now NetworkManager
 
-echo "[3/7] Disabling dhcpcd (conflicts with NetworkManager)..."
-sudo systemctl disable --now dhcpcd 2>/dev/null || echo "dhcpcd not present or already disabled"
+echo "[3/8] Checking dhcpcd configuration..."
+# Only disable dhcpcd if it's managing the WiFi interface
+if systemctl is-active --quiet dhcpcd; then
+    if grep -q "^interface $IFACE" /etc/dhcpcd.conf 2>/dev/null; then
+        echo "⚠️  WARNING: dhcpcd is managing $IFACE"
+        echo "   NetworkManager conflicts with dhcpcd for WiFi management."
+        echo "   Disabling dhcpcd now. If you use dhcpcd for eth0, you may need to:"
+        echo "   1. Add 'denyinterfaces $IFACE' to /etc/dhcpcd.conf, or"
+        echo "   2. Let NetworkManager handle all interfaces"
+        echo ""
+        read -p "Disable dhcpcd? [Y/n] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            sudo systemctl disable --now dhcpcd
+            echo "✓ dhcpcd disabled"
+        else
+            echo "⚠️  Skipping. You may need to manually configure dhcpcd to ignore $IFACE"
+        fi
+    else
+        echo "✓ dhcpcd not managing $IFACE, leaving it enabled"
+    fi
+else
+    echo "✓ dhcpcd not active"
+fi
 
-echo "[4/7] Installing Flask (if not already installed)..."
+echo "[4/8] Installing Flask (if not already installed)..."
 if ! sudo "$VENV/bin/pip" show flask >/dev/null 2>&1; then
     sudo "$VENV/bin/pip" install flask
 else
     echo "Flask already installed"
 fi
 
-echo "[5/7] Installing piwifi-manager.sh script..."
+echo "[5/8] Installing piwifi-manager.sh script..."
 sudo install -m 0755 "$PROJECT_ROOT/scripts/piwifi-manager.sh" /usr/local/bin/piwifi-manager.sh
 
-echo "[6/7] Installing systemd units..."
+echo "[6/8] Creating environment configuration file..."
+sudo tee /etc/default/piwifi >/dev/null <<EOF
+# Pi WiFi Manager Configuration
+# Edit this file to change WiFi provisioning settings
+
+IFACE=$IFACE
+AP_SSID=$AP_SSID
+AP_PASSWORD=$AP_PASSWORD
+AP_ADDR=$AP_ADDR
+FLASK_PORT=$FLASK_PORT
+
+# Flask webapp settings
+PYTHONPATH=$PROJECT_ROOT
+FLASK_WORKING_DIR=$PROJECT_ROOT/rpi_assistant
+FLASK_CMD=$VENV/bin/python -m rpi_assistant.piwifi.webapp
+EOF
+
+echo "[7/8] Installing systemd units..."
 sudo install -m 0644 "$PROJECT_ROOT/systemd/piwifi-flask.service" /etc/systemd/system/piwifi-flask.service
 sudo install -m 0644 "$PROJECT_ROOT/systemd/piwifi-manager.service" /etc/systemd/system/piwifi-manager.service
+
+# Create drop-in directory for flask service to set ExecStart
+sudo mkdir -p /etc/systemd/system/piwifi-flask.service.d
+sudo tee /etc/systemd/system/piwifi-flask.service.d/exec.conf >/dev/null <<EOF
+[Service]
+WorkingDirectory=$PROJECT_ROOT/rpi_assistant
+ExecStart=$VENV/bin/python -m rpi_assistant.piwifi.webapp
+Environment="PYTHONPATH=$PROJECT_ROOT"
+EOF
+
+echo "[8/8] Enabling services..."
+sudo systemctl daemon-reload
+sudo systemctl enable piwifi-manager.service
 
 # Configure environment variables via systemd drop-ins
 echo "[7/7] Configuring services..."
@@ -80,10 +132,16 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  Installation Complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+echo "Configuration saved to: /etc/default/piwifi"
+echo ""
 echo "The WiFi manager will automatically:"
 echo "  • Try to connect to known WiFi networks on boot"
 echo "  • Start an AP ($AP_SSID) if no connection is found"
-echo "  • Provide a web UI at http://$AP_ADDR:$FLASK_PORT"
+echo "  • Provide a web UI at http://${AP_ADDR%/*}:$FLASK_PORT"
+echo ""
+echo "To customize settings:"
+echo "  sudo nano /etc/default/piwifi"
+echo "  sudo systemctl restart piwifi-manager.service"
 echo ""
 echo "To start the service now:"
 echo "  sudo systemctl start piwifi-manager.service"

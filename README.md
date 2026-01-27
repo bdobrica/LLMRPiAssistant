@@ -261,17 +261,16 @@ No need to reconfigure networks you've already set up - it remembers them all!
 You can customize the AP name, password, and other settings:
 
 ```bash
-# Edit the override configuration
-sudo systemctl edit piwifi-manager.service
+# Edit the environment configuration
+sudo nano /etc/default/piwifi
 
-# Add these lines in the editor:
-[Service]
-Environment=AP_SSID=MyCustomName
-Environment=AP_PASSWORD=MySecurePassword123
-Environment=FLASK_PORT=8080
-Environment=IFACE=wlan0
+# Settings you can change:
+# AP_SSID=MyCustomName
+# AP_PASSWORD=MySecurePassword123
+# FLASK_PORT=8080
+# IFACE=wlan0
 
-# Save and restart the service
+# Apply changes
 sudo systemctl restart piwifi-manager.service
 ```
 
@@ -445,11 +444,13 @@ LLMRPiAssistant/
 ├── LICENSE
 ├── Makefile                # Installation and setup automation
 ├── README.md
+├── QUICKSTART.md
 ├── TODO.md
 ├── openwakeword.patch      # Bug fix for OpenWakeWord
 ├── seeed-voicecard.patch   # Kernel module fixes
 │
-├── rpi-assistant/          # Main voice assistant application
+├── rpi_assistant/          # Main voice assistant application (Python package)
+│   ├── __init__.py
 │   ├── config.ini.example
 │   ├── requirements.txt
 │   ├── app/                # Voice assistant core

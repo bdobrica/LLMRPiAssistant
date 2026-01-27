@@ -2,14 +2,18 @@
 Description=Pi WiFi Provisioning Flask UI
 After=network.target NetworkManager.service
 Wants=NetworkManager.service
+PartOf=piwifi-manager.service
 
 [Service]
 Type=simple
-# WorkingDirectory and ExecStart will be set via override.conf during installation
+# WorkingDirectory and ExecStart will be set via EnvironmentFile during installation
 Restart=on-failure
 RestartSec=2
 StandardOutput=journal
 StandardError=journal
+
+# Configuration via environment file
+EnvironmentFile=-/etc/default/piwifi
 
 [Install]
 WantedBy=multi-user.target

@@ -18,7 +18,7 @@ sudo reboot
 ## Configuration
 
 ```bash
-cd rpi-assistant
+cd rpi_assistant
 cp config.ini.example config.ini
 nano config.ini  # Add your OPENAI_API_KEY
 ```
@@ -89,7 +89,7 @@ sudo journalctl -u rpi-assistant.service -f
 sudo journalctl -u piwifi-manager.service -f
 
 # View interaction log
-tail -f rpi-assistant/openai_interactions.log
+tail -f rpi_assistant/openai_interactions.log
 ```
 
 ### Audio Testing
@@ -129,11 +129,11 @@ aplay test.wav
 
 ## File Locations
 
-- **Config**: `~/GitHub/LLMRPiAssistant/rpi-assistant/config.ini`
-- **Logs**: `~/GitHub/LLMRPiAssistant/rpi-assistant/openai_interactions.log`
+- **Config**: `~/GitHub/LLMRPiAssistant/rpi_assistant/config.ini`
+- **Logs**: `~/GitHub/LLMRPiAssistant/rpi_assistant/openai_interactions.log`
 - **Virtual env**: `/opt/venvs/rpi-assistant/`
 - **Services**: `/etc/systemd/system/rpi-assistant.service`
-- **WiFi config**: `/etc/systemd/system/piwifi-manager.service.d/override.conf`
+- **WiFi config**: `/etc/default/piwifi`
 
 ## Project Structure
 
@@ -143,7 +143,7 @@ LLMRPiAssistant/
 ├── README.md                   # Full documentation
 ├── QUICKSTART.md              # This file
 ├── TODO.md                    # Planned features
-├── rpi-assistant/
+├── rpi_assistant/             # Python package (note underscore!)
 │   ├── config.ini             # Your configuration
 │   ├── app/                   # Voice assistant code
 │   └── piwifi/                # WiFi provisioning

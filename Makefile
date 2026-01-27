@@ -5,7 +5,7 @@ SHELL_PWD := $(shell pwd)
 VENV_DIR := /opt/venvs/rpi-assistant
 PYTHON := $(VENV_DIR)/bin/python3
 PIP := $(VENV_DIR)/bin/pip
-APP_DIR := $(SHELL_PWD)/rpi-assistant
+APP_DIR := $(SHELL_PWD)/rpi_assistant
 VOICECARD_DIR := $(SHELL_PWD)/seeed-voicecard
 VOICECARD_PATCH := $(SHELL_PWD)/seeed-voicecard.patch
 OPENWAKEWORD_PATCH := $(SHELL_PWD)/openwakeword.patch
@@ -60,8 +60,8 @@ install-voicecard:
 install-assistant:
 	@echo "=== Installing rpi-assistant CLI command ==="
 	@echo '#!/bin/bash' | sudo tee /usr/local/bin/rpi-assistant > /dev/null
-	@echo 'cd $(APP_DIR)' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
-	@echo 'exec $(PYTHON) -m app "$$@"' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
+	@echo 'export PYTHONPATH="$(dir $(APP_DIR))"' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
+	@echo 'exec $(PYTHON) -m rpi_assistant.app "$$@"' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
 	sudo chmod +x /usr/local/bin/rpi-assistant
 	@echo "rpi-assistant command installed successfully"
 
@@ -69,8 +69,8 @@ install-assistant:
 install-service:
 	@echo "=== Installing rpi-assistant systemd service ==="
 	@# Create a temporary service file with correct paths
-	@sed -e 's|WorkingDirectory=.*|WorkingDirectory=$(APP_DIR)|' \
-	     -e 's|ExecStart=.*|ExecStart=$(PYTHON) -m app|' \
+	@sed -e 's|WorkingDirectory=.*|WorkingDirectory=$(dir $(APP_DIR))|' \
+	     -e 's|ExecStart=.*|ExecStart=$(PYTHON) -m rpi_assistant.app|' \
 	     $(SYSTEMD_DIR)/rpi-assistant.service | sudo tee /etc/systemd/system/rpi-assistant.service > /dev/null
 	sudo systemctl daemon-reload
 	@echo "Service installed. Enable with: sudo systemctl enable rpi-assistant.service"
