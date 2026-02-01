@@ -80,6 +80,13 @@ AP_PASSWORD=$AP_PASSWORD
 AP_ADDR=$AP_ADDR
 FLASK_PORT=$FLASK_PORT
 
+# How long to wait (in seconds) with no clients before giving up on AP mode
+# Set to 0 to disable timeout (AP will stay up indefinitely)
+AP_NO_CLIENT_TIMEOUT=30
+
+# How often (in seconds) to check if original WiFi is back while in AP mode
+AP_WIFI_RETRY_INTERVAL=15
+
 # Flask webapp settings
 PYTHONPATH=$PROJECT_ROOT
 FLASK_WORKING_DIR=$PROJECT_ROOT/rpi_assistant

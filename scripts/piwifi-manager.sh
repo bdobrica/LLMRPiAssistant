@@ -10,6 +10,11 @@ FLASK_PORT="${FLASK_PORT:-8080}"
 HOTSPOT_CON_NAME="piwifi-hotspot"
 PING_TARGET="${PING_TARGET:-1.1.1.1}"
 
+# How long to wait (in seconds) with no clients before giving up on AP mode
+AP_NO_CLIENT_TIMEOUT="${AP_NO_CLIENT_TIMEOUT:-30}"
+# How often to check if original WiFi is back while in AP mode
+AP_WIFI_RETRY_INTERVAL="${AP_WIFI_RETRY_INTERVAL:-15}"
+
 log() { echo "[piwifi-manager] $*"; }
 
 nm_ready() {
@@ -37,6 +42,22 @@ is_connected() {
 
 internet_ok() {
   ping -c 1 -W 1 "$PING_TARGET" >/dev/null 2>&1
+}
+
+has_hotspot_clients() {
+  # Check if any clients are connected to the hotspot
+  local clients=$(nmcli -t -f GENERAL.STATE,IP4.ADDRESS device show "$IFACE" 2>/dev/null | grep -c "IP4.ADDRESS" || echo "0")
+  # If hotspot is up and has more than just the host IP, there are clients
+  [ "$clients" -gt 1 ]
+}
+
+cleanup_hotspot() {
+  log "Cleaning up any existing hotspot..."
+  if nmcli connection show "$HOTSPOT_CON_NAME" >/dev/null 2>&1; then
+    nmcli connection down "$HOTSPOT_CON_NAME" 2>/dev/null || true
+    nmcli connection delete "$HOTSPOT_CON_NAME" 2>/dev/null || true
+  fi
+  systemctl stop piwifi-flask.service 2>/dev/null || true
 }
 
 stop_hotspot() {
@@ -100,6 +121,9 @@ main() {
   done
 
   nmcli radio wifi on || true
+  
+  # Clean up any leftover hotspot from previous run
+  cleanup_hotspot
 
   log "Starting continuous WiFi management loop..."
   
@@ -137,9 +161,16 @@ main() {
       log "No WiFi connection; entering AP provisioning mode."
       start_hotspot
       
-      # Stay in AP mode until a client WiFi connects
+      # Track time with no clients
+      local ap_start_time=$(date +%s)
+      local last_wifi_check=$(date +%s)
+      
+      # Stay in AP mode monitoring for both client connections and WiFi recovery
       while true; do
         sleep 5
+        local current_time=$(date +%s)
+        
+        # Check if a saved WiFi network connected (user clicked "Connect" in UI)
         if is_connected; then
           if internet_ok; then
             log "Detected client Wi-Fi connected with internet. Stopping hotspot."
@@ -147,6 +178,40 @@ main() {
             break
           else
             log "WiFi connected but no internet yet..."
+          fi
+        else
+          # Periodically try to reconnect to known WiFi networks
+          local time_since_check=$((current_time - last_wifi_check))
+          if [ $time_since_check -ge $AP_WIFI_RETRY_INTERVAL ]; then
+            log "Checking if original WiFi networks are back..."
+            last_wifi_check=$current_time
+            
+            # Temporarily bring down hotspot to check for WiFi
+            nmcli connection down "$HOTSPOT_CON_NAME" 2>/dev/null || true
+            sleep 2
+            
+            # See if NetworkManager auto-connects to a known network
+            if is_connected && internet_ok; then
+              log "Original WiFi network is back! Exiting AP mode."
+              cleanup_hotspot
+              break
+            fi
+            
+            # No luck, bring hotspot back up
+            nmcli connection up "$HOTSPOT_CON_NAME" 2>/dev/null || true
+          fi
+          
+          # Check if we should give up on AP mode (no clients for too long)
+          local time_in_ap=$((current_time - ap_start_time))
+          if [ $time_in_ap -ge $AP_NO_CLIENT_TIMEOUT ]; then
+            if ! has_hotspot_clients; then
+              log "No clients connected after ${AP_NO_CLIENT_TIMEOUT}s. Likely temporary glitch. Stopping AP mode."
+              cleanup_hotspot
+              break
+            else
+              # Clients are connected, reset timer
+              ap_start_time=$current_time
+            fi
           fi
         fi
       done
