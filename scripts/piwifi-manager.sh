@@ -17,7 +17,9 @@ nm_ready() {
 }
 
 is_connected() {
-  nmcli -t -f DEVICE,TYPE,STATE device | awk -F: -v d="$IFACE" '$1==d && $2=="wifi" && $3=="connected"{found=1} END{exit !found}'
+  # Check if connected to a real WiFi network (not our hotspot)
+  local active_wifi=$(nmcli -t -f NAME,TYPE connection show --active | grep ':wifi$' | cut -d: -f1 | grep -v "^$HOTSPOT_CON_NAME$")
+  [ -n "$active_wifi" ]
 }
 
 internet_ok() {
@@ -38,7 +40,7 @@ start_hotspot() {
 
   nmcli dev wifi hotspot ifname "$IFACE" con-name "$HOTSPOT_CON_NAME" ssid "$AP_SSID" password "$AP_PASSWORD"
 
-  nmcli connection modify "$HOTSPOT_CON_NAME" ipv4.method manual ipv4.addresses "$AP_ADDR" ipv6.method ignore
+  nmcli connection modify "$HOTSPOT_CON_NAME" ipv4.method shared ipv4.addresses "$AP_ADDR" ipv6.method ignore
 
   nmcli connection down "$HOTSPOT_CON_NAME" || true
   nmcli connection up "$HOTSPOT_CON_NAME"
