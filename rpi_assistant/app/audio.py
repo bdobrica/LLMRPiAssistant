@@ -10,6 +10,7 @@ from typing import Callable, Optional
 import numpy as np
 import sounddevice as sd
 from openwakeword.model import Model
+from openwakeword import models as OWW_models
 
 from .config import AudioConfig, RecordingConfig, WakeWordConfig
 
@@ -94,7 +95,11 @@ class WakeWordRecorder:
         
         # Initialize wake word model
         if wake_word_config.models:
-            self.model = Model(wakeword_models=wake_word_config.models)
+            self.model = Model(
+                wakeword_model_paths=[
+                    OWW_models[m]["model_path"] for m in wake_word_config.models
+                    ]
+            )
         else:
             self.model = Model()  # Load all default models
         
