@@ -1,0 +1,16 @@
+[Unit]
+Description=Pi WiFi Manager (Client/AP fallback)
+After=NetworkManager.service
+Wants=NetworkManager.service piwifi-flask.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/piwifi-manager.sh
+Restart=always
+RestartSec=5
+
+# Configuration via environment file
+EnvironmentFile=-/etc/default/piwifi
+
+[Install]
+WantedBy=multi-user.target

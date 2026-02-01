@@ -13,8 +13,10 @@ LLMRPiAssistant is a fully-featured voice assistant that brings Alexa-like funct
 - 🧠 **Conversational AI** - Natural responses using GPT-4o-mini (or any OpenAI chat model)
 - 🔊 **Text-to-Speech** - Realistic voice output with OpenAI TTS
 - 💡 **LED Feedback** - Visual indicators with reSpeaker HAT LED ring
+- � **WiFi Provisioning** - Easy network configuration via captive portal when offline
 - 🔧 **Highly Configurable** - Extensive configuration options via config.ini or environment variables
 - 📊 **Interaction Logging** - Comprehensive JSON logs for all conversations
+- 🔄 **Systemd Integration** - Run as a system service with automatic restart
 
 ### Hardware Requirements
 
@@ -46,11 +48,29 @@ This will:
 3. Install Python packages
 4. Clone and install seeed-voicecard driver (with patch applied)
 5. Configure the assistant as a CLI command
+6. Install rpi-assistant as a systemd service
 
 After installation, **reboot your Raspberry Pi** to load the audio drivers:
 ```bash
 sudo reboot
 ```
+
+### WiFi Provisioning Setup (Optional but Recommended)
+
+For portable use (taking your assistant to different locations), install the WiFi manager:
+
+```bash
+# Install WiFi provisioning system
+make install-wifi
+```
+
+This enables automatic WiFi management:
+- **On boot**: Tries to connect to known WiFi networks
+- **If offline**: Starts an access point named `PiAssistant-Setup`
+- **Web UI**: Connect to the AP and visit `http://192.168.4.1:8080` to configure WiFi
+- **Auto-reconnect**: Remembers multiple networks and reconnects automatically
+
+The system uses NetworkManager and will remember all configured networks, automatically connecting to any available one.
 
 ### Manual Installation Steps
 
@@ -146,9 +166,28 @@ export RECORDING_SILENCE_RMS="0.01"
 
 ## Usage
 
-### Running the Assistant
+### Running as a Systemd Service (Recommended)
 
-After configuration, start the assistant:
+The assistant can run automatically on boot as a systemd service:
+
+```bash
+# Enable and start the service
+sudo systemctl enable rpi-assistant.service
+sudo systemctl start rpi-assistant.service
+
+# Check status
+sudo systemctl status rpi-assistant.service
+
+# View logs
+sudo journalctl -u rpi-assistant.service -f
+
+# Stop the service
+sudo systemctl stop rpi-assistant.service
+```
+
+### Running from Command Line
+
+After configuration, you can also run the assistant manually:
 
 ```bash
 # If installed with Makefile
@@ -178,6 +217,86 @@ The default OpenWakeWord model supports these wake words:
 
 Check loaded models on startup to see available wake words.
 
+## WiFi Provisioning
+
+The WiFi provisioning system makes your assistant portable and easy to move between networks without needing a monitor or keyboard.
+
+### How It Works
+
+1. **On Boot**: The `piwifi-manager` service checks for network connectivity
+2. **Connected**: If connected to a known network, nothing happens - normal operation
+3. **Offline**: If no known networks are available:
+   - Starts an access point (AP) named `PiAssistant-Setup`
+   - Launches a Flask web UI on `http://192.168.4.1:8080`
+   - Waits for you to configure WiFi
+4. **After Configuration**: 
+   - Tries to connect to the new network
+   - If successful, stops the AP and continues in client mode
+   - If failed, returns to AP mode for reconfiguration
+
+### Using WiFi Provisioning
+
+**First-time setup or new location:**
+
+1. Power on your Raspberry Pi
+2. Wait 30-60 seconds for boot
+3. Look for WiFi network `PiAssistant-Setup` on your phone/laptop
+4. Connect to it (password: `ChangeMe12345` by default)
+5. Open browser and go to: `http://192.168.4.1:8080`
+6. Select your WiFi network from the dropdown
+7. Enter the password and click Connect
+8. Wait 10-20 seconds - the Pi will connect and the AP will disappear
+9. Your Pi is now connected to your network!
+
+**Moving to a different location:**
+
+The system remembers all configured networks. Simply power on your Pi at the new location:
+- If it can connect to any remembered network, it will automatically
+- If not, it will start the AP for you to add the new network
+
+No need to reconfigure networks you've already set up - it remembers them all!
+
+### Customizing WiFi Settings
+
+You can customize the AP name, password, and other settings:
+
+```bash
+# Edit the environment configuration
+sudo nano /etc/default/piwifi
+
+# Settings you can change:
+# AP_SSID=MyCustomName
+# AP_PASSWORD=MySecurePassword123
+# FLASK_PORT=8080
+# IFACE=wlan0
+
+# Apply changes
+sudo systemctl restart piwifi-manager.service
+```
+
+### WiFi Manager Commands
+
+```bash
+# Check WiFi manager status
+sudo systemctl status piwifi-manager.service
+
+# View live logs
+sudo journalctl -u piwifi-manager.service -f
+
+# Restart WiFi manager
+sudo systemctl restart piwifi-manager.service
+
+# Force AP mode (useful for testing)
+sudo systemctl stop piwifi-manager.service
+sudo nmcli dev wifi hotspot ifname wlan0 ssid PiAssistant-Setup password ChangeMe12345
+
+# List saved WiFi networks
+nmcli connection show
+
+# Delete a saved network
+nmcli connection delete "NetworkName"
+```
+
 ### Troubleshooting
 
 #### Audio Device Not Found
@@ -199,6 +318,28 @@ aplay -L
 # Update audio_output.device in config.ini
 ```
 
+#### WiFi Manager Not Working
+```bash
+# Check if NetworkManager is running
+sudo systemctl status NetworkManager
+
+# Check piwifi-manager status
+sudo systemctl status piwifi-manager.service
+
+# View piwifi logs
+sudo journalctl -u piwifi-manager.service -f
+
+# Manually start AP mode
+sudo nmcli dev wifi hotspot ifname wlan0 ssid PiAssistant-Setup password ChangeMe12345
+```
+
+#### Cannot Connect to WiFi After Configuration
+- Wait 10-20 seconds for connection to establish
+- Refresh the web UI to see current status
+- Check if password was entered correctly
+- Try moving closer to the router
+- Check router logs for connection attempts
+
 #### Wake Word Not Detecting
 - Adjust `wakeword.threshold` (lower = more sensitive)
 - Check microphone channel: try different `mic_channel_index` values (0-3)
@@ -214,9 +355,32 @@ aplay -L
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     __main__.py                         │
-│                  Main Entry Point                       │
-└──────────────────────┬──────────────────────────────────┘
+│                  LLMRPiAssistant                        │
+│                                                         │
+│  ┌─────────────────┐        ┌──────────────────┐      │
+│  │  rpi-assistant  │        │   piwifi         │      │
+│  │  (voice app)    │        │   (wifi mgr)     │      │
+│  │                 │        │                  │      │
+│  │  • __main__.py  │        │  • webapp.py     │      │
+│  │  • audio.py     │        │  • templates/    │      │
+│  │  • openai_client│        │                  │      │
+│  │  • pixels.py    │        └──────────────────┘      │
+│  │  • config.py    │                                   │
+│  └─────────────────┘                                   │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐  │
+│  │  systemd/                                       │  │
+│  │  • rpi-assistant.service (voice assistant)     │  │
+│  │  • piwifi-manager.service (network manager)    │  │
+│  │  • piwifi-flask.service (web UI)               │  │
+│  └─────────────────────────────────────────────────┘  │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐  │
+│  │  scripts/                                       │  │
+│  │  • piwifi-manager.sh (network state machine)   │  │
+│  │  • install-wifi.sh (wifi setup script)         │  │
+│  └─────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
                        │
         ┌──────────────┼──────────────┬──────────────┐
         │              │              │              │
@@ -237,6 +401,7 @@ aplay -L
 │  • LED ring (APA102 via SPI)           │
 │  • Speaker (ALSA audio output)         │
 │  • OpenAI API (Whisper, GPT, TTS)      │
+│  • NetworkManager (WiFi control)       │
 └─────────────────────────────────────────┘
 ```
 
@@ -275,19 +440,45 @@ The assistant uses a three-state FSM:
 ### Project Structure
 
 ```
-rpi-assistant/
-├── config.ini.example       # Example configuration
-├── requirements.txt         # Python dependencies
-└── app/
-    ├── __init__.py
-    ├── __main__.py         # Main entry point
-    ├── audio.py            # Wake word and recording
-    ├── openai_client.py    # OpenAI API wrapper
-    ├── pixels.py           # LED control
-    ├── led_pattern.py      # LED animations
-    ├── apa102.py          # SPI LED driver
-    ├── config.py          # Configuration management
-    └── logger.py          # Interaction logging
+LLMRPiAssistant/
+├── LICENSE
+├── Makefile                # Installation and setup automation
+├── README.md
+├── QUICKSTART.md
+├── TODO.md
+├── openwakeword.patch      # Bug fix for OpenWakeWord
+├── seeed-voicecard.patch   # Kernel module fixes
+│
+├── rpi_assistant/          # Main voice assistant application (Python package)
+│   ├── __init__.py
+│   ├── config.ini.example
+│   ├── requirements.txt
+│   ├── app/                # Voice assistant core
+│   │   ├── __init__.py
+│   │   ├── __main__.py     # Main entry point
+│   │   ├── audio.py        # Wake word and recording
+│   │   ├── openai_client.py # OpenAI API wrapper
+│   │   ├── pixels.py       # LED control
+│   │   ├── led_pattern.py  # LED animations
+│   │   ├── apa102.py       # SPI LED driver
+│   │   ├── config.py       # Configuration management
+│   │   └── logger.py       # Interaction logging
+│   └── piwifi/             # WiFi provisioning module
+│       ├── __init__.py
+│       ├── webapp.py       # Flask web UI
+│       └── templates/
+│           └── index.html  # WiFi configuration UI
+│
+├── systemd/                # Systemd service definitions
+│   ├── rpi-assistant.service    # Voice assistant service
+│   ├── piwifi-manager.service   # Network manager service
+│   └── piwifi-flask.service     # Web UI service
+│
+├── scripts/                # Installation and management scripts
+│   ├── piwifi-manager.sh   # Network state machine
+│   └── install-wifi.sh     # WiFi setup installer
+│
+└── tests/                  # Test suite (future)
 ```
 
 ### Testing

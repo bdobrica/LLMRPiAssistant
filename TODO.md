@@ -2,6 +2,24 @@
 
 This document tracks planned improvements, bug fixes, and feature additions, with special focus on game development capabilities.
 
+## ✅ Completed Features
+
+### WiFi Provisioning System (January 2026)
+- ✅ NetworkManager-based WiFi management
+- ✅ Automatic AP fallback when offline
+- ✅ Flask web UI for network configuration
+- ✅ Multi-network memory (remembers all configured networks)
+- ✅ Systemd service integration
+- ✅ Makefile installation target
+- ✅ Comprehensive documentation
+
+**Implementation Details:**
+- Uses NetworkManager for robust WiFi control
+- `piwifi-manager.service` monitors connectivity and manages AP mode
+- `piwifi-flask.service` provides web UI at http://192.168.4.1:8080
+- Remembers unlimited networks via NetworkManager connection profiles
+- Automatic reconnection to any known network
+
 ## 🚨 Critical Fixes (High Priority)
 
 ### 1. Conversation History Management
@@ -258,13 +276,14 @@ GAME_COMMANDS = {
 - [ ] Add logging levels for verbose debugging
 
 ### 16. Documentation
-**Status**: Partially Complete  
+**Status**: Mostly Complete  
 **Priority**: Medium  
 
 **Tasks**:
 - [x] Comprehensive README with setup, usage, architecture
 - [x] Configuration reference guide
 - [x] Troubleshooting section
+- [x] WiFi provisioning documentation
 - [ ] API documentation (Sphinx or MkDocs)
 - [ ] Game development guide
 - [ ] Video tutorial for setup
@@ -273,7 +292,37 @@ GAME_COMMANDS = {
 
 ## 🚀 Advanced Features
 
-### 17. Multi-Language Support
+### 17. Config UI via Flask
+**Status**: Not Started  
+**Priority**: Medium  
+
+**Tasks**:
+- [ ] Extend piwifi webapp to include config.ini editor
+- [ ] Web UI for editing assistant settings:
+  - OpenAI API key and models
+  - Wake word threshold
+  - Recording parameters
+  - TTS voice selection
+- [ ] Hot-reload mechanism to apply config changes without restart
+- [ ] Signal-based reload (send SIGHUP to rpi-assistant service)
+- [ ] Config validation before applying
+- [ ] Backup/restore config functionality
+
+**Suggested Implementation:**
+```python
+# Add to webapp.py
+@app.route("/settings")
+def settings():
+    config = load_config("../config.ini")
+    return render_template("settings.html", config=config)
+
+@app.post("/settings/save")
+def save_settings():
+    # Validate and save config
+    # Send reload signal: subprocess.run(["systemctl", "reload", "rpi-assistant"])
+```
+
+### 18. Multi-Language Support
 **Status**: Not Started  
 **Priority**: Low  
 
@@ -283,19 +332,19 @@ GAME_COMMANDS = {
 - [ ] Translate responses on-the-fly
 - [ ] Language-specific wake words
 
-### 18. Web Dashboard
+### 19. Web Dashboard
 **Status**: Not Started  
 **Priority**: Low  
 
 **Tasks**:
 - [ ] Real-time status monitoring
 - [ ] Game statistics visualization
-- [ ] Configuration UI
+- [ ] Configuration UI (see #17)
 - [ ] Remote control (start/stop/pause)
 - [ ] Live transcription view
 - [ ] Conversation history browser
 
-### 19. Skills/Plugins System
+### 20. Skills/Plugins System
 **Status**: Not Started  
 **Priority**: Low  
 
@@ -309,7 +358,7 @@ GAME_COMMANDS = {
   - Smart home integration
 - [ ] Skill marketplace or registry
 
-### 20. Voice Activity Detection (VAD)
+### 21. Voice Activity Detection (VAD)
 **Status**: Not Started  
 **Priority**: Low  
 
@@ -319,7 +368,7 @@ GAME_COMMANDS = {
 - [ ] Better handling of background noise
 - [ ] Reduced false stops during natural pauses
 
-### 21. Conversation Memory
+### 22. Conversation Memory
 **Status**: Not Started  
 **Priority**: Medium  
 
@@ -331,7 +380,7 @@ GAME_COMMANDS = {
 
 ## 📊 Monitoring & Analytics
 
-### 22. Performance Metrics
+### 23. Performance Metrics
 **Status**: Not Started  
 **Priority**: Low  
 
@@ -342,7 +391,7 @@ GAME_COMMANDS = {
 - [ ] Audio quality metrics
 - [ ] System resource usage
 
-### 23. Error Tracking
+### 24. Error Tracking
 **Status**: Not Started  
 **Priority**: Medium  
 

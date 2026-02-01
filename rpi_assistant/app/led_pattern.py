@@ -119,5 +119,24 @@ class LedPattern(object):
             phase += 0.25
             time.sleep(0.03)
 
+    def offline(self):
+        """Red pulsing effect for offline/error state."""
+        # Gentle red pulse
+        while not self.stop:
+            # Pulse in
+            for brightness in range(16, 50, 2):
+                if self.stop:
+                    break
+                pixels = [0, brightness, 0, 0] * self.pixels_number  # Red channel
+                self.show(pixels)
+                time.sleep(0.03)
+            # Pulse out
+            for brightness in range(48, 15, -2):
+                if self.stop:
+                    break
+                pixels = [0, brightness, 0, 0] * self.pixels_number  # Red channel
+                self.show(pixels)
+                time.sleep(0.03)
+
     def off(self):
         self.show([0] * 4 * self.pixels_number)

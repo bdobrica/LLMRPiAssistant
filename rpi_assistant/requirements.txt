@@ -1,6 +1,7 @@
+flask
+gpiozero
 numpy
 openai
 openwakeword
 sounddevice
-gpiozero
 spidev

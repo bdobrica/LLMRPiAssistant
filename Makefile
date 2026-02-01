@@ -1,27 +1,31 @@
-.PHONY: setup install-deps create-venv install-voicecard install-assistant patch-openwakeword reboot-prompt help
+.PHONY: setup install-deps create-venv install-voicecard install-assistant install-wifi install-service patch-openwakeword reboot-prompt help
 
 # Variables
 SHELL_PWD := $(shell pwd)
 VENV_DIR := /opt/venvs/rpi-assistant
 PYTHON := $(VENV_DIR)/bin/python3
 PIP := $(VENV_DIR)/bin/pip
-APP_DIR := $(SHELL_PWD)/rpi-assistant
+APP_DIR := $(SHELL_PWD)/rpi_assistant
 VOICECARD_DIR := $(SHELL_PWD)/seeed-voicecard
 VOICECARD_PATCH := $(SHELL_PWD)/seeed-voicecard.patch
 OPENWAKEWORD_PATCH := $(SHELL_PWD)/openwakeword.patch
+SCRIPTS_DIR := $(SHELL_PWD)/scripts
+SYSTEMD_DIR := $(SHELL_PWD)/systemd
 
 # Default target
 help:
 	@echo "Available targets:"
-	@echo "  make setup          - Complete installation and setup"
-	@echo "  make install-deps   - Install system dependencies"
-	@echo "  make create-venv    - Create Python virtual environment"
+	@echo "  make setup             - Complete installation and setup"
+	@echo "  make install-deps      - Install system dependencies"
+	@echo "  make create-venv       - Create Python virtual environment"
 	@echo "  make install-voicecard - Install and patch seeed-voicecard"
 	@echo "  make install-assistant - Install rpi-assistant as CLI command"
+	@echo "  make install-service   - Install rpi-assistant as systemd service"
+	@echo "  make install-wifi      - Install WiFi provisioning manager"
 	@echo "  make patch-openwakeword - Apply openwakeword bug fix patch"
 
 # Complete setup
-setup: install-deps create-venv install-voicecard patch-openwakeword install-assistant reboot-prompt
+setup: install-deps create-venv install-voicecard patch-openwakeword install-assistant install-service reboot-prompt
 
 # Install system dependencies
 install-deps:
@@ -56,10 +60,26 @@ install-voicecard:
 install-assistant:
 	@echo "=== Installing rpi-assistant CLI command ==="
 	@echo '#!/bin/bash' | sudo tee /usr/local/bin/rpi-assistant > /dev/null
-	@echo 'cd ${APP_DIR}' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
-	@echo 'exec $(PYTHON) -m app "$$@"' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
+	@echo 'export PYTHONPATH="$(dir $(APP_DIR))"' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
+	@echo 'exec $(PYTHON) -m rpi_assistant.app "$$@"' | sudo tee -a /usr/local/bin/rpi-assistant > /dev/null
 	sudo chmod +x /usr/local/bin/rpi-assistant
 	@echo "rpi-assistant command installed successfully"
+
+# Install rpi-assistant as systemd service
+install-service:
+	@echo "=== Installing rpi-assistant systemd service ==="
+	@# Create a temporary service file with correct paths
+	@sed -e 's|WorkingDirectory=.*|WorkingDirectory=$(dir $(APP_DIR))|' \
+	     -e 's|ExecStart=.*|ExecStart=$(PYTHON) -m rpi_assistant.app|' \
+	     $(SYSTEMD_DIR)/rpi-assistant.service | sudo tee /etc/systemd/system/rpi-assistant.service > /dev/null
+	sudo systemctl daemon-reload
+	@echo "Service installed. Enable with: sudo systemctl enable rpi-assistant.service"
+	@echo "Start with: sudo systemctl start rpi-assistant.service"
+
+# Install WiFi provisioning manager
+install-wifi:
+	@echo "=== Installing WiFi provisioning manager ==="
+	@bash $(SCRIPTS_DIR)/install-wifi.sh
 
 # Apply openwakeword bug fix patch
 patch-openwakeword:

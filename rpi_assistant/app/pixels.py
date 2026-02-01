@@ -49,6 +49,9 @@ class Pixels:
     def speak(self):
         self.put(self.pattern.speak)
 
+    def offline(self):
+        self.put(self.pattern.offline)
+
     def off(self):
         self.put(self.pattern.off)
 

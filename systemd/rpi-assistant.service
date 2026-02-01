@@ -1,0 +1,21 @@
+[Unit]
+Description=Raspberry Pi Voice Assistant
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+# WorkingDirectory and ExecStart will be set during installation via sed
+WorkingDirectory=/path/to/LLMRPiAssistant
+ExecStart=/opt/venvs/rpi-assistant/bin/python -m rpi_assistant.app
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target
