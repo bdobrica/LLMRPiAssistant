@@ -17,9 +17,22 @@ nm_ready() {
 }
 
 is_connected() {
-  # Check if connected to a real WiFi network (not our hotspot)
-  local active_wifi=$(nmcli -t -f NAME,TYPE connection show --active | grep ':wifi$' | cut -d: -f1 | grep -v "^$HOTSPOT_CON_NAME$")
-  [ -n "$active_wifi" ]
+  # Check if the WiFi device is in connected state (not our hotspot)
+  local device_state=$(nmcli -t -f DEVICE,TYPE,STATE device | awk -F: -v d="$IFACE" '$1==d && $2=="wifi"{print $3}')
+  
+  if [ "$device_state" != "connected" ]; then
+    return 1
+  fi
+  
+  # Make sure it's not our hotspot that's active
+  local active_con=$(nmcli -t -f DEVICE,CONNECTION device | awk -F: -v d="$IFACE" '$1==d{print $2}')
+  
+  if [ "$active_con" = "$HOTSPOT_CON_NAME" ]; then
+    return 1
+  fi
+  
+  # Device is connected and it's not the hotspot
+  return 0
 }
 
 internet_ok() {
@@ -51,18 +64,31 @@ start_hotspot() {
 
 try_connect_wait() {
   local seconds="${1:-25}"
+  local connected_without_internet=false
+  
   for _ in $(seq 1 "$seconds"); do
     if is_connected; then
       if internet_ok; then
         log "Connected and internet OK."
         return 0
       else
-        log "Wi-Fi connected but internet not reachable (yet)."
-        return 0
+        # Connected to WiFi but no internet yet - keep waiting
+        if [ "$connected_without_internet" = false ]; then
+          log "Wi-Fi connected but internet not reachable (yet), waiting..."
+          connected_without_internet=true
+        fi
       fi
     fi
     sleep 1
   done
+  
+  # If we're connected but still no internet after timeout, consider it a success
+  # The monitoring loop will handle internet coming back later
+  if is_connected; then
+    log "Connected to WiFi (internet may come up later)."
+    return 0
+  fi
+  
   return 1
 }
 
@@ -75,22 +101,55 @@ main() {
 
   nmcli radio wifi on || true
 
-  log "Attempting to auto-connect to known Wi-Fi..."
-  if try_connect_wait 25; then
-    stop_hotspot
-    log "All good; staying in client mode."
-    exit 0
-  fi
-
-  log "No Wi-Fi connection; entering AP provisioning mode."
-  start_hotspot
-
+  log "Starting continuous WiFi management loop..."
+  
   while true; do
-    sleep 5
-    if is_connected; then
-      log "Detected client Wi-Fi connected. Stopping hotspot/UI."
+    log "Attempting to auto-connect to known Wi-Fi..."
+    if try_connect_wait 25; then
+      log "Connected to WiFi."
       stop_hotspot
-      exit 0
+      
+      # Monitor connection while we're online
+      while true; do
+        sleep 5
+        
+        # Check if still connected
+        if ! is_connected; then
+          log "WiFi connection lost. Device state: $(nmcli -t -f DEVICE,STATE device | grep "^$IFACE:")"
+          break
+        fi
+        
+        # Check if internet is working (but don't break immediately if it fails)
+        # Give it a few chances since internet might be temporarily unreachable
+        if ! internet_ok; then
+          log "Internet check failed, verifying..."
+          sleep 2
+          if ! internet_ok; then
+            sleep 3
+            if ! internet_ok; then
+              log "Internet connectivity lost after multiple checks. Entering AP mode."
+              break
+            fi
+          fi
+        fi
+      done
+    else
+      log "No WiFi connection; entering AP provisioning mode."
+      start_hotspot
+      
+      # Stay in AP mode until a client WiFi connects
+      while true; do
+        sleep 5
+        if is_connected; then
+          if internet_ok; then
+            log "Detected client Wi-Fi connected with internet. Stopping hotspot."
+            stop_hotspot
+            break
+          else
+            log "WiFi connected but no internet yet..."
+          fi
+        fi
+      done
     fi
   done
 }

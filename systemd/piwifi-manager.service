@@ -6,8 +6,8 @@ Wants=NetworkManager.service piwifi-flask.service
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/piwifi-manager.sh
-Restart=on-failure
-RestartSec=2
+Restart=always
+RestartSec=5
 
 # Configuration via environment file
 EnvironmentFile=-/etc/default/piwifi
