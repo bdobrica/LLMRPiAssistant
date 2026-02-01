@@ -9,10 +9,13 @@ A voice-controlled assistant using:
 import signal
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 from .audio import WakeWordRecorder
 from .config import load_config
+from .connectivity import check_internet_connection
 from .logger import InteractionLogger
 from .openai_client import OpenAIClient
 
@@ -28,9 +31,15 @@ def main():
     """Main application entry point."""
     recorder = None
     pixels = None
+    connection_monitor_thread = None
+    connection_state = {"online": None, "first_check": True}  # None = unknown, True = online, False = offline
+    stop_monitor = threading.Event()
     
     def cleanup():
         """Cleanup resources before exit."""
+        stop_monitor.set()
+        if connection_monitor_thread is not None:
+            connection_monitor_thread.join(timeout=2)
         if recorder is not None:
             print("\n🧹 Cleaning up audio resources...")
             recorder.stop()
@@ -67,6 +76,64 @@ def main():
         print("=" * 60)
         print("🤖 RPI Voice Assistant")
         print("=" * 60)
+        
+        def play_audio_prompt(filename: str):
+            """Play a pre-generated audio prompt."""
+            if not config.audio_output.enabled:
+                return
+            
+            prompt_path = Path(__file__).parent / "audio_prompts" / filename
+            if not prompt_path.exists():
+                print(f"⚠️  Audio prompt not found: {prompt_path}")
+                return
+            
+            try:
+                subprocess.run(
+                    ["mpg123", "-a", config.audio_output.device, str(prompt_path)],
+                    capture_output=True,
+                    check=True
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"⚠️  Error playing audio prompt: {e}")
+        
+        def monitor_connection():
+            """Monitor internet connection and handle state changes."""
+            while not stop_monitor.is_set():
+                is_online = check_internet_connection(timeout=3)
+                
+                # Check if state changed
+                if connection_state["online"] != is_online:
+                    was_offline = connection_state["online"] is False
+                    connection_state["online"] = is_online
+                    
+                    if is_online:
+                        if was_offline and not connection_state["first_check"]:
+                            # Was offline, now online - announce return
+                            print("\n✅ Internet connection restored!")
+                            if pixels:
+                                pixels.listen()
+                            play_audio_prompt("online.mp3")
+                        elif connection_state["first_check"]:
+                            # First check and online - don't announce
+                            print("✅ Internet connection OK")
+                            if pixels:
+                                pixels.listen()
+                    else:
+                        # Lost connection
+                        print("\n⚠️  Internet connection lost!")
+                        if pixels:
+                            pixels.offline()
+                        if not connection_state["first_check"]:
+                            play_audio_prompt("offline.mp3")
+                    
+                    connection_state["first_check"] = False
+                
+                # Check every 10 seconds
+                stop_monitor.wait(10)
+        
+        # Start connection monitoring thread
+        connection_monitor_thread = threading.Thread(target=monitor_connection, daemon=True)
+        connection_monitor_thread.start()
         
         def on_recording_complete(audio_path: str):
             """Handle completed voice recording."""
