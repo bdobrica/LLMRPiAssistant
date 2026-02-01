@@ -90,21 +90,8 @@ echo "[7/8] Installing systemd units..."
 sudo install -m 0644 "$PROJECT_ROOT/systemd/piwifi-flask.service" /etc/systemd/system/piwifi-flask.service
 sudo install -m 0644 "$PROJECT_ROOT/systemd/piwifi-manager.service" /etc/systemd/system/piwifi-manager.service
 
-# Create drop-in directory for flask service to set ExecStart
-sudo mkdir -p /etc/systemd/system/piwifi-flask.service.d
-sudo tee /etc/systemd/system/piwifi-flask.service.d/exec.conf >/dev/null <<EOF
-[Service]
-WorkingDirectory=$PROJECT_ROOT/rpi_assistant
-ExecStart=$VENV/bin/python -m rpi_assistant.piwifi.webapp
-Environment="PYTHONPATH=$PROJECT_ROOT"
-EOF
-
-echo "[8/8] Enabling services..."
-sudo systemctl daemon-reload
-sudo systemctl enable piwifi-manager.service
-
 # Configure environment variables via systemd drop-ins
-echo "[7/7] Configuring services..."
+echo "[8/8] Configuring services..."
 sudo mkdir -p /etc/systemd/system/piwifi-manager.service.d
 sudo tee /etc/systemd/system/piwifi-manager.service.d/override.conf >/dev/null <<EOF
 [Service]
@@ -120,8 +107,10 @@ sudo tee /etc/systemd/system/piwifi-flask.service.d/override.conf >/dev/null <<E
 [Service]
 Environment=IFACE=$IFACE
 Environment=FLASK_PORT=$FLASK_PORT
-WorkingDirectory=$PROJECT_ROOT/rpi-assistant
-ExecStart=$VENV/bin/python -m piwifi.webapp
+Environment=PYTHONPATH=$PROJECT_ROOT
+WorkingDirectory=$PROJECT_ROOT
+ExecStart=
+ExecStart=$VENV/bin/python -m rpi_assistant.piwifi.webapp
 EOF
 
 sudo systemctl daemon-reload

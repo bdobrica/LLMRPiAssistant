@@ -6,7 +6,6 @@ PartOf=piwifi-manager.service
 
 [Service]
 Type=simple
-# WorkingDirectory and ExecStart will be set via EnvironmentFile during installation
 Restart=on-failure
 RestartSec=2
 StandardOutput=journal
