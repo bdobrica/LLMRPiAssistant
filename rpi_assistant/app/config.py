@@ -73,6 +73,19 @@ class LoggingConfig:
 
 
 @dataclass
+class MemoryConfig:
+    """Episodic memory configuration."""
+    enabled: bool = True
+    memory_path: str = "assistant_memory"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dim: int = 1536
+    idle_timeout_seconds: float = 20.0
+    retrieve_on_session_start: bool = True
+    retrieve_k: int = 5
+    min_turns_to_commit: int = 2  # Minimum turns before committing episode
+
+
+@dataclass
 class Config:
     """Main configuration container."""
     audio: AudioConfig
@@ -82,6 +95,7 @@ class Config:
     audio_output: AudioOutputConfig
     led: LEDConfig
     logging: LoggingConfig
+    memory: MemoryConfig
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
@@ -210,6 +224,18 @@ def load_config(config_path: Optional[str] = None) -> Config:
         log_level=get_value("logging", "log_level", "LOG_LEVEL", "INFO", str),
     )
     
+    # Load Memory Configuration
+    memory_config = MemoryConfig(
+        enabled=get_value("memory", "enabled", "MEMORY_ENABLED", True, bool),
+        memory_path=get_value("memory", "memory_path", "MEMORY_PATH", "assistant_memory", str),
+        embedding_model=get_value("memory", "embedding_model", "EMBEDDING_MODEL", "text-embedding-3-small", str),
+        embedding_dim=get_value("memory", "embedding_dim", "EMBEDDING_DIM", 1536, int),
+        idle_timeout_seconds=get_value("memory", "idle_timeout_seconds", "MEMORY_IDLE_TIMEOUT", 20.0, float),
+        retrieve_on_session_start=get_value("memory", "retrieve_on_session_start", "MEMORY_RETRIEVE_ON_START", True, bool),
+        retrieve_k=get_value("memory", "retrieve_k", "MEMORY_RETRIEVE_K", 5, int),
+        min_turns_to_commit=get_value("memory", "min_turns_to_commit", "MEMORY_MIN_TURNS", 2, int),
+    )
+    
     return Config(
         audio=audio,
         wake_word=wake_word,
@@ -218,4 +244,5 @@ def load_config(config_path: Optional[str] = None) -> Config:
         audio_output=audio_output,
         led=led_config,
         logging=logging_config,
+        memory=memory_config,
     )

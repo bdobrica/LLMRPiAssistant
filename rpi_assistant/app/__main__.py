@@ -17,6 +17,7 @@ from .audio import WakeWordRecorder
 from .config import load_config
 from .connectivity import check_internet_connection
 from .logger import InteractionLogger
+from .memory import EpisodicMemory, SessionManager
 from .openai_client import OpenAIClient
 
 try:
@@ -38,8 +39,11 @@ def main():
     def cleanup():
         """Cleanup resources before exit."""
         stop_monitor.set()
+        stop_idle_check.set()
         if connection_monitor_thread is not None:
             connection_monitor_thread.join(timeout=2)
+        if idle_check_thread is not None:
+            idle_check_thread.join(timeout=2)
         if recorder is not None:
             print("\n🧹 Cleaning up audio resources...")
             recorder.stop()
@@ -63,6 +67,19 @@ def main():
         # Initialize components
         logger = InteractionLogger(config.logging)
         openai_client = OpenAIClient(config.openai)
+        
+        # Initialize episodic memory system
+        memory = EpisodicMemory(
+            root=config.memory.memory_path,
+            dim=config.memory.embedding_dim
+        )
+        session_manager = SessionManager(
+            idle_timeout_s=config.memory.idle_timeout
+        )
+        
+        # Thread for checking idle timeout
+        idle_check_thread = None
+        stop_idle_check = threading.Event()
         
         # Initialize LED pixels if available
         if PIXELS_AVAILABLE:
@@ -95,6 +112,34 @@ def main():
                 )
             except subprocess.CalledProcessError as e:
                 print(f"⚠️  Error playing audio prompt: {e}")
+        
+        def check_idle_and_commit():
+            """Periodically check if session is idle and commit episode."""
+            while not stop_idle_check.is_set():
+                if session_manager.is_idle_expired():
+                    turns = session_manager.finalize()
+                    if turns:
+                        print("\n💾 Session idle timeout - committing episode to memory...")
+                        try:
+                            # Summarize the conversation
+                            summary = openai_client.summarize_conversation(turns)
+                            print(f"   Summary: {summary}")
+                            
+                            # Embed the summary
+                            embedding = openai_client.embed(summary)
+                            
+                            # Store in episodic memory
+                            episode_id = memory.commit_episode(
+                                summary_text=summary,
+                                embedding=embedding,
+                                meta={"turn_count": len(turns)}
+                            )
+                            print(f"   ✅ Episode {episode_id} committed")
+                        except Exception as e:
+                            print(f"   ⚠️  Error committing episode: {e}")
+                
+                # Check every 2 seconds
+                stop_idle_check.wait(2)
         
         def monitor_connection():
             """Monitor internet connection and handle state changes."""
@@ -135,13 +180,40 @@ def main():
         connection_monitor_thread = threading.Thread(target=monitor_connection, daemon=True)
         connection_monitor_thread.start()
         
+        # Start idle timeout checker thread
+        idle_check_thread = threading.Thread(target=check_idle_and_commit, daemon=True)
+        idle_check_thread.start()
+        
         def on_recording_complete(audio_path: str):
             """Handle completed voice recording."""
             print("\n🔄 Processing voice command...")
             
             try:
+                # Retrieve relevant memories if this is a new session or first turn
+                memories_context = None
+                if not session_manager.turns:
+                    # New session - retrieve relevant memories
+                    # First, do a quick transcription to get the query
+                    quick_transcription = openai_client.transcribe_audio(audio_path)
+                    if quick_transcription and config.memory.retrieval_enabled:
+                        try:
+                            print("   🔍 Searching episodic memory...")
+                            query_emb = openai_client.embed(quick_transcription)
+                            memories = memory.retrieve(
+                                query_embedding=query_emb,
+                                k=config.memory.retrieval_top_k
+                            )
+                            if memories:
+                                print(f"   📚 Found {len(memories)} relevant memories")
+                                memories_context = memories
+                        except Exception as e:
+                            print(f"   ⚠️  Memory retrieval error: {e}")
+                
                 # Process voice command through OpenAI
-                transcription, response, usage = openai_client.process_voice_command(audio_path)
+                transcription, response, usage = openai_client.process_voice_command(
+                    audio_path,
+                    retrieved_memories=memories_context
+                )
                 
                 # Log the interaction
                 audio_file = Path(audio_path)
@@ -158,6 +230,10 @@ def main():
                     usage,
                     duration
                 )
+                
+                # Add turns to session manager
+                session_manager.add_turn("user", transcription)
+                session_manager.add_turn("assistant", response)
                 
                 # Display results
                 print(f"\n📝 You said: \"{transcription}\"")

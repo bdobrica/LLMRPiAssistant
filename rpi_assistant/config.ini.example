@@ -64,6 +64,13 @@ temperature = 0.7
 # System prompt for the assistant
 system_prompt = You are a helpful voice assistant running on a Raspberry Pi. Provide concise, friendly responses suitable for voice interaction.
 
+# Text-to-Speech (TTS) settings
+tts_voice = alloy
+tts_model = tts-1
+
+# Embedding settings for episodic memory
+embedding_model = text-embedding-3-small
+
 [led]
 # LED configuration
 # Number of LEDs (12 for ReSpeaker 4-Mic Array, 3 for 2-Mic pHAT)
@@ -84,3 +91,19 @@ tts_output_path = /tmp/response.mp3
 log_file = openai_interactions.log
 # Logging level (DEBUG, INFO, WARNING, ERROR)
 log_level = INFO
+
+[memory]
+# Episodic memory configuration
+# Enable/disable memory retrieval during conversations
+retrieval_enabled = true
+# Session idle timeout in seconds (commits episode to memory after this period of silence)
+idle_timeout = 20.0
+# Embedding vector dimension (must match embedding_model)
+# text-embedding-3-small = 1536, text-embedding-3-large = 3072
+embedding_dim = 1536
+# Directory to store memory data (vectors, summaries, manifest)
+memory_path = assistant_memory
+# Initial capacity for vector storage (grows automatically as needed)
+initial_capacity = 1024
+# Number of top memories to retrieve for context
+retrieval_top_k = 5

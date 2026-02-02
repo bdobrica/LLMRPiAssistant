@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 from openai import OpenAI
 
 from .config import OpenAIConfig
@@ -19,6 +20,7 @@ class OpenAIClient:
         self.config = config
         self.client = OpenAI(api_key=config.api_key)
         self.conversation_history = []
+        self.retrieved_memories = None  # Store retrieved memories for this session
         self._initialize_conversation()
     
     def _initialize_conversation(self) -> None:
@@ -26,6 +28,12 @@ class OpenAIClient:
         self.conversation_history = [
             {"role": "system", "content": self.config.system_prompt}
         ]
+        # If we have retrieved memories, add them to the context
+        if self.retrieved_memories:
+            self.conversation_history.append({
+                "role": "system", 
+                "content": self.retrieved_memories
+            })
     
     def transcribe_audio(self, audio_file_path: str) -> str:
         """Transcribe audio file using Whisper.
@@ -138,3 +146,83 @@ class OpenAIClient:
     def reset_conversation(self) -> None:
         """Reset conversation history, keeping only system prompt."""
         self._initialize_conversation()
+    
+    def set_retrieved_memories(self, memories_text: Optional[str]) -> None:
+        """Set retrieved memories for the current session.
+        
+        Args:
+            memories_text: Formatted memory text to inject into context.
+        """
+        self.retrieved_memories = memories_text
+    
+    def embed_text(self, text: str, model: str = "text-embedding-3-small") -> np.ndarray:
+        """Generate embedding for text using OpenAI.
+        
+        Args:
+            text: Text to embed.
+            model: Embedding model to use.
+        
+        Returns:
+            Embedding vector as numpy array.
+        
+        Raises:
+            Exception: If embedding generation fails.
+        """
+        try:
+            response = self.client.embeddings.create(
+                model=model,
+                input=text,
+            )
+            # Convert to numpy array
+            embedding = np.array(response.data[0].embedding, dtype=np.float32)
+            return embedding
+        except Exception as e:
+            raise Exception(f"Embedding generation failed: {e}")
+    
+    def summarize_conversation(self, turns: list[dict]) -> str:
+        """Generate a summary of conversation turns.
+        
+        Args:
+            turns: List of conversation turns with 'role' and 'text' keys.
+        
+        Returns:
+            Summary text.
+        
+        Raises:
+            Exception: If summarization fails.
+        """
+        if not turns:
+            return ""
+        
+        # Build conversation text
+        conv_text = "\n".join([f"{t['role']}: {t['text']}" for t in turns])
+        
+        # Create summarization prompt
+        prompt = f"""Summarize the following conversation in 3-5 concise bullet points. 
+Focus on:
+- User's goals or requests
+- Key information provided
+- Any preferences or commitments made
+- Unresolved tasks or questions
+
+Conversation:
+{conv_text}
+
+Summary (bullet points):"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.config.chat_model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that creates concise conversation summaries."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=300,
+                temperature=0.3,
+            )
+            
+            summary = response.choices[0].message.content.strip()
+            return summary
+        except Exception as e:
+            raise Exception(f"Conversation summarization failed: {e}")
+
