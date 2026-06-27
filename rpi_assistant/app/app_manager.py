@@ -51,7 +51,7 @@ class AppManager:
         app_dirs: Optional[Sequence[Path]] = None,
         repository_roots: Optional[Sequence[str | Path]] = None,
         repository_public_key: str = "",
-        require_repository_signature: bool = False,
+        require_repository_signature: Optional[bool] = None,
         active_state_path: Optional[Path] = None,
     ):
         self.app_dirs = list(app_dirs) if app_dirs is not None else list(DEFAULT_EXTERNAL_APP_DIRS)
@@ -643,7 +643,7 @@ class AppManager:
                 repository = AppRepository.load(
                     root,
                     trusted_public_key=self.repository_public_key,
-                    require_signature=self.require_repository_signature,
+                    require_signature=self._requires_repository_signature(root),
                 )
             except Exception as exc:
                 self.repository_load_errors.append((str(root), str(exc)))
@@ -653,6 +653,11 @@ class AppManager:
             if repository is not None:
                 repositories.append(repository)
         return repositories
+
+    def _requires_repository_signature(self, root: str | Path) -> bool:
+        if self.require_repository_signature is not None:
+            return self.require_repository_signature
+        return _is_remote_repository_root(root)
 
     def _describe_install_source(
         self,
@@ -722,3 +727,7 @@ def _float_or_zero(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _is_remote_repository_root(root: str | Path) -> bool:
+    return isinstance(root, str) and root.strip().startswith(("http://", "https://"))

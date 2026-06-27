@@ -91,7 +91,7 @@ class AppStoreConfig:
     )
     use_local_repository_fallback: bool = True
     trusted_public_key: str = ""
-    require_signature: bool = False
+    require_signature: bool = True
 
 
 @dataclass
@@ -308,7 +308,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
             "app_store",
             "require_signature",
             "APP_STORE_REQUIRE_SIGNATURE",
-            False,
+            True,
             bool,
         ),
     )

@@ -93,5 +93,6 @@ use_local_repository_fallback = true
 # Optional Base64-encoded Ed25519 public key used to verify signed repository catalogs.
 # If left empty, the assistant uses the shipped value from voice_apps/public_key.txt.
 trusted_public_key =
-# Require repository catalogs to be signed when using the configured app store roots
-require_signature = false
+# Require repository catalogs to be signed. Remote repositories are always
+# required to be signed unless this is explicitly set to false in local config.
+require_signature = true

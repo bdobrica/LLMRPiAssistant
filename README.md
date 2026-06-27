@@ -331,13 +331,13 @@ The assistant now supports a dedicated `[app_store]` config section:
 default_repository_url = https://raw.githubusercontent.com/bdobrica/LLMRPiAssistant/main/voice_apps/
 use_local_repository_fallback = true
 trusted_public_key =
-require_signature = false
+require_signature = true
 ```
 
 - `default_repository_url` is the default remote store used for named installs.
 - `use_local_repository_fallback` keeps the checked-out `voice_apps/` directory available while developing locally.
 - `trusted_public_key` enables Ed25519 signature verification for signed catalogs. If left empty, the assistant loads the shipped key from `voice_apps/public_key.txt`.
-- `require_signature` rejects unsigned catalogs for the configured repositories.
+- `require_signature` rejects unsigned catalogs for the configured repositories. Remote repositories require signed catalogs by default; set this to `false` only for trusted development repositories.
 
 The same settings can be provided with environment variables: `APP_STORE_DEFAULT_REPOSITORY_URL`, `APP_STORE_USE_LOCAL_FALLBACK`, `APP_STORE_TRUSTED_PUBLIC_KEY`, and `APP_STORE_REQUIRE_SIGNATURE`.
 

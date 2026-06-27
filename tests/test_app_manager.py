@@ -688,7 +688,11 @@ class AppManagerTests(unittest.TestCase):
             repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
 
             with self.serve_directory(repository_dir) as base_url:
-                manager = AppManager(app_dirs=[Path(install_tmp)], repository_roots=[base_url])
+                manager = AppManager(
+                    app_dirs=[Path(install_tmp)],
+                    repository_roots=[base_url],
+                    require_repository_signature=False,
+                )
                 response = manager.handle("install app dice")
                 roll = manager.handle("roll test die")
 
@@ -696,6 +700,38 @@ class AppManagerTests(unittest.TestCase):
         self.assertEqual(response.text, "Installed Dice version 0.1.0.")
         self.assertIsNotNone(roll)
         self.assertEqual(roll.text, "rolled")
+
+    def test_remote_repository_requires_signature_by_default(self):
+        with TemporaryDirectory() as store_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+
+            with self.serve_directory(repository_dir) as base_url:
+                manager = AppManager(repository_roots=[base_url])
+                response = manager.handle("list available apps")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "No app store entries are available.")
+        self.assertEqual(manager.repositories, [])
+
+    def test_remote_repository_signature_requirement_can_be_explicitly_disabled(self):
+        with TemporaryDirectory() as store_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+
+            with self.serve_directory(repository_dir) as base_url:
+                manager = AppManager(
+                    repository_roots=[base_url],
+                    require_repository_signature=False,
+                )
+                response = manager.handle("list available apps")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Available apps: Dice.")
 
     def test_launch_can_resolve_spoken_name_without_custom_trigger(self):
         with TemporaryDirectory() as install_tmp:
