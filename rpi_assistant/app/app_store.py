@@ -131,7 +131,23 @@ def load_install_metadata(bundle_dir: Path) -> Optional[AppInstallMetadata]:
 
 
 def _bundle_file_path(bundle_dir: Path, relative_path: str) -> Path:
+    return resolve_bundle_file_path(bundle_dir, relative_path)
+
+
+def resolve_bundle_file_path(bundle_dir: Path, relative_path: str) -> Path:
+    """Resolve one catalog file path and ensure it stays under the bundle root."""
+    if not relative_path or "\\" in relative_path:
+        raise ValueError(f"Invalid bundle file path: {relative_path}")
+
     path = Path(relative_path)
     if path.is_absolute() or ".." in path.parts:
         raise ValueError(f"Invalid bundle file path: {relative_path}")
-    return bundle_dir / path
+
+    bundle_root = bundle_dir.expanduser().resolve()
+    resolved_path = (bundle_root / path).resolve()
+    try:
+        resolved_path.relative_to(bundle_root)
+    except ValueError as exc:
+        raise ValueError(f"Invalid bundle file path: {relative_path}") from exc
+
+    return resolved_path

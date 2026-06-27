@@ -680,6 +680,27 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNotNone(roll)
         self.assertEqual(roll.text, "rolled one")
 
+    def test_repository_file_paths_cannot_escape_staging_directory(self):
+        with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+            index_path = repository_dir / "index.json"
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            escape_name = f"escape-{Path(install_tmp).name}.txt"
+            index["apps"][0]["versions"][0]["files"] = [f"../{escape_name}"]
+            index_path.write_text(json.dumps(index), encoding="utf-8")
+
+            manager = AppManager(app_dirs=[Path(install_tmp)], repository_roots=[repository_dir])
+            response = manager.handle("install app dice")
+
+            escaped_path = Path(install_tmp).parent / escape_name
+
+        self.assertIsNotNone(response)
+        self.assertIn("Invalid bundle file path", response.text)
+        self.assertFalse(escaped_path.exists())
+
     def test_remote_repository_install_downloads_bundle(self):
         with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
             source_dir = Path(store_tmp) / "source"
