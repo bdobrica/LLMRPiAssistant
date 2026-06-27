@@ -1,0 +1,10 @@
+{
+  "include": [
+    "rpi_assistant",
+    "tests",
+    "voice_apps"
+  ],
+  "extraPaths": [
+    "."
+  ]
+}

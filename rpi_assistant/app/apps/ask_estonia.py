@@ -18,6 +18,7 @@ class AskEstoniaApp(VoiceApp):
 
     id = "ask_estonia"
     name = "Ask!"
+    description = "Returns a conversation starter for the Ask! party game."
     triggers = [
         "play ask",
         "estonian ask",

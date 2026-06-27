@@ -26,6 +26,25 @@ def install_app_bundle(source_dir: Path, destination_root: Path) -> Path:
     return destination_dir
 
 
+def stage_app_bundle(source_dir: Path, destination_root: Path) -> Path:
+    """Copy an app bundle into a temporary staging directory."""
+    source_dir = source_dir.expanduser().resolve()
+    destination_root = destination_root.expanduser().resolve()
+
+    if not source_dir.exists() or not source_dir.is_dir():
+        raise FileNotFoundError(f"App bundle not found: {source_dir}")
+
+    manifest = AppManifest.load(source_dir / APP_MANIFEST_FILENAME)
+    destination_root.mkdir(parents=True, exist_ok=True)
+    staged_dir = destination_root / f".{manifest.id}.staged"
+
+    if staged_dir.exists():
+        shutil.rmtree(staged_dir)
+
+    shutil.copytree(source_dir, staged_dir)
+    return staged_dir
+
+
 def uninstall_app_bundle(app_id: str, app_dirs: Sequence[Path]) -> Optional[AppManifest]:
     """Remove an installed app bundle by manifest id."""
     bundle_dir, manifest = find_installed_app_bundle(app_id, app_dirs)

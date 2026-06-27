@@ -1,6 +1,7 @@
 """Manifest model for installable voice apps."""
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -60,3 +61,25 @@ class AppManifest:
                 "App manifest entrypoint must use the format 'module_path:ClassName'"
             )
         return module_name, class_name
+
+    def compare_version(self, other: "AppManifest") -> int:
+        """Compare this manifest version to another manifest version."""
+        left = _version_key(self.version)
+        right = _version_key(other.version)
+        if left < right:
+            return -1
+        if left > right:
+            return 1
+        return 0
+
+
+def _version_key(version: str) -> Tuple[Tuple[int, object], ...]:
+    parts: List[Tuple[int, object]] = []
+    for token in re.split(r"[._+-]", version):
+        if not token:
+            continue
+        if token.isdigit():
+            parts.append((0, int(token)))
+        else:
+            parts.append((1, token.lower()))
+    return tuple(parts)

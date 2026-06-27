@@ -24,6 +24,7 @@ class VoiceApp(ABC):
 
     id: str = ""
     name: str = ""
+    description: str = ""
     triggers: List[str] = []
     manifest: Optional["AppManifest"] = None
     install_dir: Optional[Path] = None

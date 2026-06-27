@@ -214,7 +214,7 @@ cd rpi-assistant
 - **Truth or Dare**: Say phrases like `play truth or dare` or `do truth or dare for Alex` to start a short stateful flow that keeps the next utterance inside the game.
 - **Ask!**: Say `play ask` or `ask game` to get a deterministic conversation starter without calling the chat model.
 - **Cancel**: Say `stop game`, `cancel app`, or `nevermind` to end the active local app and return to normal assistant behavior.
-- **App Management**: Say `list installed apps`, `install app from /path/to/bundle`, or `uninstall app dice` to manage manifest-based external apps locally.
+- **App Management**: Say `list installed apps`, `list available apps`, `install app dice`, `describe app dice`, `upgrade app dice`, or `uninstall app dice` to manage installable apps.
 
 ### Dynamic App Discovery
 
@@ -223,8 +223,26 @@ The assistant now discovers apps dynamically instead of relying on a hardcoded l
 - **Built-in apps**: Any `VoiceApp` subclass inside `rpi_assistant/app/apps/` is discovered automatically at startup.
 - **External apps**: Manifest-based app bundles installed under `~/.config/rpi-assistant/apps/` are loaded automatically.
 - **Bundle layout**: Each installed app lives in its own directory and must include `manifest.json` plus the Python module named by the manifest entrypoint.
+- **Public app store**: The repo now includes a catalog under `voice_apps/`. That directory is designed to work as the public app-store source for named installs such as `install app dice`.
 
-This now supports local app lifecycle commands directly: installation copies a bundle into that directory, uninstallation removes it, and listing installed apps uses the currently registered runtime app list.
+This now supports local app lifecycle commands directly: installation can copy a bundle from a filesystem path or resolve an app id from the repo catalog, upgrades compare manifest versions, descriptions read manifest metadata, and uninstall removes the installed bundle.
+
+### Repository App Catalog
+
+The repository-backed catalog uses a small index file at `voice_apps/index.json`:
+
+```json
+{
+   "apps": [
+      {
+         "id": "dice",
+         "bundle": "apps/dice"
+      }
+   ]
+}
+```
+
+Each entry points to a manifest-based app bundle inside the repo. That makes the catalog easy to host directly from the public main branch later without changing the app bundle format.
 
 ### External App Manifest
 

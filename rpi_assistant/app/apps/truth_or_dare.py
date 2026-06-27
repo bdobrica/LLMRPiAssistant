@@ -24,6 +24,7 @@ class TruthOrDareApp(VoiceApp):
 
     id = "truth_or_dare"
     name = "Truth or Dare"
+    description = "Runs a quick truth-or-dare prompt for one player."
     triggers = [
         "truth or dare",
         "do truth or dare",
