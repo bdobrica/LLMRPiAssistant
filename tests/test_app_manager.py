@@ -324,7 +324,7 @@ class AppManagerTests(unittest.TestCase):
             response = manager.handle("what game is active")
 
         self.assertIsNotNone(response)
-        self.assertEqual(response.text, "Truth or Dare is active for Alex.")
+        self.assertEqual(response.text, "Truth or Dare (classic) is active for Alex.")
 
     def test_app_store_health_reports_loaded_roots_and_signature_mode(self):
         with TemporaryDirectory() as store_tmp:

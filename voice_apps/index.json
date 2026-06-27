@@ -37,9 +37,10 @@
             "bundle": "apps/truth_or_dare/0.1.0",
             "files": [
               "app.py",
-              "manifest.json"
+              "manifest.json",
+              "prompts.json"
             ],
-            "sha256": "954d2557aecddc974a21a3ef37db00deb0337b765d2e652cd4ebe84a450735b3"
+            "sha256": "de0401460cb36f9c2f33e9e2d6e2c53b4407975c7abdddf91cb30d42d0322bf1"
           }
         ]
       }
@@ -48,6 +49,6 @@
   "signing": {
     "algorithm": "ed25519",
     "key_id": "owner",
-    "signature": "1EKqw0WZ2WeMZHB+NT/V8od9SvPI4uqnq9cEYgMrayZxIyHnXh/iSbBhAFch42Px9NXsMy9AUEUUvEGNjD8BBA=="
+    "signature": "Sv3GxZHfa4W1Nqz32n7KVHGFMXWE8IyzgTchyuj8FfnltO6LuLk3v1Xww3bQPwfOT+s29n2t9qRncJs0Cd4GCg=="
   }
 }

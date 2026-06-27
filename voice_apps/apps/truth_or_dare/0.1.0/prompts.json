@@ -1,0 +1,206 @@
+{
+  "classic": {
+    "label": "classic",
+    "keywords": [
+      "classic"
+    ],
+    "truths": [
+      "Do you have a favourite sibling?",
+      "What have you bought that has been the biggest waste of money?",
+      "What is a secret you have never told anyone?",
+      "Do you have a hidden talent?",
+      "If you could swap lives with someone in the room, who would it be?",
+      "Do you have a favourite friend?",
+      "Name someone you have pretended to like but could not stand.",
+      "What is the worst thing you would do if you could become invisible?",
+      "What is the worst thing you have ever done at work?",
+      "Rate everyone playing from your most to least favourite.",
+      "What is your most absurd dealbreaker?",
+      "Have you ever broken the law?",
+      "Who would you choose if you had to get back with an ex?",
+      "Who would you call in the room to help bury a body?",
+      "Who is the most surprising person to ever slide into your DMs?",
+      "What is something you are glad your mum does not know about you?",
+      "Have you ever gone skinny dipping?",
+      "What is the one thing you would never do for all the money in the world?",
+      "Who do you think is the worst dressed person in the room?",
+      "Who in the room would be the worst person to date, and why?"
+    ],
+    "dares": [
+      "Let another person post a status on your behalf.",
+      "Take a selfie with five different bouncers.",
+      "Let the other players go through your phone for one minute.",
+      "Photobomb a picture.",
+      "Get an item from the bathroom and sell it to the group for three minutes.",
+      "Let another person draw a tattoo with a permanent marker on your back.",
+      "Drink a mystery drink created by the rest of the group.",
+      "Show your search history on your phone.",
+      "Let the rest of the group DM someone from your Instagram.",
+      "Keep three ice cubes in your mouth until they melt.",
+      "Yell out the first word that comes to your mind.",
+      "Pretend to be the person on your left for ten minutes.",
+      "Whisper a secret to the person on your left.",
+      "Eat something of the group's choice without using your hands.",
+      "Let another person in the group touch up your makeup.",
+      "Say two honest things about everyone in the group.",
+      "Talk in an American or Australian accent for ten minutes.",
+      "Scroll through your Instagram followers until someone says stop, and you have to like all their pics.",
+      "Let someone shave a part of your body.",
+      "Reply to the first five Instagram stories on your timeline."
+    ]
+  },
+  "dirty": {
+    "label": "dirty",
+    "keywords": [
+      "dirty"
+    ],
+    "truths": [
+      "What is your biggest turn-off?",
+      "What is the largest age gap between you and your sexual partners?",
+      "Does size really matter?",
+      "Who was your worst sexual partner, and why?",
+      "Have you ever faked an orgasm?",
+      "Have you ever been caught in action? If so, by whom?",
+      "If you could only ever do one position for the rest of your life, which would it be and why?",
+      "What is the most embarrassing thing that has happened to you during sex?",
+      "Where is the riskiest place you have done it?",
+      "Have you ever filmed a sex tape?",
+      "What is your biggest turn-on?",
+      "Do you have any fetishes?",
+      "Do you like loud or silent people in bed?",
+      "What is your favourite song about action in the bedroom?",
+      "What is your maddest one-night stand story?"
+    ],
+    "dares": [
+      "Send your ex a message saying you miss them.",
+      "Make eye contact with the person to your right and moan for ten seconds.",
+      "Ask a stranger for advice on a strange rash you have recently developed.",
+      "Make your orgasm face at the next stranger you see until they make eye contact with you.",
+      "Seductively eat a banana while locking eyes with the person to your left.",
+      "Send one of your parents a sext and do not reply for one hour.",
+      "Pass your phone to the person on your left and let them post a sexual status to your Facebook.",
+      "Perform a seductive dance in front of the group.",
+      "Pick up the nearest object to you and demonstrate how to put on protection.",
+      "Close your eyes, pick a random phone contact, and leave them a dirty voicemail.",
+      "Drop an ice cube in your pants.",
+      "Google the dirtiest thing you can think of and show it to the person next to you.",
+      "FaceTime your most recent contact, burp, then hang up.",
+      "Smell everyone's armpits and rank them from best to worst.",
+      "Tell us the one bedtime secret no one knows about you."
+    ]
+  },
+  "funny": {
+    "label": "funny",
+    "keywords": [
+      "funny"
+    ],
+    "truths": [
+      "What is the most embarrassing thing you have ever done?",
+      "Have you ever peed yourself?",
+      "What is the weirdest thing you have ever eaten?",
+      "What is the weirdest dream you have ever had?",
+      "What is the weirdest thing you have ever done in front of the mirror?",
+      "What is the strangest rumour you have heard about yourself?",
+      "Have you ever lied to get out of a bad date? If so, what was the lie?",
+      "If you farted in the elevator, would you blame someone else or say excuse me?",
+      "What is the craziest thing you have done on public transportation?",
+      "Who was your worst kiss ever?",
+      "What was the last thing you searched for on your phone?",
+      "Have you ever walked in on your parents doing it?",
+      "What would you do if you got locked in a supermarket overnight?",
+      "If you were the opposite sex for one day, what would you do?",
+      "What is the most drunk you have ever been?"
+    ],
+    "dares": [
+      "Pull a moonie.",
+      "Attempt to break dance for thirty seconds.",
+      "Serenade the person to your right.",
+      "Dance like your life depends on it with no music for two minutes.",
+      "Give a personalised insult to everyone in the room.",
+      "Tell everyone your most embarrassing story about yourself.",
+      "Show the most embarrassing photo on your phone.",
+      "Attempt to impersonate everyone in the room.",
+      "Let the group text your mum on your phone something embarrassing.",
+      "Quack like a duck until your next turn.",
+      "Call a random phone number and talk to them for as long as possible.",
+      "Using only your elbows, upload a Facebook status.",
+      "Close your eyes, sit on someone's lap, and guess who it is.",
+      "Argue with a wall and pretend it talks back for one minute.",
+      "Call one of your parents and tell them you have pooped today."
+    ]
+  },
+  "truth_or_drink": {
+    "label": "truth or drink",
+    "keywords": [
+      "truth or drink",
+      "drink"
+    ],
+    "truths": [
+      "Who do you think is the worst dressed person in this room?",
+      "Do you pick your nose?",
+      "What is the strangest thing someone would find in your web search history?",
+      "Where is your favourite place to fart in public?",
+      "If someone offered you one million dollars to break up with your current partner and never get back together, would you?",
+      "Have you ever told someone you would not be home so that they would not come over to yours?",
+      "What is the weirdest role play you have ever done?",
+      "Who is your favourite family member?",
+      "Where is the grossest place you have ever hooked up?",
+      "What was the most embarrassing thing you ever did on a date?",
+      "Which sexual act are you best at?",
+      "When was the last time you peed in bed?",
+      "Tell us your most embarrassing vomit story.",
+      "Tell us your cheesiest pick-up line.",
+      "If you could get away with crime for a day, what crime would you commit and why?",
+      "Has anyone ever accidentally seen you naked?",
+      "Have you ever slept with someone then immediately regretted it?",
+      "Are you a part of the mile-high club?",
+      "Who would it be if you could kiss someone right now?",
+      "How many exes' numbers are currently in your phone?"
+    ],
+    "dares": []
+  },
+  "couple": {
+    "label": "couple",
+    "keywords": [
+      "girlfriend",
+      "boyfriend",
+      "couple",
+      "relationship",
+      "partner"
+    ],
+    "truths": [
+      "What is the scariest thing you have ever done?",
+      "What is your biggest regret?",
+      "What is a bad habit you have?",
+      "What is one thing on your bucket list?",
+      "When was the last time you cried?",
+      "What is your guilty pleasure?",
+      "Have you ever cheated on someone?",
+      "What would your three wishes be if you met a genie?",
+      "What is your biggest fear?",
+      "What is your biggest insecurity?",
+      "What is something that no one else knows about you?",
+      "What is the one thing you would do if you knew there were no consequences?",
+      "What is one useless skill you would love to learn anyway?",
+      "What is the most annoying thing about me?",
+      "What is the last lie you told?"
+    ],
+    "dares": [
+      "Only answer yes for an hour.",
+      "Exchange an item of clothing with the player on your right.",
+      "Attempt the first TikTok dance that appears on your for-you page.",
+      "Eat one teaspoon of the spiciest thing you can find.",
+      "Drink a shot of vinegar.",
+      "Send a weird GIF to the tenth person on your contacts list.",
+      "Use a voice-changing filter and send a funny voice message to your ex.",
+      "Start a funny conversation with your parents and hang up abruptly.",
+      "Freestyle rap about our relationship.",
+      "Go live on any social media account and declare your love for me.",
+      "Twerk along to a boring song until the music stops.",
+      "Let your partner give you a makeover.",
+      "Post a one-thousand-word Facebook status of gibberish.",
+      "Put on a blindfold and eat whatever your partner gives you.",
+      "Put two drops of the spiciest sauce on your tongue."
+    ]
+  }
+}
