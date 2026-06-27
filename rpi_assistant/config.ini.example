@@ -13,6 +13,9 @@ channels = 4
 mic_channel_index = 0
 # Substring to match audio device name
 device_match = seeed
+# Maximum live audio buffered between the device callback and recorder loop.
+# Lower drops stale audio sooner; higher tolerates brief CPU spikes.
+queue_seconds = 5.0
 
 [wakeword]
 # Wake word detection settings
@@ -41,6 +44,9 @@ silence_hold_seconds = 0.8
 silence_rms_threshold = 0.007
 # How much audio to capture before wake word
 pre_roll_seconds = 0.4
+# How long to keep dropping stale audio after command processing/TTS before
+# resuming wake-word detection
+processing_drain_seconds = 3.0
 # Where to save recorded audio
 output_path = /tmp/command.wav
 

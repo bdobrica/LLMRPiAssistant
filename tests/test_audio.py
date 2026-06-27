@@ -22,7 +22,7 @@ sys.modules.setdefault("openwakeword", openwakeword_module)
 sys.modules.setdefault("openwakeword.model", openwakeword_model_module)
 
 from rpi_assistant.app.audio import WakeWordRecorder
-from rpi_assistant.app.config import AudioConfig, RecordingConfig
+from rpi_assistant.app.config import AudioConfig, RecordingConfig, WakeWordConfig
 
 
 class FakeWakeModel:
@@ -116,6 +116,25 @@ class WakeWordRecorderTests(unittest.TestCase):
         )
 
         self.assertEqual(recorder.audio_queue.qsize(), 1)
+
+    def test_recorder_uses_configured_queue_and_drain_seconds(self):
+        recorder = WakeWordRecorder(
+            AudioConfig(
+                sample_rate=16000,
+                chunk_size=160,
+                channels=1,
+                device_match="fake",
+                queue_seconds=0.05,
+            ),
+            WakeWordConfig(),
+            RecordingConfig(processing_drain_seconds=0.25),
+        )
+
+        try:
+            self.assertEqual(recorder.audio_queue.maxsize, 5)
+            self.assertEqual(recorder.processing_drain_seconds, 0.25)
+        finally:
+            recorder.stop()
 
 
 if __name__ == "__main__":

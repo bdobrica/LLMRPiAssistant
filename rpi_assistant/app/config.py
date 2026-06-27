@@ -22,6 +22,7 @@ class AudioConfig:
     channels: int = 4
     mic_channel_index: int = 0
     device_match: str = "seeed"
+    queue_seconds: float = 5.0
 
 
 @dataclass
@@ -41,6 +42,7 @@ class RecordingConfig:
     silence_hold_seconds: float = 0.8
     silence_rms_threshold: float = 0.007
     pre_roll_seconds: float = 0.4
+    processing_drain_seconds: float = 3.0
     output_path: str = "/tmp/command.wav"
 
 
@@ -166,6 +168,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
         channels=get_value("audio", "channels", "AUDIO_CHANNELS", 4, int),
         mic_channel_index=get_value("audio", "mic_channel_index", "AUDIO_MIC_CHANNEL", 0, int),
         device_match=get_value("audio", "device_match", "AUDIO_DEVICE_MATCH", "seeed", str),
+        queue_seconds=get_value("audio", "queue_seconds", "AUDIO_QUEUE_SECONDS", 5.0, float),
     )
 
     models_str = get_value("wakeword", "models", "WAKEWORD_MODELS", None, str)
@@ -212,6 +215,13 @@ def load_config(config_path: Optional[str] = None) -> Config:
             "pre_roll_seconds",
             "RECORDING_PRE_ROLL",
             0.4,
+            float,
+        ),
+        processing_drain_seconds=get_value(
+            "recording",
+            "processing_drain_seconds",
+            "RECORDING_PROCESSING_DRAIN",
+            3.0,
             float,
         ),
         output_path=get_value(

@@ -70,9 +70,6 @@ class WakeWordRecorder:
     - PROCESSING: Processing recorded audio (blocks new wake word detection)
     """
 
-    AUDIO_QUEUE_SECONDS = 5.0
-    PROCESSING_DRAIN_SECONDS = 3.0
-    
     def __init__(
         self,
         audio_config: AudioConfig,
@@ -115,7 +112,8 @@ class WakeWordRecorder:
         # Thread-safe bounded queues. Audio chunks are intentionally dropped when
         # processing falls behind instead of allowing unbounded memory growth.
         chunk_seconds = audio_config.chunk_size / audio_config.sample_rate
-        audio_queue_size = max(1, int(self.AUDIO_QUEUE_SECONDS / chunk_seconds))
+        queue_seconds = max(chunk_seconds, audio_config.queue_seconds)
+        audio_queue_size = max(1, int(queue_seconds / chunk_seconds))
         self.audio_queue = queue.Queue(maxsize=audio_queue_size)
         self.recording_queue = queue.Queue(maxsize=1)
         self.processing_thread: Optional[threading.Thread] = None
@@ -133,7 +131,7 @@ class WakeWordRecorder:
         self.device = pick_input_device(audio_config.device_match)
         self.stream = None
         self.running = False
-        self.processing_drain_seconds = self.PROCESSING_DRAIN_SECONDS
+        self.processing_drain_seconds = max(0.0, recording_config.processing_drain_seconds)
         
         # Thread synchronization
         self.lock = threading.Lock()
