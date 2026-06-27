@@ -11,6 +11,7 @@ LLMRPiAssistant is a fully-featured voice assistant that brings Alexa-like funct
 - 🎙️ **Wake Word Detection** - Always listening for activation using OpenWakeWord
 - 🗣️ **Speech Recognition** - Powered by OpenAI Whisper for accurate transcription
 - 🧠 **Conversational AI** - Natural responses using GPT-4o-mini (or any OpenAI chat model)
+- 🎲 **Local Voice Apps** - Built-in stateful experiences such as Truth or Dare and Ask! that run before chat fallback
 - 🔊 **Text-to-Speech** - Realistic voice output with OpenAI TTS
 - 💡 **LED Feedback** - Visual indicators with reSpeaker HAT LED ring
 - � **WiFi Provisioning** - Easy network configuration via captive portal when offline
@@ -203,9 +204,16 @@ cd rpi-assistant
 1. **Listen Mode**: LED ring shows blue breathing pattern
 2. **Wake Word**: Say wake word (e.g., "hey mycroft")
 3. **Recording**: LED shows wakeup animation, speak your command
-4. **Processing**: LED shows thinking pattern while transcribing
-5. **Response**: Assistant speaks response with LED speak pattern
-6. **Repeat**: Returns to listen mode
+4. **Processing**: Audio is transcribed, then routed to a local voice app if one matches
+5. **Fallback Chat**: If no local app handles the request, the transcript is sent to OpenAI chat
+6. **Response**: Assistant speaks response with LED speak pattern
+7. **Repeat**: Returns to listen mode
+
+### Built-in Local Voice Apps
+
+- **Truth or Dare**: Say phrases like `play truth or dare` or `do truth or dare for Alex` to start a short stateful flow that keeps the next utterance inside the game.
+- **Ask!**: Say `play ask` or `ask game` to get a deterministic conversation starter without calling the chat model.
+- **Cancel**: Say `stop game`, `cancel app`, or `nevermind` to end the active local app and return to normal assistant behavior.
 
 ### Wake Words
 
@@ -363,6 +371,8 @@ sudo nmcli dev wifi hotspot ifname wlan0 ssid PiAssistant-Setup password ChangeM
 │  │                 │        │                  │      │
 │  │  • __main__.py  │        │  • webapp.py     │      │
 │  │  • audio.py     │        │  • templates/    │      │
+│  │  • app_manager.py│       │                  │      │
+│  │  • apps/        │        │                  │      │
 │  │  • openai_client│        │                  │      │
 │  │  • pixels.py    │        └──────────────────┘      │
 │  │  • config.py    │                                   │

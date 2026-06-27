@@ -10,9 +10,9 @@ import signal
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
 
+from .app_manager import AppManager
 from .audio import WakeWordRecorder
 from .config import load_config
 from .connectivity import check_internet_connection
@@ -34,7 +34,7 @@ def main():
     connection_monitor_thread = None
     connection_state = {"online": None, "first_check": True}  # None = unknown, True = online, False = offline
     stop_monitor = threading.Event()
-    
+
     def cleanup():
         """Cleanup resources before exit."""
         stop_monitor.set()
@@ -45,25 +45,26 @@ def main():
             recorder.stop()
         if pixels is not None:
             pixels.off()
-    
+
     def signal_handler(signum, frame):
         """Handle termination signals."""
         print(f"\n📡 Received signal {signum}")
         cleanup()
         sys.exit(0)
-    
+
     # Register signal handlers for clean shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     try:
         # Load configuration
         config = load_config()
-        
+
         # Initialize components
         logger = InteractionLogger(config.logging)
         openai_client = OpenAIClient(config.openai)
-        
+        app_manager = AppManager()
+
         # Initialize LED pixels if available
         if PIXELS_AVAILABLE:
             try:
@@ -72,21 +73,21 @@ def main():
             except Exception as e:
                 print(f"⚠️  Could not initialize pixels: {e}")
                 pixels = None
-        
+
         print("=" * 60)
         print("🤖 RPI Voice Assistant")
         print("=" * 60)
-        
+
         def play_audio_prompt(filename: str):
             """Play a pre-generated audio prompt."""
             if not config.audio_output.enabled:
                 return
-            
+
             prompt_path = Path(__file__).parent / "audio_prompts" / filename
             if not prompt_path.exists():
                 print(f"⚠️  Audio prompt not found: {prompt_path}")
                 return
-            
+
             try:
                 subprocess.run(
                     ["mpg123", "-a", config.audio_output.device, str(prompt_path)],
@@ -95,17 +96,17 @@ def main():
                 )
             except subprocess.CalledProcessError as e:
                 print(f"⚠️  Error playing audio prompt: {e}")
-        
+
         def monitor_connection():
             """Monitor internet connection and handle state changes."""
             while not stop_monitor.is_set():
                 is_online = check_internet_connection(timeout=3)
-                
+
                 # Check if state changed
                 if connection_state["online"] != is_online:
                     was_offline = connection_state["online"] is False
                     connection_state["online"] = is_online
-                    
+
                     if is_online:
                         if was_offline and not connection_state["first_check"]:
                             # Was offline, now online - announce return
@@ -125,90 +126,107 @@ def main():
                             pixels.offline()
                         if not connection_state["first_check"]:
                             play_audio_prompt("offline.mp3")
-                    
+
                     connection_state["first_check"] = False
-                
+
                 # Check every 10 seconds
                 stop_monitor.wait(10)
-        
+
         # Start connection monitoring thread
         connection_monitor_thread = threading.Thread(target=monitor_connection, daemon=True)
         connection_monitor_thread.start()
-        
+
         def on_recording_complete(audio_path: str):
             """Handle completed voice recording."""
             print("\n🔄 Processing voice command...")
-            
+
             try:
-                # Process voice command through OpenAI
-                transcription, response, usage = openai_client.process_voice_command(audio_path)
-                
+                transcription = openai_client.transcribe_audio(audio_path)
+                app_response = app_manager.handle(transcription)
+
+                if app_response is not None:
+                    response = app_response.text
+                    usage = {
+                        "model": "local_app",
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0,
+                    }
+                else:
+                    response, usage = openai_client.get_chat_response(transcription)
+
                 # Log the interaction
                 audio_file = Path(audio_path)
                 duration = None
                 if audio_file.exists():
                     import wave
+
                     with wave.open(str(audio_file), 'rb') as wf:
                         duration = wf.getnframes() / wf.getframerate()
-                
+
                 logger.log_complete_interaction(
-                    audio_path, 
-                    transcription, 
-                    response, 
+                    audio_path,
+                    transcription,
+                    response,
                     usage,
                     duration
                 )
-                
+
                 # Display results
                 print(f"\n📝 You said: \"{transcription}\"")
                 print(f"\n💬 Assistant: {response}")
                 print(f"\n📊 Tokens: {usage['total_tokens']} "
                       f"(prompt: {usage['prompt_tokens']}, "
                       f"completion: {usage['completion_tokens']})")
-                
+
                 # Generate and play TTS response
                 if config.audio_output.enabled:
                     try:
                         print("\n🔊 Generating speech...")
                         if pixels:
                             pixels.speak()
-                        
+
                         # Generate TTS as MP3
                         mp3_path = config.audio_output.tts_output_path
-                        
+
                         openai_client.generate_speech(
                             text=response,
                             output_path=mp3_path,
                             voice=config.openai.tts_voice,
                         )
-                        
+
                         # Play the MP3 audio using mpg123
                         result = subprocess.run(
                             ["mpg123", "-a", config.audio_output.device, mp3_path],
                             capture_output=True,
                             text=True,
                         )
-                        
+
                         if result.returncode != 0:
                             print(f"mpg123 stderr: {result.stderr}")
                             print(f"mpg123 stdout: {result.stdout}")
-                            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
-                        
+                            raise subprocess.CalledProcessError(
+                                result.returncode,
+                                result.args,
+                                result.stdout,
+                                result.stderr,
+                            )
+
                         if pixels:
                             pixels.listen()
                     except Exception as e:
                         print(f"\n⚠️  TTS playback error: {e}")
                         if pixels:
                             pixels.listen()
-                
+
                 print("\n" + "=" * 60)
                 print("Listening for wake word...\n")
-                
+
             except Exception as e:
                 error_msg = f"Error processing command: {e}"
                 print(f"\n❌ {error_msg}\n")
                 logger.log_error(error_msg, {"audio_file": audio_path})
-        
+
         # Start wake word recorder
         recorder = WakeWordRecorder(
             config.audio,
@@ -217,9 +235,9 @@ def main():
             on_recording_complete=on_recording_complete,
             pixels=pixels,
         )
-        
+
         recorder.start()
-        
+
     except KeyboardInterrupt:
         print("\n\n👋 Shutting down...")
         cleanup()
