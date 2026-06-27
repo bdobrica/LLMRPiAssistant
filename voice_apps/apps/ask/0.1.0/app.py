@@ -1,8 +1,8 @@
-"""Ask! conversation starter app."""
+"""Ask app bundle for the public app repository."""
 
 import random
 
-from .base import AppResponse, VoiceApp
+from rpi_assistant.app.apps.base import AppResponse, VoiceApp
 
 QUESTIONS = [
     "What is a movie that you can re-watch anytime?",
@@ -13,15 +13,14 @@ QUESTIONS = [
 ]
 
 
-class AskEstoniaApp(VoiceApp):
+class AskApp(VoiceApp):
     """Single-turn prompt generator for the Ask! game."""
 
-    id = "ask_estonia"
+    id = "ask"
     name = "Ask!"
     description = "Returns a conversation starter for the Ask! party game."
     triggers = [
         "play ask",
-        "estonian ask",
         "ask game",
     ]
 

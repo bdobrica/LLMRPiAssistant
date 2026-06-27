@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from ..app_install import AppInstallMetadata
@@ -46,3 +46,10 @@ class VoiceApp(ABC):
 
     def stop(self) -> None:
         """Reset any local app state on exit."""
+
+    def serialize_state(self) -> Dict[str, Any]:
+        """Return persistent state for restart recovery."""
+        return {}
+
+    def restore_state(self, state: Dict[str, Any]) -> None:
+        """Restore previously persisted state."""

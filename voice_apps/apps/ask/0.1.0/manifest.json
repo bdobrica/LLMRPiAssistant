@@ -1,0 +1,11 @@
+{
+  "id": "ask",
+  "name": "Ask!",
+  "version": "0.1.0",
+  "entrypoint": "app:AskApp",
+  "triggers": [
+    "play ask",
+    "ask game"
+  ],
+  "description": "Returns a conversation starter for the Ask! party game."
+}

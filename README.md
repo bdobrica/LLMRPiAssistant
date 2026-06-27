@@ -209,25 +209,27 @@ cd rpi-assistant
 6. **Response**: Assistant speaks response with LED speak pattern
 7. **Repeat**: Returns to listen mode
 
-### Built-in Local Voice Apps
+### Installable Voice Apps
 
-- **Truth or Dare**: Say phrases like `play truth or dare` or `do truth or dare for Alex` to start a short stateful flow that keeps the next utterance inside the game.
-- **Ask!**: Say `play ask` or `ask game` to get a deterministic conversation starter without calling the chat model.
+- **Truth or Dare**: Install `truth_or_dare`, then say phrases like `play truth or dare` or `do truth or dare for Alex` to start a short stateful flow that keeps the next utterance inside the game.
+- **Ask!**: Install `ask`, then say `play ask` or `ask game` to get a deterministic conversation starter without calling the chat model.
 - **Cancel**: Say `stop game`, `cancel app`, or `nevermind` to end the active local app and return to normal assistant behavior.
-- **App Management**: Say `list installed apps`, `list available apps`, `list app versions dice`, `install app dice`, `install app dice@0.1.0`, `describe app dice`, `upgrade app dice`, or `uninstall app dice` to manage installable apps.
+- **App Management**: Say `list installed apps`, `list available apps`, `list app versions truth_or_dare`, `install app ask`, `install app truth_or_dare`, `install app dice@0.1.0`, `describe app ask`, `upgrade app dice`, or `uninstall app dice` to manage installable apps.
 
 ### Dynamic App Discovery
 
 The assistant now discovers apps dynamically instead of relying on a hardcoded list.
 
-- **Built-in apps**: Any `VoiceApp` subclass inside `rpi_assistant/app/apps/` is discovered automatically at startup.
+- **Built-in apps**: The assistant core no longer ships party games as built-ins; `rpi_assistant/app/apps/` only contains the shared base interfaces.
 - **External apps**: Manifest-based app bundles installed under `~/.config/rpi-assistant/apps/` are loaded automatically.
 - **Bundle layout**: Each installed app lives in its own directory and must include `manifest.json` plus the Python module named by the manifest entrypoint.
 - **Public app store**: The repo now includes a catalog under `voice_apps/`. That directory is designed to work as the public app-store source for named installs such as `install app dice`, and the same format can be served from a remote raw URL.
 
-This now supports local app lifecycle commands directly: installation can copy a bundle from a filesystem path or resolve an app id from the repo catalog, repository installs can pin an explicit version, upgrades compare manifest versions, descriptions read manifest metadata, and uninstall removes the installed bundle.
+This now supports local app lifecycle commands directly: installation can copy a bundle from a filesystem path or resolve an app id from the repo catalog, repository installs can pin an explicit version, upgrades compare manifest versions, descriptions read manifest metadata, active apps can be restored after a restart, and uninstall removes the installed bundle.
 
 Installed external apps also persist source metadata locally, so `describe app <id>` can distinguish path-based sideloads from repository-managed installs.
+
+Active multi-turn apps also persist their in-progress state in `~/.config/rpi-assistant/active_app_state.json`, so a restart can resume the app that currently owns the conversation.
 
 ### Repository App Catalog
 
@@ -237,11 +239,33 @@ The repository-backed catalog uses a small index file at `voice_apps/index.json`
 {
    "apps": [
       {
+         "id": "ask",
+         "versions": [
+            {
+               "version": "0.1.0",
+               "bundle": "apps/ask/0.1.0",
+               "files": ["app.py", "manifest.json"],
+               "sha256": "..."
+            }
+         ]
+      },
+      {
          "id": "dice",
          "versions": [
             {
                "version": "0.1.0",
                "bundle": "apps/dice/0.1.0",
+               "files": ["app.py", "manifest.json"],
+               "sha256": "..."
+            }
+         ]
+      },
+      {
+         "id": "truth_or_dare",
+         "versions": [
+            {
+               "version": "0.1.0",
+               "bundle": "apps/truth_or_dare/0.1.0",
                "files": ["app.py", "manifest.json"],
                "sha256": "..."
             }

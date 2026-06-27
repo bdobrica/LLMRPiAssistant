@@ -17,6 +17,7 @@ from rpi_assistant.app.app_repository import (
     RepositoryRelease,
     AppRepository,
 )
+from rpi_assistant.app.app_state import ActiveAppState, DEFAULT_ACTIVE_APP_STATE_PATH
 from rpi_assistant.app.app_store import (
     find_installed_app_bundle,
     install_app_bundle,
@@ -67,6 +68,7 @@ class AppManager:
         repository_roots: Optional[Sequence[str | Path]] = None,
         repository_public_key: str = "",
         require_repository_signature: bool = False,
+        active_state_path: Optional[Path] = None,
     ):
         self.app_dirs = list(app_dirs) if app_dirs is not None else list(DEFAULT_EXTERNAL_APP_DIRS)
         self.repository_roots = (
@@ -76,6 +78,7 @@ class AppManager:
         )
         self.repository_public_key = repository_public_key
         self.require_repository_signature = require_repository_signature
+        self.active_state_path = active_state_path or DEFAULT_ACTIVE_APP_STATE_PATH
         self.repositories = self._load_repositories()
         self.apps: List[VoiceApp] = []
         self.active_app: Optional[VoiceApp] = None
@@ -87,6 +90,8 @@ class AppManager:
             for app in discover_apps(app_dirs=self.app_dirs):
                 self.register_app(app)
 
+        self._restore_active_app()
+
     def handle(self, text: str) -> Optional[AppResponse]:
         """Route text to the active app or start a matching app."""
         if self._is_cancel_command(text):
@@ -97,6 +102,9 @@ class AppManager:
             if response.done:
                 self.active_app.stop()
                 self.active_app = None
+                self._clear_active_app_state()
+            else:
+                self._persist_active_app_state()
             return response
 
         management_response = self._handle_management_command(text)
@@ -112,6 +120,9 @@ class AppManager:
                     if active_app is not None:
                         active_app.stop()
                     self.active_app = None
+                    self._clear_active_app_state()
+                else:
+                    self._persist_active_app_state()
                 return response
 
         return None
@@ -124,6 +135,7 @@ class AppManager:
         app_name = self.active_app.name
         self.active_app.stop()
         self.active_app = None
+        self._clear_active_app_state()
         return AppResponse(text=f"Stopped {app_name}.", done=True)
 
     def register_app(self, app: VoiceApp) -> None:
@@ -141,6 +153,7 @@ class AppManager:
             if self.active_app is app:
                 app.stop()
                 self.active_app = None
+                self._clear_active_app_state()
 
             return self.apps.pop(index)
 
@@ -421,6 +434,33 @@ class AppManager:
 
         return f"Installed from path {install_metadata.source}."
 
+    def _persist_active_app_state(self) -> None:
+        if self.active_app is None:
+            self._clear_active_app_state()
+            return
+
+        ActiveAppState(
+            app_id=self.active_app.id,
+            state=self.active_app.serialize_state(),
+        ).write(self.active_state_path)
+
+    def _restore_active_app(self) -> None:
+        persisted_state = ActiveAppState.load(self.active_state_path)
+        if persisted_state is None or not persisted_state.app_id:
+            return
+
+        app = self._find_app(persisted_state.app_id)
+        if app is None:
+            self._clear_active_app_state()
+            return
+
+        app.restore_state(persisted_state.state)
+        self.active_app = app
+
+    def _clear_active_app_state(self) -> None:
+        if self.active_state_path.exists():
+            self.active_state_path.unlink()
+
     def _looks_like_path(self, target: str) -> bool:
         return (
             "/" in target
@@ -435,6 +475,8 @@ class AppManager:
 
         if lowered in self.LIST_PATTERNS:
             app_names = sorted(app.name for app in self.list_apps())
+            if not app_names:
+                return AppResponse(text="No apps are installed.", done=True)
             return AppResponse(text=f"Installed apps: {', '.join(app_names)}.", done=True)
 
         if lowered in self.LIST_AVAILABLE_PATTERNS:

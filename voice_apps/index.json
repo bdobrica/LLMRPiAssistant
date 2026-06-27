@@ -1,6 +1,20 @@
 {
   "apps": [
     {
+      "id": "ask",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "bundle": "apps/ask/0.1.0",
+          "files": [
+            "app.py",
+            "manifest.json"
+          ],
+          "sha256": "8bbae568941c59843c7e419e9400a24b251d3c535bbc792329776ec86f8aef92"
+        }
+      ]
+    },
+    {
       "id": "dice",
       "versions": [
         {
@@ -11,6 +25,20 @@
             "manifest.json"
           ],
           "sha256": "7aea91f19bc20d8edb6c205c6569b84799e82ddb844c608a899187f133a05d20"
+        }
+      ]
+    },
+    {
+      "id": "truth_or_dare",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "bundle": "apps/truth_or_dare/0.1.0",
+          "files": [
+            "app.py",
+            "manifest.json"
+          ],
+          "sha256": "aaadcc891466747934fd444e6feeaea39a84ab40dbe4186e136ef4dd92c21841"
         }
       ]
     }

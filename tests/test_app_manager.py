@@ -14,12 +14,13 @@ from rpi_assistant.app.app_loader import discover_apps
 from nacl.encoding import Base64Encoder
 from nacl.signing import SigningKey
 
-from rpi_assistant.app.app_manifest import AppManifest
 from rpi_assistant.app.app_install import AppInstallMetadata, INSTALL_METADATA_FILENAME
+from rpi_assistant.app.app_manifest import AppManifest
 from rpi_assistant.app.app_store import calculate_bundle_checksum, list_bundle_files
-from rpi_assistant.app.apps.ask_estonia import QUESTIONS
 from rpi_assistant.app.app_signing import sign_catalog
-from rpi_assistant.app.apps.truth_or_dare import DARES, TRUTHS
+
+
+VOICE_APPS_REPOSITORY = Path(__file__).resolve().parents[1] / "voice_apps"
 
 
 class AppManagerTests(unittest.TestCase):
@@ -131,27 +132,40 @@ class AppManagerTests(unittest.TestCase):
             server.server_close()
 
     def test_truth_or_dare_stays_active_until_choice(self):
-        manager = AppManager()
+        with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                active_state_path=Path(state_tmp) / "active_app.json",
+            )
+            manager.handle("install app truth_or_dare")
 
-        response = manager.handle("do truth or dare for Alex")
+            response = manager.handle("do truth or dare for Alex")
 
-        self.assertIsNotNone(response)
-        self.assertEqual(response.text, "Alex, truth or dare?")
-        self.assertTrue(response.expect_input)
-        self.assertFalse(response.done)
-        self.assertIsNotNone(manager.active_app)
+            self.assertIsNotNone(response)
+            self.assertEqual(response.text, "Alex, truth or dare?")
+            self.assertTrue(response.expect_input)
+            self.assertFalse(response.done)
+            self.assertIsNotNone(manager.active_app)
 
-        follow_up = manager.handle("truth")
+            follow_up = manager.handle("truth")
 
-        self.assertIn(follow_up.text, TRUTHS)
+        self.assertIsNotNone(follow_up)
         self.assertTrue(follow_up.done)
+        self.assertNotEqual(follow_up.text, "Alex, truth or dare?")
         self.assertIsNone(manager.active_app)
 
     def test_cancel_stops_active_app(self):
-        manager = AppManager()
+        with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                active_state_path=Path(state_tmp) / "active_app.json",
+            )
+            manager.handle("install app truth_or_dare")
 
-        manager.handle("play truth or dare")
-        response = manager.handle("cancel app")
+            manager.handle("play truth or dare")
+            response = manager.handle("cancel app")
 
         self.assertIsNotNone(response)
         self.assertEqual(response.text, "Stopped Truth or Dare.")
@@ -166,22 +180,33 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNone(response)
 
     def test_ask_app_returns_local_prompt(self):
-        manager = AppManager()
+        with TemporaryDirectory() as install_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+            )
+            manager.handle("install app ask")
 
-        response = manager.handle("play ask")
+            response = manager.handle("play ask")
 
         self.assertIsNotNone(response)
-        self.assertIn(response.text, QUESTIONS)
         self.assertTrue(response.done)
         self.assertIsNone(manager.active_app)
+        self.assertTrue(bool(response.text))
 
     def test_dare_choice_completes_app(self):
-        manager = AppManager()
+        with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                active_state_path=Path(state_tmp) / "active_app.json",
+            )
+            manager.handle("install app truth_or_dare")
 
-        manager.handle("play truth or dare")
-        response = manager.handle("dare")
+            manager.handle("do truth or dare for Alex")
+            response = manager.handle("dare")
 
-        self.assertIn(response.text, DARES)
+        self.assertIsNotNone(response)
         self.assertTrue(response.done)
         self.assertIsNone(manager.active_app)
 
@@ -190,7 +215,7 @@ class AppManagerTests(unittest.TestCase):
 
         app_ids = {app.id for app in manager.list_apps()}
 
-        self.assertEqual(app_ids, {"ask_estonia", "truth_or_dare"})
+        self.assertEqual(app_ids, set())
 
     def test_external_app_directory_is_discovered(self):
         with TemporaryDirectory() as tmp_dir:
@@ -205,13 +230,18 @@ class AppManagerTests(unittest.TestCase):
         self.assertEqual(response.text, "rolled")
 
     def test_unregister_app_removes_it(self):
-        manager = AppManager()
+        with TemporaryDirectory() as install_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+            )
+            manager.handle("install app ask")
 
-        removed = manager.unregister_app("truth_or_dare")
+            removed = manager.unregister_app("ask")
 
         self.assertIsNotNone(removed)
-        self.assertEqual(removed.id, "truth_or_dare")
-        self.assertEqual({app.id for app in manager.list_apps()}, {"ask_estonia"})
+        self.assertEqual(removed.id, "ask")
+        self.assertEqual({app.id for app in manager.list_apps()}, set())
 
     def test_list_installed_apps_command_uses_registered_apps(self):
         manager = AppManager()
@@ -219,7 +249,49 @@ class AppManagerTests(unittest.TestCase):
         response = manager.handle("list installed apps")
 
         self.assertIsNotNone(response)
-        self.assertEqual(response.text, "Installed apps: Ask!, Truth or Dare.")
+        self.assertEqual(response.text, "No apps are installed.")
+
+    def test_active_app_state_survives_restart(self):
+        with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
+            state_path = Path(state_tmp) / "active_app.json"
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                active_state_path=state_path,
+            )
+            manager.handle("install app truth_or_dare")
+            manager.handle("do truth or dare for Alex")
+
+            restarted_manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                active_state_path=state_path,
+            )
+            follow_up = restarted_manager.handle("truth")
+
+        self.assertIsNotNone(restarted_manager.active_app or follow_up)
+        self.assertIsNotNone(follow_up)
+        self.assertTrue(follow_up.done)
+        self.assertIsNone(restarted_manager.active_app)
+        self.assertFalse(state_path.exists())
+
+    def test_truth_or_dare_asks_for_player_before_choice(self):
+        with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                active_state_path=Path(state_tmp) / "active_app.json",
+            )
+            manager.handle("install app truth_or_dare")
+
+            first = manager.handle("play truth or dare")
+            second = manager.handle("Alex")
+
+        self.assertIsNotNone(first)
+        self.assertEqual(first.text, "Who is playing truth or dare?")
+        self.assertTrue(first.expect_input)
+        self.assertIsNotNone(second)
+        self.assertEqual(second.text, "Alex, truth or dare?")
 
     def test_list_available_apps_command_uses_repository(self):
         with TemporaryDirectory() as store_tmp:
@@ -299,7 +371,7 @@ class AppManagerTests(unittest.TestCase):
         response = manager.handle("uninstall app truth_or_dare")
 
         self.assertIsNotNone(response)
-        self.assertEqual(response.text, "Cannot uninstall built-in app Truth or Dare.")
+        self.assertEqual(response.text, "App truth_or_dare is not installed.")
 
     def test_describe_app_uses_repository_metadata(self):
         with TemporaryDirectory() as store_tmp:

@@ -1,0 +1,12 @@
+{
+  "id": "truth_or_dare",
+  "name": "Truth or Dare",
+  "version": "0.1.0",
+  "entrypoint": "app:TruthOrDareApp",
+  "triggers": [
+    "truth or dare",
+    "do truth or dare",
+    "play truth or dare"
+  ],
+  "description": "Runs a quick truth-or-dare prompt for one player."
+}
