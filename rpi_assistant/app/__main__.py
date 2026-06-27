@@ -153,14 +153,37 @@ def main():
             try:
                 transcription = openai_client.transcribe_audio(audio_path)
                 app_response = app_manager.handle(transcription)
+                classifier_usage = None
+
+                if app_response is None and app_manager.should_classify_app_intent(transcription):
+                    try:
+                        classified_intent, classifier_usage = openai_client.classify_app_intent(
+                            transcription,
+                            app_manager.app_intent_context(),
+                        )
+                        if classified_intent is not None:
+                            app_response = app_manager.handle_classified_intent(
+                                classified_intent,
+                                transcription,
+                            )
+                    except Exception as e:
+                        print(f"\n⚠️  App intent classification skipped: {e}")
 
                 if app_response is not None:
                     response = app_response.text
                     usage = {
-                        "model": "local_app",
-                        "prompt_tokens": 0,
-                        "completion_tokens": 0,
-                        "total_tokens": 0,
+                        "model": "local_app"
+                        if classifier_usage is None
+                        else f"local_app via {classifier_usage['model']}",
+                        "prompt_tokens": 0
+                        if classifier_usage is None
+                        else classifier_usage["prompt_tokens"],
+                        "completion_tokens": 0
+                        if classifier_usage is None
+                        else classifier_usage["completion_tokens"],
+                        "total_tokens": 0
+                        if classifier_usage is None
+                        else classifier_usage["total_tokens"],
                     }
                 else:
                     response, usage = openai_client.get_chat_response(transcription)

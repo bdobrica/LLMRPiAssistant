@@ -1,6 +1,7 @@
-"""OpenAI API client for transcription and chat completion."""
+"""OpenAI API client for transcription, app intent classification, and chat."""
+import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from openai import OpenAI
 
@@ -91,6 +92,49 @@ class OpenAIClient:
             return assistant_message, usage
         except Exception as e:
             raise Exception(f"Chat completion failed: {e}")
+
+    def classify_app_intent(self, user_message: str, app_context: dict) -> tuple[Optional[dict], dict]:
+        """Classify whether a transcription should be handled by the local app manager.
+
+        The classifier is intentionally stateless and constrained to known app IDs so
+        ambiguous ASR output can still route to local app commands without letting the
+        general chat assistant answer on behalf of the app manager.
+        """
+        system_prompt = (
+            "You classify voice assistant transcriptions into local app-manager intents. "
+            "Return only JSON. Use only app IDs from the provided context. "
+            "If the user is asking a normal general question, return intent none. "
+            "Valid intents: none, list_installed, list_available, install_app, "
+            "uninstall_app, upgrade_app, describe_app, list_versions, launch_app, "
+            "resume_active, active_status, app_store_health, cancel. "
+            "Schema: {\"intent\": string, \"app_id\": string|null, "
+            "\"version\": string|null, \"raw_target\": string|null, "
+            "\"confidence\": number}."
+        )
+        payload = {
+            "transcription": user_message,
+            "context": app_context,
+        }
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.config.chat_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": json.dumps(payload)},
+                ],
+                max_tokens=120,
+                temperature=0,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content or "{}"
+            usage = _usage_dict(response, self.config.chat_model)
+            parsed = json.loads(content)
+            if not isinstance(parsed, dict):
+                return None, usage
+            return parsed, usage
+        except Exception as e:
+            raise Exception(f"App intent classification failed: {e}")
     
     def generate_speech(self, text: str, output_path: str, voice: str = "alloy") -> None:
         """Generate speech from text using OpenAI TTS.
@@ -138,3 +182,13 @@ class OpenAIClient:
     def reset_conversation(self) -> None:
         """Reset conversation history, keeping only system prompt."""
         self._initialize_conversation()
+
+
+def _usage_dict(response: Any, model: str) -> dict:
+    usage = getattr(response, "usage", None)
+    return {
+        "model": model,
+        "prompt_tokens": getattr(usage, "prompt_tokens", 0) if usage is not None else 0,
+        "completion_tokens": getattr(usage, "completion_tokens", 0) if usage is not None else 0,
+        "total_tokens": getattr(usage, "total_tokens", 0) if usage is not None else 0,
+    }

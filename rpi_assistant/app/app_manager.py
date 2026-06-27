@@ -2,7 +2,7 @@
 
 import shutil
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from rpi_assistant.app.app_install import AppInstallMetadata
 from rpi_assistant.app.app_loader import (
@@ -25,7 +25,12 @@ from rpi_assistant.app.app_store import (
     uninstall_app_bundle,
 )
 from rpi_assistant.app.apps.base import AppResponse, VoiceApp
-from rpi_assistant.app.intent_detector import DetectedIntent, IntentDetector
+from rpi_assistant.app.intent_detector import (
+    DetectedIntent,
+    IntentDetector,
+    manifest_aliases,
+    normalize_text,
+)
 
 
 class AppManager:
@@ -122,6 +127,113 @@ class AppManager:
                 return response
 
         return None
+
+    def app_intent_context(self) -> Dict[str, Any]:
+        """Return the compact app catalog used by LLM intent classification."""
+        available_apps = []
+        for repository in self.repositories:
+            for release in repository.list():
+                available_apps.append(
+                    {
+                        "id": release.manifest.id,
+                        "name": release.manifest.name,
+                        "triggers": release.manifest.triggers,
+                    }
+                )
+
+        installed_apps = [
+            {
+                "id": app.id,
+                "name": app.name,
+                "triggers": app.triggers,
+            }
+            for app in self.apps
+        ]
+
+        return {
+            "installed_apps": sorted(installed_apps, key=lambda entry: entry["id"]),
+            "available_apps": sorted(
+                {entry["id"]: entry for entry in available_apps}.values(),
+                key=lambda entry: entry["id"],
+            ),
+            "active_app": None
+            if self.active_app is None
+            else {"id": self.active_app.id, "name": self.active_app.name},
+        }
+
+    def should_classify_app_intent(self, text: str) -> bool:
+        """Return whether an LLM app-intent pass is worth attempting."""
+        normalized = normalize_text(text)
+        app_words = {
+            "app",
+            "apps",
+            "store",
+            "install",
+            "add",
+            "uninstall",
+            "remove",
+            "delete",
+            "upgrade",
+            "update",
+            "version",
+            "versions",
+            "available",
+            "installed",
+            "launch",
+            "start",
+            "play",
+            "open",
+            "resume",
+            "continue",
+            "active",
+            "cancel",
+        }
+        if any(relevant_word in normalized.split() for relevant_word in app_words):
+            return True
+
+        for alias in self._all_app_aliases():
+            if alias and alias in normalized:
+                return True
+
+        return False
+
+    def handle_classified_intent(
+        self,
+        classified_intent: Dict[str, Any],
+        original_text: str,
+    ) -> Optional[AppResponse]:
+        """Execute a strict app intent produced by the LLM classifier."""
+        intent_name = str(classified_intent.get("intent", "")).strip().lower()
+        confidence = _float_or_zero(classified_intent.get("confidence", 0))
+        if not intent_name or intent_name == "none" or confidence < 0.55:
+            return None
+
+        if intent_name == "cancel":
+            return self.cancel()
+
+        if intent_name == "launch_app":
+            app_id = str(classified_intent.get("app_id", "")).strip()
+            app = self._find_app(app_id)
+            if app is None:
+                return None
+
+            self.active_app = app
+            response = app.start(original_text)
+            if response.done:
+                app.stop()
+                self.active_app = None
+                self._clear_active_app_state()
+            else:
+                self._persist_active_app_state()
+            return response
+
+        intent = DetectedIntent(
+            name=intent_name,
+            raw_target=str(classified_intent.get("raw_target", "")).strip(),
+            app_id=_optional_str(classified_intent.get("app_id")),
+            version=_optional_str(classified_intent.get("version")),
+        )
+        return self._handle_detected_intent(intent)
 
     def cancel(self) -> Optional[AppResponse]:
         """Cancel the active app, if any."""
@@ -468,6 +580,29 @@ class AppManager:
                 return repository_release
         return None
 
+    def _all_app_aliases(self) -> List[str]:
+        aliases = []
+        for app in self.apps:
+            manifest = app.manifest
+            if manifest is None:
+                aliases.extend(manifest_aliases(app.id, app.name, app.triggers))
+            else:
+                aliases.extend(
+                    manifest_aliases(manifest.id, manifest.name, manifest.triggers)
+                )
+
+        for repository in self.repositories:
+            for release in repository.list():
+                aliases.extend(
+                    manifest_aliases(
+                        release.manifest.id,
+                        release.manifest.name,
+                        release.manifest.triggers,
+                    )
+                )
+
+        return sorted(set(aliases), key=len, reverse=True)
+
     def _upgrade_from_source(
         self,
         source_dir: Path,
@@ -573,3 +708,17 @@ class AppManager:
     def _is_cancel_command(self, text: str) -> bool:
         lowered = text.lower()
         return any(trigger in lowered for trigger in self.CANCEL_TRIGGERS)
+
+
+def _optional_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _float_or_zero(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0

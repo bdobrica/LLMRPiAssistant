@@ -200,6 +200,92 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNone(manager.active_app)
         self.assertTrue(bool(response.text))
 
+    def test_classified_install_intent_can_resolve_noisy_spoken_app_name(self):
+        with TemporaryDirectory() as install_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+            )
+
+            response = manager.handle("Install the app through Tor Dare")
+            if response is None:
+                response = manager.handle_classified_intent(
+                    {
+                        "intent": "install_app",
+                        "app_id": "truth_or_dare",
+                        "version": None,
+                        "raw_target": "through Tor Dare",
+                        "confidence": 0.86,
+                    },
+                    "Install the app through Tor Dare",
+                )
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Installed Truth or Dare version 0.1.0.")
+
+    def test_list_available_apps_command_tolerates_asr_drift(self):
+        with TemporaryDirectory() as store_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+            manager = AppManager(repository_roots=[repository_dir])
+
+            response = manager.handle("least available apps")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Available apps: Dice.")
+
+    def test_install_apps_without_target_lists_available_apps(self):
+        with TemporaryDirectory() as store_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+            manager = AppManager(repository_roots=[repository_dir])
+
+            response = manager.handle("Please install apps")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Available apps: Dice.")
+
+    def test_list_installed_apps_command_can_be_embedded_in_sentence(self):
+        with TemporaryDirectory() as install_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+            )
+            manager.handle("install app dice")
+
+            response = manager.handle(
+                "I don't want to install apps I want you to list the installed apps"
+            )
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Installed apps: Dice.")
+
+    def test_install_command_can_resolve_uppercase_store_app_name(self):
+        with TemporaryDirectory() as install_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+            )
+
+            response = manager.handle("Install APP DICE")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Installed Dice version 0.1.0.")
+
+    def test_classifier_gate_only_allows_app_related_transcriptions(self):
+        manager = AppManager(repository_roots=[VOICE_APPS_REPOSITORY])
+
+        self.assertFalse(manager.should_classify_app_intent("Are you online?"))
+        self.assertTrue(manager.should_classify_app_intent("Install app footordare"))
+        self.assertTrue(manager.should_classify_app_intent("Start truth or dare"))
+
     def test_dare_choice_completes_app(self):
         with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
             manager = AppManager(
@@ -625,6 +711,47 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNotNone(response)
         self.assertTrue(response.done)
         self.assertTrue(bool(response.text))
+
+    def test_launch_can_resolve_fuzzy_spoken_name(self):
+        with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+                active_state_path=Path(state_tmp) / "active_app.json",
+            )
+            manager.handle("install app truth or dare")
+
+            response = manager.handle("Start true or dare")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Who is playing truth or dare?")
+        self.assertTrue(response.expect_input)
+
+    def test_classified_launch_intent_can_start_installed_app(self):
+        with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+                active_state_path=Path(state_tmp) / "active_app.json",
+            )
+            manager.handle("install app truth or dare")
+
+            response = manager.handle_classified_intent(
+                {
+                    "intent": "launch_app",
+                    "app_id": "truth_or_dare",
+                    "version": None,
+                    "raw_target": "true or dare",
+                    "confidence": 0.81,
+                },
+                "Start true or dare",
+            )
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Who is playing truth or dare?")
+        self.assertTrue(response.expect_input)
 
     def test_signed_repository_can_be_required_and_persists_verified_metadata(self):
         with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
