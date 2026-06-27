@@ -4,12 +4,22 @@
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 from nacl.encoding import Base64Encoder
 from nacl.signing import SigningKey
 
-from rpi_assistant.app.app_signing import sign_catalog
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+
+def load_sign_catalog():
+    """Import the catalog signing helper after the repo root is on sys.path."""
+    from rpi_assistant.app.app_signing import sign_catalog
+
+    return sign_catalog
 
 
 def main() -> None:
@@ -35,11 +45,13 @@ def main() -> None:
     private_key = args.private_key or os.getenv(args.private_key_env, "")
     if not private_key:
         raise ValueError("A private signing key is required via argument or environment variable")
+    private_key_bytes = private_key.encode("utf-8")
 
     payload = json.loads(args.index_path.read_text(encoding="utf-8"))
     catalog = payload.get("catalog", payload)
+    sign_catalog = load_sign_catalog()
     signature = sign_catalog(catalog, private_key)
-    signing_key = SigningKey(private_key, encoder=Base64Encoder)
+    signing_key = SigningKey(private_key_bytes, encoder=Base64Encoder)
     public_key = signing_key.verify_key.encode(encoder=Base64Encoder).decode("utf-8")
 
     signed_payload = {
