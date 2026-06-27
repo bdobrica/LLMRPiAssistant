@@ -14,6 +14,8 @@ class ConfigTests(unittest.TestCase):
                     [
                         "[openai]",
                         "api_key = test-key",
+                        "conversation_idle_timeout_seconds = 42",
+                        "conversation_relevance_threshold = 0.6",
                         "",
                         "[audio]",
                         "queue_seconds = 1.5",
@@ -29,6 +31,8 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(config.audio.queue_seconds, 1.5)
         self.assertEqual(config.recording.processing_drain_seconds, 0.75)
+        self.assertEqual(config.openai.conversation_idle_timeout_seconds, 42)
+        self.assertEqual(config.openai.conversation_relevance_threshold, 0.6)
 
 
 if __name__ == "__main__":

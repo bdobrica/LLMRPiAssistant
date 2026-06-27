@@ -251,6 +251,10 @@ def main():
                         print(f"\n⚠️  TTS playback error: {e}")
                         if pixels:
                             pixels.listen()
+                    finally:
+                        openai_client.mark_response_output_finished()
+                else:
+                    openai_client.mark_response_output_finished()
 
                 print("\n" + "=" * 60)
                 print("Listening for wake word...\n")

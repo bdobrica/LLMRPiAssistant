@@ -66,6 +66,11 @@ chat_model = gpt-4o-mini
 max_tokens = 500
 # Response creativity (0.0-2.0)
 temperature = 0.7
+# Reset active chat context if this many seconds pass after the last spoken response.
+# Set to 0 to disable idle context resets.
+conversation_idle_timeout_seconds = 300.0
+# If prior context relevance is below this score (0.0-1.0), reset active chat context.
+conversation_relevance_threshold = 0.35
 
 # System prompt for the assistant
 system_prompt = You are a helpful voice assistant running on a Raspberry Pi. Provide concise, friendly responses suitable for voice interaction.

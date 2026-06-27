@@ -1,6 +1,7 @@
 """OpenAI API client for transcription, app intent classification, and chat."""
 import json
 from pathlib import Path
+import time
 from typing import Any, Optional
 
 from openai import OpenAI
@@ -20,6 +21,8 @@ class OpenAIClient:
         self.config = config
         self.client = OpenAI(api_key=config.api_key)
         self.conversation_history = []
+        self.compacted_contexts = []
+        self.last_response_output_finished_at: Optional[float] = None
         self._initialize_conversation()
     
     def _initialize_conversation(self) -> None:
@@ -64,6 +67,8 @@ class OpenAIClient:
             Exception: If chat completion fails.
         """
         try:
+            self._prepare_conversation_for(user_message)
+
             # Add user message to history
             self.conversation_history.append({"role": "user", "content": user_message})
             
@@ -92,6 +97,85 @@ class OpenAIClient:
             return assistant_message, usage
         except Exception as e:
             raise Exception(f"Chat completion failed: {e}")
+
+    def mark_response_output_finished(self) -> None:
+        """Record when the last response finished being presented to the user."""
+        self.last_response_output_finished_at = time.time()
+
+    def compact_conversation(self, reason: str) -> bool:
+        """Archive active chat turns for future retrieval and reset chat context."""
+        messages = self.conversation_history[1:]
+        if not messages:
+            return False
+
+        self.compacted_contexts.append(
+            {
+                "reason": reason,
+                "created_at": time.time(),
+                "messages": [dict(message) for message in messages],
+                "vector_store_status": "pending",
+            }
+        )
+        self._initialize_conversation()
+        print(f"Compacted chat context ({reason}); archived {len(messages)} messages.")
+        return True
+
+    def _prepare_conversation_for(self, user_message: str) -> None:
+        if not self._has_active_chat_context():
+            return
+
+        if self._idle_timeout_exceeded():
+            self.compact_conversation("idle_timeout")
+            return
+
+        relevance_score = self._conversation_relevance_score(user_message)
+        if relevance_score is None:
+            return
+        if relevance_score < self.config.conversation_relevance_threshold:
+            self.compact_conversation(f"low_relevance:{relevance_score:.2f}")
+
+    def _has_active_chat_context(self) -> bool:
+        return len(self.conversation_history) > 1
+
+    def _idle_timeout_exceeded(self) -> bool:
+        timeout = self.config.conversation_idle_timeout_seconds
+        if timeout <= 0 or self.last_response_output_finished_at is None:
+            return False
+        return (time.time() - self.last_response_output_finished_at) >= timeout
+
+    def _conversation_relevance_score(self, user_message: str) -> Optional[float]:
+        history = self.conversation_history[1:]
+        if not history:
+            return None
+
+        system_prompt = (
+            "Estimate whether the current user message depends on or continues the "
+            "prior chat history. Return only JSON using schema "
+            "{\"relatedness\": number, \"reason\": string}. "
+            "Use 0 for unrelated and 1 for clearly dependent on prior context."
+        )
+        payload = {
+            "current_user_message": user_message,
+            "prior_messages": history[-8:],
+        }
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.config.chat_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": json.dumps(payload)},
+                ],
+                max_tokens=80,
+                temperature=0,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content or "{}"
+            parsed = json.loads(content)
+            return _clamp_float(parsed.get("relatedness"))
+        except Exception as e:
+            print(f"⚠️  Conversation relevance check skipped: {e}")
+            return None
 
     def classify_app_intent(self, user_message: str, app_context: dict) -> tuple[Optional[dict], dict]:
         """Classify whether a transcription should be handled by the local app manager.
@@ -192,3 +276,11 @@ def _usage_dict(response: Any, model: str) -> dict:
         "completion_tokens": getattr(usage, "completion_tokens", 0) if usage is not None else 0,
         "total_tokens": getattr(usage, "total_tokens", 0) if usage is not None else 0,
     }
+
+
+def _clamp_float(value: Any) -> Optional[float]:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(1.0, number))

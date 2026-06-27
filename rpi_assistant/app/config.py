@@ -58,6 +58,8 @@ class OpenAIConfig:
     system_prompt: str = "You are a helpful voice assistant."
     max_tokens: int = 500
     temperature: float = 0.7
+    conversation_idle_timeout_seconds: float = 300.0
+    conversation_relevance_threshold: float = 0.35
 
 
 @dataclass
@@ -267,6 +269,20 @@ def load_config(config_path: Optional[str] = None) -> Config:
         ),
         max_tokens=get_value("openai", "max_tokens", "OPENAI_MAX_TOKENS", 500, int),
         temperature=get_value("openai", "temperature", "OPENAI_TEMPERATURE", 0.7, float),
+        conversation_idle_timeout_seconds=get_value(
+            "openai",
+            "conversation_idle_timeout_seconds",
+            "OPENAI_CONVERSATION_IDLE_TIMEOUT",
+            300.0,
+            float,
+        ),
+        conversation_relevance_threshold=get_value(
+            "openai",
+            "conversation_relevance_threshold",
+            "OPENAI_CONVERSATION_RELEVANCE_THRESHOLD",
+            0.35,
+            float,
+        ),
     )
 
     audio_output = AudioOutputConfig(
