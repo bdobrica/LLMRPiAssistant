@@ -215,6 +215,16 @@ cd rpi-assistant
 - **Ask!**: Say `play ask` or `ask game` to get a deterministic conversation starter without calling the chat model.
 - **Cancel**: Say `stop game`, `cancel app`, or `nevermind` to end the active local app and return to normal assistant behavior.
 
+### Dynamic App Discovery
+
+The assistant now discovers apps dynamically instead of relying on a hardcoded list.
+
+- **Built-in apps**: Any `VoiceApp` subclass inside `rpi_assistant/app/apps/` is discovered automatically at startup.
+- **External apps**: Additional apps can be dropped into `~/.config/rpi-assistant/apps/` and are loaded automatically on the next start.
+- **Supported external layouts**: A single `.py` file, or a directory containing `app.py`.
+
+This is the first step toward voice-driven `install app` and `uninstall app` flows: installation can eventually copy app files into that directory, and uninstallation can remove them.
+
 ### Wake Words
 
 The default OpenWakeWord model supports these wake words:
@@ -371,6 +381,7 @@ sudo nmcli dev wifi hotspot ifname wlan0 ssid PiAssistant-Setup password ChangeM
 │  │                 │        │                  │      │
 │  │  • __main__.py  │        │  • webapp.py     │      │
 │  │  • audio.py     │        │  • templates/    │      │
+│  │  • app_loader.py │       │                  │      │
 │  │  • app_manager.py│       │                  │      │
 │  │  • apps/        │        │                  │      │
 │  │  • openai_client│        │                  │      │

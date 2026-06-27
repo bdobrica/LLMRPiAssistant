@@ -1,10 +1,10 @@
 """Voice app routing and lifecycle management."""
 
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Sequence
 
-from .apps.ask_estonia import AskEstoniaApp
+from .app_loader import discover_apps
 from .apps.base import AppResponse, VoiceApp
-from .apps.truth_or_dare import TruthOrDareApp
 
 
 class AppManager:
@@ -19,9 +19,20 @@ class AppManager:
         "stop app",
     )
 
-    def __init__(self, apps: Optional[List[VoiceApp]] = None):
-        self.apps = apps if apps is not None else self._default_apps()
+    def __init__(
+        self,
+        apps: Optional[List[VoiceApp]] = None,
+        app_dirs: Optional[Sequence[Path]] = None,
+    ):
+        self.apps: List[VoiceApp] = []
         self.active_app: Optional[VoiceApp] = None
+
+        if apps is not None:
+            for app in apps:
+                self.register_app(app)
+        else:
+            for app in discover_apps(app_dirs=app_dirs):
+                self.register_app(app)
 
     def handle(self, text: str) -> Optional[AppResponse]:
         """Route text to the active app or start a matching app."""
@@ -56,11 +67,29 @@ class AppManager:
         self.active_app = None
         return AppResponse(text=f"Stopped {app_name}.", done=True)
 
-    def _default_apps(self) -> List[VoiceApp]:
-        return [
-            TruthOrDareApp(),
-            AskEstoniaApp(),
-        ]
+    def register_app(self, app: VoiceApp) -> None:
+        """Register an app instance with uniqueness enforced by id."""
+        if any(existing.id == app.id for existing in self.apps):
+            raise ValueError(f"App id is already registered: {app.id}")
+        self.apps.append(app)
+
+    def unregister_app(self, app_id: str) -> Optional[VoiceApp]:
+        """Remove a registered app and stop it if it is active."""
+        for index, app in enumerate(self.apps):
+            if app.id != app_id:
+                continue
+
+            if self.active_app is app:
+                app.stop()
+                self.active_app = None
+
+            return self.apps.pop(index)
+
+        return None
+
+    def list_apps(self) -> List[VoiceApp]:
+        """Return a shallow copy of the registered apps."""
+        return list(self.apps)
 
     def _is_cancel_command(self, text: str) -> bool:
         lowered = text.lower()
