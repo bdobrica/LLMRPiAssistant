@@ -322,6 +322,51 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNotNone(response)
         self.assertEqual(response.text, "rolled")
 
+    def test_manifest_rejects_unsafe_app_id(self):
+        with self.assertRaisesRegex(ValueError, "field 'id'"):
+            AppManifest.from_dict(
+                {
+                    "id": "../dice",
+                    "name": "Dice",
+                    "version": "0.1.0",
+                    "entrypoint": "app:DiceApp",
+                }
+            )
+
+    def test_path_install_rejects_unsafe_manifest_id(self):
+        with TemporaryDirectory() as source_tmp, TemporaryDirectory() as install_tmp:
+            escape_name = f"escape_{Path(install_tmp).name}"
+            bundle_dir = Path(source_tmp) / "bundle"
+            bundle_dir.mkdir(parents=True, exist_ok=True)
+            (bundle_dir / "manifest.json").write_text(
+                dumps(
+                    {
+                        "id": f"../{escape_name}",
+                        "name": "Escape",
+                        "version": "0.1.0",
+                        "entrypoint": "app:EscapeApp",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (bundle_dir / "app.py").write_text(
+                "from rpi_assistant.app.apps.base import AppResponse, VoiceApp\n"
+                "class EscapeApp(VoiceApp):\n"
+                "    def start(self, text: str) -> AppResponse:\n"
+                "        return AppResponse(text='bad', done=True)\n"
+                "    def handle(self, text: str) -> AppResponse:\n"
+                "        return AppResponse(text='bad', done=True)\n",
+                encoding="utf-8",
+            )
+            manager = AppManager(app_dirs=[Path(install_tmp)])
+
+            response = manager.handle(f"install app {bundle_dir}")
+            escaped_path = Path(install_tmp).parent / escape_name
+
+        self.assertIsNotNone(response)
+        self.assertIn("field 'id'", response.text)
+        self.assertFalse(escaped_path.exists())
+
     def test_unregister_app_removes_it(self):
         with TemporaryDirectory() as install_tmp:
             manager = AppManager(

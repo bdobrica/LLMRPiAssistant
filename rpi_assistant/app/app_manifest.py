@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 APP_MANIFEST_FILENAME = "manifest.json"
+APP_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 
 
 @dataclass(frozen=True)
@@ -41,8 +42,15 @@ class AppManifest:
         if triggers and not isinstance(triggers, list):
             raise ValueError("App manifest field 'triggers' must be a list")
 
+        app_id = str(data["id"]).strip()
+        if not APP_ID_PATTERN.fullmatch(app_id):
+            raise ValueError(
+                "App manifest field 'id' must contain only lowercase letters, "
+                "numbers, and underscores, and must start with a letter or number"
+            )
+
         manifest = cls(
-            id=str(data["id"]),
+            id=app_id,
             name=str(data["name"]),
             version=str(data["version"]),
             entrypoint=str(data["entrypoint"]),
