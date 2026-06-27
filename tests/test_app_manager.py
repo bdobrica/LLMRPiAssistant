@@ -422,6 +422,19 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNotNone(response)
         self.assertEqual(response.text, "Installed Dice version 0.1.0.")
 
+    def test_install_command_can_resolve_spoken_app_name(self):
+        with TemporaryDirectory() as install_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+            )
+
+            response = manager.handle("install app truth or dare")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Installed Truth or Dare version 0.1.0.")
+
     def test_uninstall_command_removes_bundle_and_unregisters_app(self):
         with TemporaryDirectory() as source_tmp, TemporaryDirectory() as install_tmp:
             source_bundle = self.create_app_bundle(Path(source_tmp))
@@ -540,6 +553,17 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNotNone(response)
         self.assertEqual(response.text, "Available versions for Dice: 0.2.0, 0.1.0.")
 
+    def test_list_app_versions_can_resolve_spoken_app_name(self):
+        manager = AppManager(
+            repository_roots=[VOICE_APPS_REPOSITORY],
+            repository_public_key=VOICE_APPS_PUBLIC_KEY,
+        )
+
+        response = manager.handle("list app versions truth or dare")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Available versions for Truth or Dare: 0.1.0.")
+
     def test_install_command_can_pin_repository_version(self):
         with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
             source_dir = Path(store_tmp) / "source"
@@ -586,6 +610,21 @@ class AppManagerTests(unittest.TestCase):
         self.assertEqual(response.text, "Installed Dice version 0.1.0.")
         self.assertIsNotNone(roll)
         self.assertEqual(roll.text, "rolled")
+
+    def test_launch_can_resolve_spoken_name_without_custom_trigger(self):
+        with TemporaryDirectory() as install_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+            )
+            manager.handle("install app ask")
+
+            response = manager.handle("start ask")
+
+        self.assertIsNotNone(response)
+        self.assertTrue(response.done)
+        self.assertTrue(bool(response.text))
 
     def test_signed_repository_can_be_required_and_persists_verified_metadata(self):
         with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:

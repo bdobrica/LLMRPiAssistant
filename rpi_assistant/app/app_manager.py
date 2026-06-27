@@ -1,21 +1,20 @@
 """Voice app routing and lifecycle management."""
 
-import re
 import shutil
 from pathlib import Path
 from typing import List, Optional, Sequence
 
+from rpi_assistant.app.app_install import AppInstallMetadata
 from rpi_assistant.app.app_loader import (
     DEFAULT_EXTERNAL_APP_DIRS,
     discover_apps,
     load_external_app_bundle,
 )
-from rpi_assistant.app.app_install import AppInstallMetadata
 from rpi_assistant.app.app_manifest import AppManifest
 from rpi_assistant.app.app_repository import (
     DEFAULT_APP_REPOSITORY_ROOTS,
-    RepositoryRelease,
     AppRepository,
+    RepositoryRelease,
     load_default_repository_public_key,
 )
 from rpi_assistant.app.app_state import ActiveAppState, DEFAULT_ACTIVE_APP_STATE_PATH
@@ -26,6 +25,7 @@ from rpi_assistant.app.app_store import (
     uninstall_app_bundle,
 )
 from rpi_assistant.app.apps.base import AppResponse, VoiceApp
+from rpi_assistant.app.intent_detector import DetectedIntent, IntentDetector
 
 
 class AppManager:
@@ -38,46 +38,6 @@ class AppManager:
         "nevermind",
         "never mind",
         "stop app",
-    )
-    INSTALL_PATTERN = re.compile(r"^(?:install|add)\s+app(?:\s+from)?\s+(?P<source>.+)$", re.IGNORECASE)
-    UPGRADE_PATTERN = re.compile(r"^(?:upgrade|update)\s+app\s+(?P<app_id>[a-zA-Z0-9_-]+)$", re.IGNORECASE)
-    UNINSTALL_PATTERN = re.compile(
-        r"^(?:uninstall|remove|delete)\s+app\s+(?P<app_id>[a-zA-Z0-9_-]+)$",
-        re.IGNORECASE,
-    )
-    DESCRIBE_PATTERN = re.compile(r"^(?:describe|show)\s+app\s+(?P<app_id>[a-zA-Z0-9_-]+)$", re.IGNORECASE)
-    LIST_VERSIONS_PATTERN = re.compile(
-        r"^(?:list|show)\s+app\s+versions\s+(?P<app_id>[a-zA-Z0-9_-]+)$",
-        re.IGNORECASE,
-    )
-    LIST_PATTERNS = (
-        "list apps",
-        "list installed apps",
-        "what apps are installed",
-        "what app is installed",
-    )
-    LIST_AVAILABLE_PATTERNS = (
-        "list available apps",
-        "list store apps",
-        "what apps are available",
-    )
-    RESUME_PATTERNS = (
-        "resume app",
-        "resume game",
-        "continue app",
-        "continue game",
-    )
-    ACTIVE_STATUS_PATTERNS = (
-        "what app is active",
-        "what game is active",
-        "active app",
-        "active game",
-    )
-    APP_STORE_HEALTH_PATTERNS = (
-        "app store health",
-        "app store status",
-        "store health",
-        "store status",
     )
 
     def __init__(
@@ -117,9 +77,11 @@ class AppManager:
         if self._is_cancel_command(text):
             return self.cancel()
 
-        local_command_response = self._handle_local_command(text)
-        if local_command_response is not None:
-            return local_command_response
+        detector = IntentDetector(self.apps, self.repositories)
+
+        management_intent = detector.detect_management_intent(text)
+        if management_intent is not None:
+            return self._handle_detected_intent(management_intent)
 
         if self.active_app is not None:
             response = self.active_app.handle(text)
@@ -131,9 +93,19 @@ class AppManager:
                 self._persist_active_app_state()
             return response
 
-        management_response = self._handle_management_command(text)
-        if management_response is not None:
-            return management_response
+        launch_app = detector.detect_launch_app(text)
+        if launch_app is not None:
+            self.active_app = launch_app
+            response = launch_app.start(text)
+            if response.done:
+                active_app = self.active_app
+                if active_app is not None:
+                    active_app.stop()
+                self.active_app = None
+                self._clear_active_app_state()
+            else:
+                self._persist_active_app_state()
+            return response
 
         for app in self.apps:
             if app.matches(text):
@@ -297,11 +269,7 @@ class AppManager:
             signature_verified=repository_release.signature_verified,
         )
         try:
-            self._upgrade_from_source(
-                staged_dir,
-                repository_release.manifest,
-                metadata,
-            )
+            self._upgrade_from_source(staged_dir, repository_release.manifest, metadata)
         finally:
             if staged_dir.exists():
                 shutil.rmtree(staged_dir)
@@ -405,6 +373,84 @@ class AppManager:
 
         return response
 
+    def _handle_detected_intent(self, intent: DetectedIntent) -> Optional[AppResponse]:
+        if intent.name == "list_installed":
+            app_names = sorted(app.name for app in self.list_apps())
+            if not app_names:
+                return AppResponse(text="No apps are installed.", done=True)
+            return AppResponse(text=f"Installed apps: {', '.join(app_names)}.", done=True)
+
+        if intent.name == "list_available":
+            repository_apps = []
+            for repository in self.repositories:
+                repository_apps.extend(repository.list())
+            names = sorted({entry.manifest.name for entry in repository_apps})
+            if not names:
+                return AppResponse(text="No app store entries are available.", done=True)
+            return AppResponse(text=f"Available apps: {', '.join(names)}.", done=True)
+
+        if intent.name == "resume_active":
+            return self.resume_active_app()
+
+        if intent.name == "active_status":
+            return AppResponse(text=self.describe_active_app(), done=True)
+
+        if intent.name == "app_store_health":
+            return AppResponse(text=self.app_store_health(), done=True)
+
+        if intent.name == "install_app":
+            try:
+                if self._looks_like_path(intent.raw_target):
+                    manifest = self.install_app(Path(intent.raw_target))
+                else:
+                    manifest = self.install_store_app(intent.app_id or intent.raw_target, version=intent.version)
+            except Exception as exc:
+                return AppResponse(text=f"Could not install app: {exc}", done=True)
+
+            existing_app = self._find_app(manifest.id)
+            if existing_app is not None and existing_app.manifest is not None:
+                return AppResponse(
+                    text=f"Installed {manifest.name} version {existing_app.manifest.version}.",
+                    done=True,
+                )
+            return AppResponse(text=f"Installed {manifest.name}.", done=True)
+
+        if intent.name == "upgrade_app":
+            app_target = intent.app_id or intent.raw_target
+            try:
+                manifest = self.upgrade_app(app_target)
+            except Exception as exc:
+                return AppResponse(text=str(exc), done=True)
+            return AppResponse(text=f"Upgraded {manifest.name} to {manifest.version}.", done=True)
+
+        if intent.name == "uninstall_app":
+            app_target = intent.app_id or intent.raw_target
+            try:
+                manifest = self.uninstall_app(app_target)
+            except Exception as exc:
+                return AppResponse(text=str(exc), done=True)
+            if manifest is None:
+                return AppResponse(text=f"App {app_target} is not installed.", done=True)
+            return AppResponse(text=f"Uninstalled {manifest.name}.", done=True)
+
+        if intent.name == "describe_app":
+            app_target = intent.app_id or intent.raw_target
+            try:
+                description = self.describe_app(app_target)
+            except Exception as exc:
+                return AppResponse(text=str(exc), done=True)
+            return AppResponse(text=description, done=True)
+
+        if intent.name == "list_versions":
+            app_target = intent.app_id or intent.raw_target
+            try:
+                version_text = self.list_app_versions(app_target)
+            except Exception as exc:
+                return AppResponse(text=str(exc), done=True)
+            return AppResponse(text=version_text, done=True)
+
+        return None
+
     def _find_app(self, app_id: str) -> Optional[VoiceApp]:
         for app in self.apps:
             if app.id == app_id:
@@ -421,16 +467,6 @@ class AppManager:
             if repository_release is not None:
                 return repository_release
         return None
-
-    def _parse_store_target(self, target: str) -> tuple[str, Optional[str]]:
-        app_id, separator, version = target.partition("@")
-        app_id = app_id.strip()
-        if not separator:
-            return app_id, None
-        version = version.strip()
-        if not app_id or not version:
-            raise ValueError("App store target must use the format '<app_id>@<version>'")
-        return app_id, version
 
     def _upgrade_from_source(
         self,
@@ -483,20 +519,6 @@ class AppManager:
                 repositories.append(repository)
         return repositories
 
-    def _handle_local_command(self, text: str) -> Optional[AppResponse]:
-        lowered = text.strip().lower()
-
-        if lowered in self.RESUME_PATTERNS:
-            return self.resume_active_app()
-
-        if lowered in self.ACTIVE_STATUS_PATTERNS:
-            return AppResponse(text=self.describe_active_app(), done=True)
-
-        if lowered in self.APP_STORE_HEALTH_PATTERNS:
-            return AppResponse(text=self.app_store_health(), done=True)
-
-        return None
-
     def _describe_install_source(
         self,
         install_metadata: Optional[AppInstallMetadata],
@@ -547,90 +569,6 @@ class AppManager:
             or target.startswith("~")
             or Path(target).exists()
         )
-
-    def _handle_management_command(self, text: str) -> Optional[AppResponse]:
-        normalized = text.strip()
-        lowered = normalized.lower()
-
-        if lowered in self.LIST_PATTERNS:
-            app_names = sorted(app.name for app in self.list_apps())
-            if not app_names:
-                return AppResponse(text="No apps are installed.", done=True)
-            return AppResponse(text=f"Installed apps: {', '.join(app_names)}.", done=True)
-
-        if lowered in self.LIST_AVAILABLE_PATTERNS:
-            repository_apps = []
-            for repository in self.repositories:
-                repository_apps.extend(repository.list())
-            names = sorted({entry.manifest.name for entry in repository_apps})
-            if not names:
-                return AppResponse(text="No app store entries are available.", done=True)
-            return AppResponse(text=f"Available apps: {', '.join(names)}.", done=True)
-
-        list_versions_match = self.LIST_VERSIONS_PATTERN.match(normalized)
-        if list_versions_match:
-            app_id = list_versions_match.group("app_id")
-            try:
-                version_text = self.list_app_versions(app_id)
-            except Exception as exc:
-                return AppResponse(text=str(exc), done=True)
-
-            return AppResponse(text=version_text, done=True)
-
-        install_match = self.INSTALL_PATTERN.match(normalized)
-        if install_match:
-            source = install_match.group("source").strip().strip("\"'")
-            try:
-                if self._looks_like_path(source):
-                    manifest = self.install_app(Path(source))
-                else:
-                    app_id, version = self._parse_store_target(source)
-                    manifest = self.install_store_app(app_id, version=version)
-            except Exception as exc:
-                return AppResponse(text=f"Could not install app: {exc}", done=True)
-
-            existing_app = self._find_app(manifest.id)
-            if existing_app is not None and existing_app.manifest is not None:
-                return AppResponse(
-                    text=f"Installed {manifest.name} version {existing_app.manifest.version}.",
-                    done=True,
-                )
-            return AppResponse(text=f"Installed {manifest.name}.", done=True)
-
-        upgrade_match = self.UPGRADE_PATTERN.match(normalized)
-        if upgrade_match:
-            app_id = upgrade_match.group("app_id")
-            try:
-                manifest = self.upgrade_app(app_id)
-            except Exception as exc:
-                return AppResponse(text=str(exc), done=True)
-
-            return AppResponse(text=f"Upgraded {manifest.name} to {manifest.version}.", done=True)
-
-        uninstall_match = self.UNINSTALL_PATTERN.match(normalized)
-        if uninstall_match:
-            app_id = uninstall_match.group("app_id")
-            try:
-                manifest = self.uninstall_app(app_id)
-            except Exception as exc:
-                return AppResponse(text=str(exc), done=True)
-
-            if manifest is None:
-                return AppResponse(text=f"App {app_id} is not installed.", done=True)
-
-            return AppResponse(text=f"Uninstalled {manifest.name}.", done=True)
-
-        describe_match = self.DESCRIBE_PATTERN.match(normalized)
-        if describe_match:
-            app_id = describe_match.group("app_id")
-            try:
-                description = self.describe_app(app_id)
-            except Exception as exc:
-                return AppResponse(text=str(exc), done=True)
-
-            return AppResponse(text=description, done=True)
-
-        return None
 
     def _is_cancel_command(self, text: str) -> bool:
         lowered = text.lower()
