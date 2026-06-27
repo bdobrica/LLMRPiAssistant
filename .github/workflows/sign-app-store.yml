@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r rpi_assistant/requirements.txt
+          python -m pip install PyNaCl
 
       - name: Sign catalog
         env:
