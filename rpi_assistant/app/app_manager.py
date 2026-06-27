@@ -61,6 +61,24 @@ class AppManager:
         "list store apps",
         "what apps are available",
     )
+    RESUME_PATTERNS = (
+        "resume app",
+        "resume game",
+        "continue app",
+        "continue game",
+    )
+    ACTIVE_STATUS_PATTERNS = (
+        "what app is active",
+        "what game is active",
+        "active app",
+        "active game",
+    )
+    APP_STORE_HEALTH_PATTERNS = (
+        "app store health",
+        "app store status",
+        "store health",
+        "store status",
+    )
 
     def __init__(
         self,
@@ -80,6 +98,7 @@ class AppManager:
         self.repository_public_key = repository_public_key or load_default_repository_public_key()
         self.require_repository_signature = require_repository_signature
         self.active_state_path = active_state_path or DEFAULT_ACTIVE_APP_STATE_PATH
+        self.repository_load_errors: List[tuple[str, str]] = []
         self.repositories = self._load_repositories()
         self.apps: List[VoiceApp] = []
         self.active_app: Optional[VoiceApp] = None
@@ -97,6 +116,10 @@ class AppManager:
         """Route text to the active app or start a matching app."""
         if self._is_cancel_command(text):
             return self.cancel()
+
+        local_command_response = self._handle_local_command(text)
+        if local_command_response is not None:
+            return local_command_response
 
         if self.active_app is not None:
             response = self.active_app.handle(text)
@@ -342,6 +365,46 @@ class AppManager:
 
         return f"Available versions for {app_name}: {', '.join(versions)}."
 
+    def describe_active_app(self) -> str:
+        """Return a short spoken description of the currently active app."""
+        if self.active_app is None:
+            return "No app is active."
+        return self.active_app.status_text()
+
+    def resume_active_app(self) -> AppResponse:
+        """Return the resume prompt for the currently active app."""
+        if self.active_app is None:
+            return AppResponse(text="No app is active.", done=True)
+
+        response = self.active_app.resume()
+        if response.done:
+            self.active_app.stop()
+            self.active_app = None
+            self._clear_active_app_state()
+        else:
+            self._persist_active_app_state()
+        return response
+
+    def app_store_health(self) -> str:
+        """Return a spoken summary of app-store readiness and repository loading."""
+        configured_roots = [str(root) for root in self.repository_roots]
+        loaded_roots = [str(repository.root) for repository in self.repositories]
+        signature_mode = "enabled" if self.require_repository_signature else "optional"
+
+        response = (
+            f"App store: {len(self.repositories)} of {len(configured_roots)} repositories loaded. "
+            f"Signature verification is {signature_mode}."
+        )
+
+        if loaded_roots:
+            response += f" Loaded repositories: {', '.join(loaded_roots)}."
+
+        if self.repository_load_errors:
+            failed_roots = ", ".join(root for root, _ in self.repository_load_errors)
+            response += f" Failed repositories: {failed_roots}."
+
+        return response
+
     def _find_app(self, app_id: str) -> Optional[VoiceApp]:
         for app in self.apps:
             if app.id == app_id:
@@ -412,12 +475,27 @@ class AppManager:
                     require_signature=self.require_repository_signature,
                 )
             except Exception as exc:
+                self.repository_load_errors.append((str(root), str(exc)))
                 print(f"⚠️  Could not load app store repository {root}: {exc}")
                 continue
 
             if repository is not None:
                 repositories.append(repository)
         return repositories
+
+    def _handle_local_command(self, text: str) -> Optional[AppResponse]:
+        lowered = text.strip().lower()
+
+        if lowered in self.RESUME_PATTERNS:
+            return self.resume_active_app()
+
+        if lowered in self.ACTIVE_STATUS_PATTERNS:
+            return AppResponse(text=self.describe_active_app(), done=True)
+
+        if lowered in self.APP_STORE_HEALTH_PATTERNS:
+            return AppResponse(text=self.app_store_health(), done=True)
+
+        return None
 
     def _describe_install_source(
         self,

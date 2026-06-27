@@ -213,8 +213,9 @@ cd rpi-assistant
 
 - **Truth or Dare**: Install `truth_or_dare`, then say phrases like `play truth or dare` or `do truth or dare for Alex` to start a short stateful flow that keeps the next utterance inside the game.
 - **Ask!**: Install `ask`, then say `play ask` or `ask game` to get a deterministic conversation starter without calling the chat model.
+- **Resume / Status**: Say `resume app`, `resume game`, or `what game is active` to continue or inspect the currently active multi-turn app.
 - **Cancel**: Say `stop game`, `cancel app`, or `nevermind` to end the active local app and return to normal assistant behavior.
-- **App Management**: Say `list installed apps`, `list available apps`, `list app versions truth_or_dare`, `install app ask`, `install app truth_or_dare`, `install app dice@0.1.0`, `describe app ask`, `upgrade app dice`, or `uninstall app dice` to manage installable apps.
+- **App Management**: Say `list installed apps`, `list available apps`, `list app versions truth_or_dare`, `install app ask`, `install app truth_or_dare`, `install app dice@0.1.0`, `describe app ask`, `upgrade app dice`, `app store health`, or `uninstall app dice` to manage installable apps.
 
 ### Dynamic App Discovery
 

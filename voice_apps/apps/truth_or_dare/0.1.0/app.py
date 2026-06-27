@@ -122,6 +122,36 @@ class TruthOrDareApp(VoiceApp):
         player_name = str(state.get("player_name", "")).strip()
         self.player_name = player_name or None
 
+    def resume(self) -> AppResponse:
+        if self.phase == "waiting_for_player":
+            return AppResponse(
+                text="Who is playing truth or dare?",
+                expect_input=True,
+                state=self.serialize_state(),
+            )
+
+        if self.phase == "waiting_for_choice":
+            if self.player_name:
+                prompt = f"{self.player_name}, truth or dare?"
+            else:
+                prompt = "Truth or dare?"
+            return AppResponse(
+                text=prompt,
+                expect_input=True,
+                state=self.serialize_state(),
+            )
+
+        return AppResponse(text="Truth or Dare is done.", done=True)
+
+    def status_text(self) -> str:
+        if self.phase == "waiting_for_player":
+            return "Truth or Dare is active and waiting for a player."
+        if self.phase == "waiting_for_choice":
+            if self.player_name:
+                return f"Truth or Dare is active for {self.player_name}."
+            return "Truth or Dare is active and waiting for truth or dare."
+        return "No app is active."
+
     def _extract_player_name(self, text: str) -> Optional[str]:
         match = re.search(r"for\s+([a-zA-ZăâîșțĂÂÎȘȚ]+)", text, re.IGNORECASE)
         if match:

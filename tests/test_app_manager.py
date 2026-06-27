@@ -285,6 +285,65 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNone(restarted_manager.active_app)
         self.assertFalse(state_path.exists())
 
+    def test_resume_app_repeats_the_current_prompt(self):
+        with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
+            state_path = Path(state_tmp) / "active_app.json"
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+                active_state_path=state_path,
+            )
+            manager.handle("install app truth_or_dare")
+            manager.handle("do truth or dare for Alex")
+
+            restarted_manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+                active_state_path=state_path,
+            )
+            response = restarted_manager.handle("resume app")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Alex, truth or dare?")
+        self.assertTrue(response.expect_input)
+        self.assertIsNotNone(restarted_manager.active_app)
+
+    def test_active_game_command_reports_current_game(self):
+        with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
+                active_state_path=Path(state_tmp) / "active_app.json",
+            )
+            manager.handle("install app truth_or_dare")
+            manager.handle("do truth or dare for Alex")
+
+            response = manager.handle("what game is active")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Truth or Dare is active for Alex.")
+
+    def test_app_store_health_reports_loaded_roots_and_signature_mode(self):
+        with TemporaryDirectory() as store_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+            manager = AppManager(
+                repository_roots=[repository_dir],
+                require_repository_signature=False,
+            )
+
+            response = manager.handle("app store health")
+
+        self.assertIsNotNone(response)
+        self.assertIn("App store: 1 of 1 repositories loaded.", response.text)
+        self.assertIn("Signature verification is optional.", response.text)
+        self.assertIn(str(repository_dir), response.text)
+
     def test_truth_or_dare_asks_for_player_before_choice(self):
         with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
             manager = AppManager(

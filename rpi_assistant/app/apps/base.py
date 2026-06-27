@@ -53,3 +53,15 @@ class VoiceApp(ABC):
 
     def restore_state(self, state: Dict[str, Any]) -> None:
         """Restore previously persisted state."""
+
+    def resume(self) -> AppResponse:
+        """Return the prompt that should be spoken when resuming this app."""
+        return AppResponse(
+            text=f"Resuming {self.name}.",
+            expect_input=True,
+            state=self.serialize_state(),
+        )
+
+    def status_text(self) -> str:
+        """Return a short spoken description of the current app state."""
+        return f"{self.name} is active."
