@@ -84,3 +84,13 @@ tts_output_path = /tmp/response.mp3
 log_file = openai_interactions.log
 # Logging level (DEBUG, INFO, WARNING, ERROR)
 log_level = INFO
+
+[app_store]
+# Default remote repository root used for named app installs like "install app dice"
+default_repository_url = https://raw.githubusercontent.com/bdobrica/LLMRPiAssistant/main/voice_apps/
+# Keep the checked-out local voice_apps directory as a fallback when running from source
+use_local_repository_fallback = true
+# Optional Base64-encoded Ed25519 public key used to verify signed repository catalogs
+trusted_public_key =
+# Require repository catalogs to be signed when using the configured app store roots
+require_signature = false

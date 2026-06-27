@@ -1,6 +1,7 @@
 flask
 gpiozero
 numpy
+nacl
 openai
 openwakeword
 sounddevice

@@ -11,9 +11,14 @@ from tempfile import TemporaryDirectory
 
 from rpi_assistant.app.app_manager import AppManager
 from rpi_assistant.app.app_loader import discover_apps
+from nacl.encoding import Base64Encoder
+from nacl.signing import SigningKey
+
 from rpi_assistant.app.app_manifest import AppManifest
+from rpi_assistant.app.app_install import AppInstallMetadata, INSTALL_METADATA_FILENAME
 from rpi_assistant.app.app_store import calculate_bundle_checksum, list_bundle_files
 from rpi_assistant.app.apps.ask_estonia import QUESTIONS
+from rpi_assistant.app.app_signing import sign_catalog
 from rpi_assistant.app.apps.truth_or_dare import DARES, TRUTHS
 
 
@@ -89,6 +94,22 @@ class AppManagerTests(unittest.TestCase):
             encoding="utf-8",
         )
         return root_dir
+
+    def sign_repository(self, repository_dir: Path, private_key_base64: str) -> str:
+        index_path = repository_dir / "index.json"
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+        signature = sign_catalog(payload, private_key_base64)
+        signed_payload = {
+            "catalog": payload,
+            "signing": {
+                "algorithm": "ed25519",
+                "key_id": "test",
+                "signature": signature,
+            },
+        }
+        index_path.write_text(json.dumps(signed_payload), encoding="utf-8")
+        signing_key = SigningKey(private_key_base64, encoder=Base64Encoder)
+        return signing_key.verify_key.encode(encoder=Base64Encoder).decode("utf-8")
 
     @contextmanager
     def serve_directory(self, directory: Path):
@@ -229,6 +250,22 @@ class AppManagerTests(unittest.TestCase):
 
         self.assertIsNotNone(roll)
         self.assertEqual(roll.text, "rolled")
+
+    def test_install_command_persists_install_metadata_for_path_sources(self):
+        with TemporaryDirectory() as source_tmp, TemporaryDirectory() as install_tmp:
+            source_bundle = self.create_app_bundle(Path(source_tmp))
+            manager = AppManager(app_dirs=[Path(install_tmp)])
+
+            manager.handle(f"install app from {source_bundle}")
+            metadata_path = Path(install_tmp) / "dice" / INSTALL_METADATA_FILENAME
+            metadata = AppInstallMetadata.load(metadata_path)
+            response = manager.handle("describe app dice")
+
+        self.assertIsNotNone(metadata)
+        self.assertEqual(metadata.source_type, "path")
+        self.assertEqual(metadata.requested_target, str(source_bundle))
+        self.assertIsNotNone(response)
+        self.assertIn("Installed from path", response.text)
 
     def test_install_command_can_resolve_app_store_id(self):
         with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
@@ -407,6 +444,51 @@ class AppManagerTests(unittest.TestCase):
         self.assertEqual(response.text, "Installed Dice version 0.1.0.")
         self.assertIsNotNone(roll)
         self.assertEqual(roll.text, "rolled")
+
+    def test_signed_repository_can_be_required_and_persists_verified_metadata(self):
+        with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+            private_key = SigningKey.generate().encode(encoder=Base64Encoder).decode("utf-8")
+            public_key = self.sign_repository(repository_dir, private_key)
+            manager = AppManager(
+                app_dirs=[Path(install_tmp)],
+                repository_roots=[repository_dir],
+                repository_public_key=public_key,
+                require_repository_signature=True,
+            )
+
+            response = manager.handle("install app dice")
+            metadata_path = Path(install_tmp) / "dice" / INSTALL_METADATA_FILENAME
+            metadata = AppInstallMetadata.load(metadata_path)
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Installed Dice version 0.1.0.")
+        self.assertIsNotNone(metadata)
+        self.assertEqual(metadata.source_type, "repository")
+        self.assertTrue(metadata.signature_verified)
+
+    def test_invalid_required_signature_skips_repository(self):
+        with TemporaryDirectory() as store_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+            private_key = SigningKey.generate().encode(encoder=Base64Encoder).decode("utf-8")
+            self.sign_repository(repository_dir, private_key)
+            wrong_public_key = SigningKey.generate().verify_key.encode(encoder=Base64Encoder).decode("utf-8")
+            manager = AppManager(
+                repository_roots=[repository_dir],
+                repository_public_key=wrong_public_key,
+                require_repository_signature=True,
+            )
+
+            response = manager.handle("list available apps")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "No app store entries are available.")
 
     def test_checksum_mismatch_blocks_install(self):
         with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:

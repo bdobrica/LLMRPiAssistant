@@ -13,6 +13,7 @@ import threading
 from pathlib import Path
 
 from .app_manager import AppManager
+from .app_repository import DEFAULT_APP_REPOSITORY_ROOTS
 from .audio import WakeWordRecorder
 from .config import load_config
 from .connectivity import check_internet_connection
@@ -63,7 +64,16 @@ def main():
         # Initialize components
         logger = InteractionLogger(config.logging)
         openai_client = OpenAIClient(config.openai)
-        app_manager = AppManager()
+        repository_roots: list[str | Path] = []
+        if config.app_store.default_repository_url:
+            repository_roots.append(config.app_store.default_repository_url)
+        if config.app_store.use_local_repository_fallback:
+            repository_roots.extend(DEFAULT_APP_REPOSITORY_ROOTS)
+        app_manager = AppManager(
+            repository_roots=repository_roots or None,
+            repository_public_key=config.app_store.trusted_public_key,
+            require_repository_signature=config.app_store.require_signature,
+        )
 
         # Initialize LED pixels if available
         if PIXELS_AVAILABLE:

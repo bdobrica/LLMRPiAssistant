@@ -227,6 +227,8 @@ The assistant now discovers apps dynamically instead of relying on a hardcoded l
 
 This now supports local app lifecycle commands directly: installation can copy a bundle from a filesystem path or resolve an app id from the repo catalog, repository installs can pin an explicit version, upgrades compare manifest versions, descriptions read manifest metadata, and uninstall removes the installed bundle.
 
+Installed external apps also persist source metadata locally, so `describe app <id>` can distinguish path-based sideloads from repository-managed installs.
+
 ### Repository App Catalog
 
 The repository-backed catalog uses a small index file at `voice_apps/index.json`:
@@ -250,6 +252,23 @@ The repository-backed catalog uses a small index file at `voice_apps/index.json`
 ```
 
 Each release points to a manifest-based app bundle inside the repo, declares the files that belong to that release, and includes a SHA-256 checksum for bundle verification. That makes the catalog easy to host directly from the public main branch later without changing the app bundle format.
+
+Optionally, the catalog can be wrapped in signed metadata:
+
+```json
+{
+   "catalog": {
+      "apps": []
+   },
+   "signing": {
+      "algorithm": "ed25519",
+      "key_id": "default",
+      "signature": "..."
+   }
+}
+```
+
+When you configure a trusted Ed25519 public key, the assistant verifies the catalog signature before using the repository.
 
 ### External App Manifest
 
@@ -277,6 +296,35 @@ dice/
 The manifest `entrypoint` uses the format `module_path:ClassName`. For the example above, `app.py` must define a `DiceApp` class that subclasses `VoiceApp`.
 
 For a remote repository, point the assistant at the raw directory root that contains `index.json`. Each release is downloaded file-by-file from the declared bundle path and verified against the catalog checksum before installation.
+
+### App Store Configuration
+
+The assistant now supports a dedicated `[app_store]` config section:
+
+```ini
+[app_store]
+default_repository_url = https://raw.githubusercontent.com/bdobrica/LLMRPiAssistant/main/voice_apps/
+use_local_repository_fallback = true
+trusted_public_key =
+require_signature = false
+```
+
+- `default_repository_url` is the default remote store used for named installs.
+- `use_local_repository_fallback` keeps the checked-out `voice_apps/` directory available while developing locally.
+- `trusted_public_key` enables Ed25519 signature verification for signed catalogs.
+- `require_signature` rejects unsigned catalogs for the configured repositories.
+
+The same settings can be provided with environment variables: `APP_STORE_DEFAULT_REPOSITORY_URL`, `APP_STORE_USE_LOCAL_FALLBACK`, `APP_STORE_TRUSTED_PUBLIC_KEY`, and `APP_STORE_REQUIRE_SIGNATURE`.
+
+### Signing Catalogs
+
+Use [scripts/sign-app-store.py](scripts/sign-app-store.py) to wrap a catalog in signed metadata:
+
+```bash
+/home/bogdan/.venvs/py-rpia/bin/python scripts/sign-app-store.py voice_apps/index.json <base64-private-key>
+```
+
+The script prints the matching Base64-encoded public key, which you can place in `trusted_public_key`.
 
 ### Wake Words
 

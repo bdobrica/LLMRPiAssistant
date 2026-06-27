@@ -10,11 +10,12 @@ from rpi_assistant.app.app_loader import (
     discover_apps,
     load_external_app_bundle,
 )
+from rpi_assistant.app.app_install import AppInstallMetadata
 from rpi_assistant.app.app_manifest import AppManifest
 from rpi_assistant.app.app_repository import (
     DEFAULT_APP_REPOSITORY_ROOTS,
     RepositoryRelease,
-    load_app_repositories,
+    AppRepository,
 )
 from rpi_assistant.app.app_store import (
     find_installed_app_bundle,
@@ -64,6 +65,8 @@ class AppManager:
         apps: Optional[List[VoiceApp]] = None,
         app_dirs: Optional[Sequence[Path]] = None,
         repository_roots: Optional[Sequence[str | Path]] = None,
+        repository_public_key: str = "",
+        require_repository_signature: bool = False,
     ):
         self.app_dirs = list(app_dirs) if app_dirs is not None else list(DEFAULT_EXTERNAL_APP_DIRS)
         self.repository_roots = (
@@ -71,7 +74,9 @@ class AppManager:
             if repository_roots is not None
             else list(DEFAULT_APP_REPOSITORY_ROOTS)
         )
-        self.repositories = load_app_repositories(self.repository_roots)
+        self.repository_public_key = repository_public_key
+        self.require_repository_signature = require_repository_signature
+        self.repositories = self._load_repositories()
         self.apps: List[VoiceApp] = []
         self.active_app: Optional[VoiceApp] = None
 
@@ -145,14 +150,25 @@ class AppManager:
         """Return a shallow copy of the registered apps."""
         return list(self.apps)
 
-    def install_app(self, source_dir: Path) -> AppManifest:
+    def install_app(
+        self,
+        source_dir: Path,
+        install_metadata: Optional[AppInstallMetadata] = None,
+    ) -> AppManifest:
         """Install an external app bundle and register it immediately."""
         source_dir = source_dir.expanduser().resolve()
         manifest = AppManifest.load(source_dir / "manifest.json")
+        metadata = install_metadata or AppInstallMetadata(
+            source_type="path",
+            source=str(source_dir),
+            requested_target=str(source_dir),
+            installed_version=manifest.version,
+        )
 
         existing_app = self._find_app(manifest.id)
         if existing_app is None:
             destination_dir = install_app_bundle(source_dir, self.app_dirs[0])
+            metadata.write(destination_dir)
 
             try:
                 app = load_external_app_bundle(destination_dir)
@@ -175,7 +191,7 @@ class AppManager:
                 f"App {manifest.name} version {existing_manifest.version} is already installed."
             )
 
-        self._upgrade_from_source(source_dir, manifest)
+        self._upgrade_from_source(source_dir, manifest, metadata)
         return manifest
 
     def install_store_app(self, app_id: str, version: Optional[str] = None) -> AppManifest:
@@ -185,8 +201,18 @@ class AppManager:
             raise FileNotFoundError(f"App {app_id} was not found in the app store.")
 
         staged_dir = repository_release.materialize(self.app_dirs[0])
+        metadata = AppInstallMetadata(
+            source_type="repository",
+            source=str(repository_release.repository_root),
+            requested_target=f"{app_id}@{version}" if version else app_id,
+            installed_version=repository_release.manifest.version,
+            repository_root=str(repository_release.repository_root),
+            bundle_ref=repository_release.bundle_ref,
+            sha256=repository_release.sha256,
+            signature_verified=repository_release.signature_verified,
+        )
         try:
-            return self.install_app(staged_dir)
+            return self.install_app(staged_dir, install_metadata=metadata)
         finally:
             if staged_dir.exists():
                 shutil.rmtree(staged_dir)
@@ -223,8 +249,22 @@ class AppManager:
             raise ValueError(f"App {installed_app.name} is already up to date.")
 
         staged_dir = repository_release.materialize(self.app_dirs[0])
+        metadata = AppInstallMetadata(
+            source_type="repository",
+            source=str(repository_release.repository_root),
+            requested_target=app_id,
+            installed_version=repository_release.manifest.version,
+            repository_root=str(repository_release.repository_root),
+            bundle_ref=repository_release.bundle_ref,
+            sha256=repository_release.sha256,
+            signature_verified=repository_release.signature_verified,
+        )
         try:
-            self._upgrade_from_source(staged_dir, repository_release.manifest)
+            self._upgrade_from_source(
+                staged_dir,
+                repository_release.manifest,
+                metadata,
+            )
         finally:
             if staged_dir.exists():
                 shutil.rmtree(staged_dir)
@@ -246,6 +286,7 @@ class AppManager:
             status = "installed"
             name = installed_app.name
             triggers = installed_app.triggers
+            install_metadata = installed_app.install_metadata
         else:
             if repository_release is None:
                 raise FileNotFoundError(f"App {app_id} was not found.")
@@ -255,13 +296,19 @@ class AppManager:
             status = "available"
             name = manifest.name
             triggers = manifest.triggers
+            install_metadata = None
 
         trigger_text = ", ".join(triggers) if triggers else "none"
-        return (
+        response = (
             f"{name}. Version: {version}. Status: {status}. "
             f"Description: {description or 'No description provided.'} "
             f"Triggers: {trigger_text}."
         )
+
+        if install_metadata is not None:
+            response = f"{response} {self._describe_install_source(install_metadata)}"
+
+        return response
 
     def list_app_versions(self, app_id: str) -> str:
         """Return the available repository versions for one app."""
@@ -308,13 +355,19 @@ class AppManager:
             raise ValueError("App store target must use the format '<app_id>@<version>'")
         return app_id, version
 
-    def _upgrade_from_source(self, source_dir: Path, manifest: AppManifest) -> None:
+    def _upgrade_from_source(
+        self,
+        source_dir: Path,
+        manifest: AppManifest,
+        install_metadata: AppInstallMetadata,
+    ) -> None:
         existing_bundle_dir, _ = find_installed_app_bundle(manifest.id, self.app_dirs)
         if existing_bundle_dir is None:
             raise FileNotFoundError(f"Installed app bundle for {manifest.id} was not found.")
 
         staged_dir = stage_app_bundle(source_dir, self.app_dirs[0])
         try:
+            install_metadata.write(staged_dir)
             upgraded_app = load_external_app_bundle(staged_dir)
             existing_app = self.unregister_app(manifest.id)
             if existing_app is not None and self.active_app is existing_app:
@@ -334,6 +387,39 @@ class AppManager:
             if staged_dir.exists():
                 shutil.rmtree(staged_dir)
             raise
+
+    def _load_repositories(self) -> List[AppRepository]:
+        repositories: List[AppRepository] = []
+        for root in self.repository_roots:
+            try:
+                repository = AppRepository.load(
+                    root,
+                    trusted_public_key=self.repository_public_key,
+                    require_signature=self.require_repository_signature,
+                )
+            except Exception as exc:
+                print(f"⚠️  Could not load app store repository {root}: {exc}")
+                continue
+
+            if repository is not None:
+                repositories.append(repository)
+        return repositories
+
+    def _describe_install_source(
+        self,
+        install_metadata: Optional[AppInstallMetadata],
+    ) -> str:
+        if install_metadata is None:
+            return "Installed from: built-in or unknown source."
+
+        if install_metadata.source_type == "repository":
+            signature_text = "verified" if install_metadata.signature_verified else "not verified"
+            return (
+                f"Installed from repository {install_metadata.repository_root} "
+                f"as {install_metadata.requested_target}; signature {signature_text}."
+            )
+
+        return f"Installed from path {install_metadata.source}."
 
     def _looks_like_path(self, target: str) -> bool:
         return (

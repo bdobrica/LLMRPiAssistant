@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
+from .app_install import AppInstallMetadata, INSTALL_METADATA_FILENAME
 from .app_manifest import APP_MANIFEST_FILENAME, AppManifest
 
 
@@ -19,6 +20,8 @@ def list_bundle_files(bundle_dir: Path) -> List[str]:
         if file_path.suffix == ".pyc":
             continue
         if "__pycache__" in file_path.parts:
+            continue
+        if file_path.name == INSTALL_METADATA_FILENAME:
             continue
         files.append(file_path.relative_to(bundle_dir).as_posix())
 
@@ -120,6 +123,11 @@ def find_installed_app_bundle(
                 return bundle_dir, manifest
 
     return None, None
+
+
+def load_install_metadata(bundle_dir: Path) -> Optional[AppInstallMetadata]:
+    """Load installed app metadata from a bundle directory if present."""
+    return AppInstallMetadata.load(bundle_dir / INSTALL_METADATA_FILENAME)
 
 
 def _bundle_file_path(bundle_dir: Path, relative_path: str) -> Path:

@@ -7,6 +7,7 @@ from pkgutil import iter_modules
 from types import ModuleType
 from typing import Iterable, List, Optional, Sequence, Type
 
+from .app_store import load_install_metadata
 from .app_manifest import APP_MANIFEST_FILENAME, AppManifest
 from .apps.base import VoiceApp
 
@@ -87,6 +88,7 @@ def load_external_app_bundle(bundle_dir: Path) -> VoiceApp:
         app.triggers = list(manifest.triggers)
     app.manifest = manifest
     app.install_dir = bundle_dir
+    app.install_metadata = load_install_metadata(bundle_dir)
     app.is_builtin = False
 
     return app

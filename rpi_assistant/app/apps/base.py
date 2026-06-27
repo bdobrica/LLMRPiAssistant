@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
+    from ..app_install import AppInstallMetadata
     from ..app_manifest import AppManifest
 
 
@@ -28,6 +29,7 @@ class VoiceApp(ABC):
     triggers: List[str] = []
     manifest: Optional["AppManifest"] = None
     install_dir: Optional[Path] = None
+    install_metadata: Optional["AppInstallMetadata"] = None
     is_builtin: bool = True
 
     def matches(self, text: str) -> bool:
