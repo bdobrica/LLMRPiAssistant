@@ -1,4 +1,5 @@
 import unittest
+from json import dumps
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -9,6 +10,45 @@ from rpi_assistant.app.apps.truth_or_dare import DARES, TRUTHS
 
 
 class AppManagerTests(unittest.TestCase):
+    def create_app_bundle(
+        self,
+        parent_dir: Path,
+        app_id: str = "dice",
+        name: str = "Dice",
+        trigger: str = "roll test die",
+        response_text: str = "rolled",
+    ) -> Path:
+        bundle_dir = parent_dir / app_id
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+        (bundle_dir / "manifest.json").write_text(
+            dumps(
+                {
+                    "id": app_id,
+                    "name": name,
+                    "version": "0.1.0",
+                    "entrypoint": "app:DiceApp",
+                    "triggers": [trigger],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (bundle_dir / "app.py").write_text(
+            "from rpi_assistant.app.apps.base import AppResponse, VoiceApp\n"
+            "\n"
+            "class DiceApp(VoiceApp):\n"
+            "    id = 'placeholder'\n"
+            "    name = 'Placeholder'\n"
+            "    triggers = []\n"
+            "\n"
+            "    def start(self, text: str) -> AppResponse:\n"
+            f"        return AppResponse(text='{response_text}', done=True)\n"
+            "\n"
+            "    def handle(self, text: str) -> AppResponse:\n"
+            f"        return AppResponse(text='{response_text} again', done=True)\n",
+            encoding="utf-8",
+        )
+        return bundle_dir
+
     def test_truth_or_dare_stays_active_until_choice(self):
         manager = AppManager()
 
@@ -73,22 +113,7 @@ class AppManagerTests(unittest.TestCase):
 
     def test_external_app_directory_is_discovered(self):
         with TemporaryDirectory() as tmp_dir:
-            app_file = Path(tmp_dir) / "dice.py"
-            app_file.write_text(
-                "from rpi_assistant.app.apps.base import AppResponse, VoiceApp\n"
-                "\n"
-                "class DiceApp(VoiceApp):\n"
-                "    id = 'dice'\n"
-                "    name = 'Dice'\n"
-                "    triggers = ['roll test die']\n"
-                "\n"
-                "    def start(self, text: str) -> AppResponse:\n"
-                "        return AppResponse(text='rolled', done=True)\n"
-                "\n"
-                "    def handle(self, text: str) -> AppResponse:\n"
-                "        return AppResponse(text='rolled again', done=True)\n",
-                encoding="utf-8",
-            )
+            self.create_app_bundle(Path(tmp_dir))
 
             apps = discover_apps(app_dirs=[Path(tmp_dir)])
             manager = AppManager(apps=apps)
@@ -106,6 +131,52 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNotNone(removed)
         self.assertEqual(removed.id, "truth_or_dare")
         self.assertEqual({app.id for app in manager.list_apps()}, {"ask_estonia"})
+
+    def test_list_installed_apps_command_uses_registered_apps(self):
+        manager = AppManager()
+
+        response = manager.handle("list installed apps")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Installed apps: Ask!, Truth or Dare.")
+
+    def test_install_command_copies_bundle_and_registers_app(self):
+        with TemporaryDirectory() as source_tmp, TemporaryDirectory() as install_tmp:
+            source_bundle = self.create_app_bundle(Path(source_tmp))
+            manager = AppManager(app_dirs=[Path(install_tmp)])
+
+            response = manager.handle(f"install app from {source_bundle}")
+
+            self.assertIsNotNone(response)
+            self.assertEqual(response.text, "Installed Dice.")
+            self.assertTrue((Path(install_tmp) / "dice" / "manifest.json").exists())
+            self.assertIn("dice", {app.id for app in manager.list_apps()})
+
+            roll = manager.handle("roll test die")
+
+        self.assertIsNotNone(roll)
+        self.assertEqual(roll.text, "rolled")
+
+    def test_uninstall_command_removes_bundle_and_unregisters_app(self):
+        with TemporaryDirectory() as source_tmp, TemporaryDirectory() as install_tmp:
+            source_bundle = self.create_app_bundle(Path(source_tmp))
+            manager = AppManager(app_dirs=[Path(install_tmp)])
+            manager.handle(f"install app from {source_bundle}")
+
+            response = manager.handle("uninstall app dice")
+
+            self.assertIsNotNone(response)
+            self.assertEqual(response.text, "Uninstalled Dice.")
+            self.assertFalse((Path(install_tmp) / "dice").exists())
+            self.assertNotIn("dice", {app.id for app in manager.list_apps()})
+
+    def test_cannot_uninstall_built_in_app(self):
+        manager = AppManager()
+
+        response = manager.handle("uninstall app truth_or_dare")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Cannot uninstall built-in app Truth or Dare.")
 
 
 if __name__ == "__main__":

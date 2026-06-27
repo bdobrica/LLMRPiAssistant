@@ -2,7 +2,11 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List
+from pathlib import Path
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from ..app_manifest import AppManifest
 
 
 @dataclass
@@ -21,6 +25,9 @@ class VoiceApp(ABC):
     id: str = ""
     name: str = ""
     triggers: List[str] = []
+    manifest: Optional["AppManifest"] = None
+    install_dir: Optional[Path] = None
+    is_builtin: bool = True
 
     def matches(self, text: str) -> bool:
         lowered = text.lower()

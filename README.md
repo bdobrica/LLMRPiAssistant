@@ -214,16 +214,41 @@ cd rpi-assistant
 - **Truth or Dare**: Say phrases like `play truth or dare` or `do truth or dare for Alex` to start a short stateful flow that keeps the next utterance inside the game.
 - **Ask!**: Say `play ask` or `ask game` to get a deterministic conversation starter without calling the chat model.
 - **Cancel**: Say `stop game`, `cancel app`, or `nevermind` to end the active local app and return to normal assistant behavior.
+- **App Management**: Say `list installed apps`, `install app from /path/to/bundle`, or `uninstall app dice` to manage manifest-based external apps locally.
 
 ### Dynamic App Discovery
 
 The assistant now discovers apps dynamically instead of relying on a hardcoded list.
 
 - **Built-in apps**: Any `VoiceApp` subclass inside `rpi_assistant/app/apps/` is discovered automatically at startup.
-- **External apps**: Additional apps can be dropped into `~/.config/rpi-assistant/apps/` and are loaded automatically on the next start.
-- **Supported external layouts**: A single `.py` file, or a directory containing `app.py`.
+- **External apps**: Manifest-based app bundles installed under `~/.config/rpi-assistant/apps/` are loaded automatically.
+- **Bundle layout**: Each installed app lives in its own directory and must include `manifest.json` plus the Python module named by the manifest entrypoint.
 
-This is the first step toward voice-driven `install app` and `uninstall app` flows: installation can eventually copy app files into that directory, and uninstallation can remove them.
+This now supports local app lifecycle commands directly: installation copies a bundle into that directory, uninstallation removes it, and listing installed apps uses the currently registered runtime app list.
+
+### External App Manifest
+
+Installable apps must include a `manifest.json` file with at least these fields:
+
+```json
+{
+   "id": "dice",
+   "name": "Dice",
+   "version": "0.1.0",
+   "entrypoint": "app:DiceApp",
+   "triggers": ["roll test die"]
+}
+```
+
+Minimal bundle layout:
+
+```text
+dice/
+   manifest.json
+   app.py
+```
+
+The manifest `entrypoint` uses the format `module_path:ClassName`. For the example above, `app.py` must define a `DiceApp` class that subclasses `VoiceApp`.
 
 ### Wake Words
 

@@ -7,6 +7,7 @@ from pkgutil import iter_modules
 from types import ModuleType
 from typing import Iterable, List, Optional, Sequence, Type
 
+from .app_manifest import APP_MANIFEST_FILENAME, AppManifest
 from .apps.base import VoiceApp
 
 BUILTIN_APPS_PACKAGE = "rpi_assistant.app.apps"
@@ -17,22 +18,33 @@ DEFAULT_EXTERNAL_APP_DIRS = (
 
 def discover_apps(app_dirs: Optional[Sequence[Path]] = None) -> List[VoiceApp]:
     """Instantiate all discovered built-in and external voice apps."""
-    classes = discover_builtin_app_classes()
-    classes.extend(discover_external_app_classes(app_dirs or DEFAULT_EXTERNAL_APP_DIRS))
+    apps = discover_builtin_apps()
+    apps.extend(discover_external_apps(app_dirs or DEFAULT_EXTERNAL_APP_DIRS))
 
-    instances: List[VoiceApp] = []
     seen_ids = set()
 
-    for app_class in classes:
-        app = app_class()
+    for app in apps:
         if not app.id:
-            raise ValueError(f"Discovered app {app_class.__name__} is missing an id")
+            raise ValueError(f"Discovered app {app.__class__.__name__} is missing an id")
         if app.id in seen_ids:
             raise ValueError(f"Duplicate app id discovered: {app.id}")
         seen_ids.add(app.id)
-        instances.append(app)
 
-    return instances
+    return sorted(apps, key=lambda app: app.id)
+
+
+def discover_builtin_apps() -> List[VoiceApp]:
+    """Instantiate built-in app classes from the packaged apps directory."""
+    apps: List[VoiceApp] = []
+
+    for app_class in discover_builtin_app_classes():
+        app = app_class()
+        app.is_builtin = True
+        app.manifest = None
+        app.install_dir = None
+        apps.append(app)
+
+    return apps
 
 
 def discover_builtin_app_classes() -> List[Type[VoiceApp]]:
@@ -49,20 +61,35 @@ def discover_builtin_app_classes() -> List[Type[VoiceApp]]:
     return sorted(discovered, key=lambda app_class: app_class.id)
 
 
-def discover_external_app_classes(app_dirs: Sequence[Path]) -> List[Type[VoiceApp]]:
-    """Discover app classes from configured app directories on disk."""
-    discovered: List[Type[VoiceApp]] = []
+def discover_external_apps(app_dirs: Sequence[Path]) -> List[VoiceApp]:
+    """Instantiate manifest-based app bundles from configured app directories."""
+    discovered: List[VoiceApp] = []
 
     for app_dir in app_dirs:
         if not app_dir.exists() or not app_dir.is_dir():
             continue
 
-        for module_path in sorted(_iter_external_module_paths(app_dir)):
-            module_name = _external_module_name(module_path)
-            module = _load_module_from_path(module_name, module_path)
-            discovered.extend(_get_voice_app_classes(module))
+        for manifest_path in sorted(_iter_external_manifest_paths(app_dir)):
+            discovered.append(load_external_app_bundle(manifest_path.parent))
 
-    return sorted(discovered, key=lambda app_class: app_class.id)
+    return sorted(discovered, key=lambda app: app.id)
+
+
+def load_external_app_bundle(bundle_dir: Path) -> VoiceApp:
+    """Instantiate one external app bundle from its manifest."""
+    manifest = AppManifest.load(bundle_dir / APP_MANIFEST_FILENAME)
+    app_class = _load_entrypoint_class(manifest, bundle_dir)
+    app = app_class()
+
+    app.id = manifest.id
+    app.name = manifest.name
+    if manifest.triggers:
+        app.triggers = list(manifest.triggers)
+    app.manifest = manifest
+    app.install_dir = bundle_dir
+    app.is_builtin = False
+
+    return app
 
 
 def _get_voice_app_classes(module: ModuleType) -> List[Type[VoiceApp]]:
@@ -79,14 +106,45 @@ def _get_voice_app_classes(module: ModuleType) -> List[Type[VoiceApp]]:
     return classes
 
 
-def _iter_external_module_paths(app_dir: Path) -> Iterable[Path]:
+def _iter_external_manifest_paths(app_dir: Path) -> Iterable[Path]:
+    direct_manifest = app_dir / APP_MANIFEST_FILENAME
+    if direct_manifest.exists():
+        yield direct_manifest
+
     for child in app_dir.iterdir():
         if child.name.startswith("_"):
             continue
-        if child.is_file() and child.suffix == ".py" and child.name != "__init__.py":
-            yield child
-        elif child.is_dir() and (child / "app.py").exists():
-            yield child / "app.py"
+        if child.is_dir() and (child / APP_MANIFEST_FILENAME).exists():
+            yield child / APP_MANIFEST_FILENAME
+
+
+def _load_entrypoint_class(manifest: AppManifest, bundle_dir: Path) -> Type[VoiceApp]:
+    module_name, class_name = manifest.entrypoint_parts()
+    module_path = _resolve_entrypoint_module_path(bundle_dir, module_name)
+    module = _load_module_from_path(_external_module_name(module_path), module_path)
+    app_class = getattr(module, class_name, None)
+
+    if not isclass(app_class) or not issubclass(app_class, VoiceApp):
+        raise TypeError(
+            f"App entrypoint {manifest.entrypoint} must resolve to a VoiceApp subclass"
+        )
+
+    return app_class
+
+
+def _resolve_entrypoint_module_path(bundle_dir: Path, module_name: str) -> Path:
+    module_parts = module_name.split(".")
+    module_path = bundle_dir.joinpath(*module_parts).with_suffix(".py")
+    package_init = bundle_dir.joinpath(*module_parts, "__init__.py")
+
+    if module_path.exists():
+        return module_path
+    if package_init.exists():
+        return package_init
+
+    raise FileNotFoundError(
+        f"App entrypoint module '{module_name}' was not found in bundle {bundle_dir}"
+    )
 
 
 def _external_module_name(module_path: Path) -> str:
