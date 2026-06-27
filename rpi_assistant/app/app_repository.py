@@ -16,6 +16,16 @@ APP_REPOSITORY_INDEX_FILENAME = "index.json"
 DEFAULT_APP_REPOSITORY_ROOTS = (
     Path(__file__).resolve().parents[2] / "voice_apps",
 )
+DEFAULT_APP_REPOSITORY_PUBLIC_KEY_PATH = (
+    Path(__file__).resolve().parents[2] / "voice_apps" / "public_key.txt"
+)
+
+
+def load_default_repository_public_key() -> str:
+    """Load the shipped repository verification key if present."""
+    if not DEFAULT_APP_REPOSITORY_PUBLIC_KEY_PATH.exists():
+        return ""
+    return DEFAULT_APP_REPOSITORY_PUBLIC_KEY_PATH.read_text(encoding="utf-8").strip()
 
 
 @dataclass(frozen=True)

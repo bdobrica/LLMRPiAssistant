@@ -182,6 +182,7 @@ cython_debug/
 
 # Config files
 config.ini
+.secrets/
 
 # VS Code
 .vscode/

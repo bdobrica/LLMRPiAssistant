@@ -90,7 +90,8 @@ log_level = INFO
 default_repository_url = https://raw.githubusercontent.com/bdobrica/LLMRPiAssistant/main/voice_apps/
 # Keep the checked-out local voice_apps directory as a fallback when running from source
 use_local_repository_fallback = true
-# Optional Base64-encoded Ed25519 public key used to verify signed repository catalogs
+# Optional Base64-encoded Ed25519 public key used to verify signed repository catalogs.
+# If left empty, the assistant uses the shipped value from voice_apps/public_key.txt.
 trusted_public_key =
 # Require repository catalogs to be signed when using the configured app store roots
 require_signature = false

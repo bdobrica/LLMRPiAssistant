@@ -16,6 +16,7 @@ from rpi_assistant.app.app_repository import (
     DEFAULT_APP_REPOSITORY_ROOTS,
     RepositoryRelease,
     AppRepository,
+    load_default_repository_public_key,
 )
 from rpi_assistant.app.app_state import ActiveAppState, DEFAULT_ACTIVE_APP_STATE_PATH
 from rpi_assistant.app.app_store import (
@@ -76,7 +77,7 @@ class AppManager:
             if repository_roots is not None
             else list(DEFAULT_APP_REPOSITORY_ROOTS)
         )
-        self.repository_public_key = repository_public_key
+        self.repository_public_key = repository_public_key or load_default_repository_public_key()
         self.require_repository_signature = require_repository_signature
         self.active_state_path = active_state_path or DEFAULT_ACTIVE_APP_STATE_PATH
         self.repositories = self._load_repositories()

@@ -335,7 +335,7 @@ require_signature = false
 
 - `default_repository_url` is the default remote store used for named installs.
 - `use_local_repository_fallback` keeps the checked-out `voice_apps/` directory available while developing locally.
-- `trusted_public_key` enables Ed25519 signature verification for signed catalogs.
+- `trusted_public_key` enables Ed25519 signature verification for signed catalogs. If left empty, the assistant loads the shipped key from `voice_apps/public_key.txt`.
 - `require_signature` rejects unsigned catalogs for the configured repositories.
 
 The same settings can be provided with environment variables: `APP_STORE_DEFAULT_REPOSITORY_URL`, `APP_STORE_USE_LOCAL_FALLBACK`, `APP_STORE_TRUSTED_PUBLIC_KEY`, and `APP_STORE_REQUIRE_SIGNATURE`.
@@ -348,7 +348,26 @@ Use [scripts/sign-app-store.py](scripts/sign-app-store.py) to wrap a catalog in 
 /home/bogdan/.venvs/py-rpia/bin/python scripts/sign-app-store.py voice_apps/index.json <base64-private-key>
 ```
 
-The script prints the matching Base64-encoded public key, which you can place in `trusted_public_key`.
+The script prints the matching Base64-encoded public key, which can be shipped in `voice_apps/public_key.txt`.
+
+Recommended local setup:
+
+- Keep the private signing key only on your machine in an ignored file such as `.secrets/app-store-signing-private.key`.
+- Commit only the public key in `voice_apps/public_key.txt`.
+- Re-sign `voice_apps/index.json` whenever the app catalog changes.
+
+### GitHub Actions Signing
+
+The repo now includes [sign-app-store.yml](.github/workflows/sign-app-store.yml), which re-signs `voice_apps/index.json` on pushes to `main` when the app store changes.
+
+To enable it:
+
+1. Open your GitHub repository settings.
+2. Go to `Settings > Secrets and variables > Actions`.
+3. Add a new repository secret named `APP_STORE_SIGNING_PRIVATE_KEY`.
+4. Paste the Base64-encoded private key from your local `.secrets/app-store-signing-private.key` file.
+
+The workflow derives the matching public key during signing and verifies that it matches `voice_apps/public_key.txt` before pushing the updated signed catalog commit.
 
 ### Wake Words
 

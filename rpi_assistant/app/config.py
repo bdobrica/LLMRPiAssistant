@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from .app_repository import load_default_repository_public_key
+
 
 @dataclass
 class AudioConfig:
@@ -278,6 +280,8 @@ def load_config(config_path: Optional[str] = None) -> Config:
         log_level=get_value("logging", "log_level", "LOG_LEVEL", "INFO", str),
     )
 
+    default_public_key = load_default_repository_public_key()
+
     app_store_config = AppStoreConfig(
         default_repository_url=get_value(
             "app_store",
@@ -297,7 +301,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
             "app_store",
             "trusted_public_key",
             "APP_STORE_TRUSTED_PUBLIC_KEY",
-            "",
+            default_public_key,
             str,
         ),
         require_signature=get_value(

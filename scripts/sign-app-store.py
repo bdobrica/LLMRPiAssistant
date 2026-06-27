@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from nacl.encoding import Base64Encoder
@@ -16,6 +17,7 @@ def main() -> None:
     parser.add_argument("index_path", type=Path, help="Path to voice_apps/index.json")
     parser.add_argument(
         "private_key",
+        nargs="?",
         help="Base64-encoded Ed25519 private key seed",
     )
     parser.add_argument(
@@ -23,12 +25,21 @@ def main() -> None:
         default="default",
         help="Identifier stored alongside the signature",
     )
+    parser.add_argument(
+        "--private-key-env",
+        default="APP_STORE_SIGNING_PRIVATE_KEY",
+        help="Environment variable holding the Base64-encoded private key when the positional argument is omitted",
+    )
     args = parser.parse_args()
+
+    private_key = args.private_key or os.getenv(args.private_key_env, "")
+    if not private_key:
+        raise ValueError("A private signing key is required via argument or environment variable")
 
     payload = json.loads(args.index_path.read_text(encoding="utf-8"))
     catalog = payload.get("catalog", payload)
-    signature = sign_catalog(catalog, args.private_key)
-    signing_key = SigningKey(args.private_key, encoder=Base64Encoder)
+    signature = sign_catalog(catalog, private_key)
+    signing_key = SigningKey(private_key, encoder=Base64Encoder)
     public_key = signing_key.verify_key.encode(encoder=Base64Encoder).decode("utf-8")
 
     signed_payload = {
@@ -45,3 +56,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -21,6 +21,9 @@ from rpi_assistant.app.app_signing import sign_catalog
 
 
 VOICE_APPS_REPOSITORY = Path(__file__).resolve().parents[1] / "voice_apps"
+VOICE_APPS_PUBLIC_KEY = (VOICE_APPS_REPOSITORY / "public_key.txt").read_text(
+    encoding="utf-8"
+).strip()
 
 
 class AppManagerTests(unittest.TestCase):
@@ -136,6 +139,7 @@ class AppManagerTests(unittest.TestCase):
             manager = AppManager(
                 app_dirs=[Path(install_tmp)],
                 repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
                 active_state_path=Path(state_tmp) / "active_app.json",
             )
             manager.handle("install app truth_or_dare")
@@ -160,6 +164,7 @@ class AppManagerTests(unittest.TestCase):
             manager = AppManager(
                 app_dirs=[Path(install_tmp)],
                 repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
                 active_state_path=Path(state_tmp) / "active_app.json",
             )
             manager.handle("install app truth_or_dare")
@@ -184,6 +189,7 @@ class AppManagerTests(unittest.TestCase):
             manager = AppManager(
                 app_dirs=[Path(install_tmp)],
                 repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
             )
             manager.handle("install app ask")
 
@@ -199,6 +205,7 @@ class AppManagerTests(unittest.TestCase):
             manager = AppManager(
                 app_dirs=[Path(install_tmp)],
                 repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
                 active_state_path=Path(state_tmp) / "active_app.json",
             )
             manager.handle("install app truth_or_dare")
@@ -234,6 +241,7 @@ class AppManagerTests(unittest.TestCase):
             manager = AppManager(
                 app_dirs=[Path(install_tmp)],
                 repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
             )
             manager.handle("install app ask")
 
@@ -257,6 +265,7 @@ class AppManagerTests(unittest.TestCase):
             manager = AppManager(
                 app_dirs=[Path(install_tmp)],
                 repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
                 active_state_path=state_path,
             )
             manager.handle("install app truth_or_dare")
@@ -265,6 +274,7 @@ class AppManagerTests(unittest.TestCase):
             restarted_manager = AppManager(
                 app_dirs=[Path(install_tmp)],
                 repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
                 active_state_path=state_path,
             )
             follow_up = restarted_manager.handle("truth")
@@ -280,6 +290,7 @@ class AppManagerTests(unittest.TestCase):
             manager = AppManager(
                 app_dirs=[Path(install_tmp)],
                 repository_roots=[VOICE_APPS_REPOSITORY],
+                repository_public_key=VOICE_APPS_PUBLIC_KEY,
                 active_state_path=Path(state_tmp) / "active_app.json",
             )
             manager.handle("install app truth_or_dare")

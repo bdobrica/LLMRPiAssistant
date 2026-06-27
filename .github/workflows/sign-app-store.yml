@@ -1,0 +1,61 @@
+name: Sign App Store
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - voice_apps/index.json
+      - voice_apps/apps/**
+      - scripts/sign-app-store.py
+      - rpi_assistant/app/app_signing.py
+      - .github/workflows/sign-app-store.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sign:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r rpi_assistant/requirements.txt
+
+      - name: Sign catalog
+        env:
+          APP_STORE_SIGNING_PRIVATE_KEY: ${{ secrets.APP_STORE_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APP_STORE_SIGNING_PRIVATE_KEY" ]; then
+            echo "APP_STORE_SIGNING_PRIVATE_KEY secret is not configured" >&2
+            exit 1
+          fi
+          public_key=$(python scripts/sign-app-store.py voice_apps/index.json --private-key-env APP_STORE_SIGNING_PRIVATE_KEY --key-id owner)
+          repo_public_key=$(tr -d '\n' < voice_apps/public_key.txt)
+          if [ "$public_key" != "$repo_public_key" ]; then
+            echo "Derived public key does not match voice_apps/public_key.txt" >&2
+            exit 1
+          fi
+
+      - name: Commit signed catalog
+        run: |
+          if git diff --quiet -- voice_apps/index.json; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add voice_apps/index.json
+          git commit -m "Sign app store catalog"
+          git push
