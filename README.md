@@ -214,7 +214,7 @@ cd rpi-assistant
 - **Truth or Dare**: Say phrases like `play truth or dare` or `do truth or dare for Alex` to start a short stateful flow that keeps the next utterance inside the game.
 - **Ask!**: Say `play ask` or `ask game` to get a deterministic conversation starter without calling the chat model.
 - **Cancel**: Say `stop game`, `cancel app`, or `nevermind` to end the active local app and return to normal assistant behavior.
-- **App Management**: Say `list installed apps`, `list available apps`, `install app dice`, `describe app dice`, `upgrade app dice`, or `uninstall app dice` to manage installable apps.
+- **App Management**: Say `list installed apps`, `list available apps`, `list app versions dice`, `install app dice`, `install app dice@0.1.0`, `describe app dice`, `upgrade app dice`, or `uninstall app dice` to manage installable apps.
 
 ### Dynamic App Discovery
 
@@ -223,9 +223,9 @@ The assistant now discovers apps dynamically instead of relying on a hardcoded l
 - **Built-in apps**: Any `VoiceApp` subclass inside `rpi_assistant/app/apps/` is discovered automatically at startup.
 - **External apps**: Manifest-based app bundles installed under `~/.config/rpi-assistant/apps/` are loaded automatically.
 - **Bundle layout**: Each installed app lives in its own directory and must include `manifest.json` plus the Python module named by the manifest entrypoint.
-- **Public app store**: The repo now includes a catalog under `voice_apps/`. That directory is designed to work as the public app-store source for named installs such as `install app dice`.
+- **Public app store**: The repo now includes a catalog under `voice_apps/`. That directory is designed to work as the public app-store source for named installs such as `install app dice`, and the same format can be served from a remote raw URL.
 
-This now supports local app lifecycle commands directly: installation can copy a bundle from a filesystem path or resolve an app id from the repo catalog, upgrades compare manifest versions, descriptions read manifest metadata, and uninstall removes the installed bundle.
+This now supports local app lifecycle commands directly: installation can copy a bundle from a filesystem path or resolve an app id from the repo catalog, repository installs can pin an explicit version, upgrades compare manifest versions, descriptions read manifest metadata, and uninstall removes the installed bundle.
 
 ### Repository App Catalog
 
@@ -236,13 +236,20 @@ The repository-backed catalog uses a small index file at `voice_apps/index.json`
    "apps": [
       {
          "id": "dice",
-         "bundle": "apps/dice"
+         "versions": [
+            {
+               "version": "0.1.0",
+               "bundle": "apps/dice/0.1.0",
+               "files": ["app.py", "manifest.json"],
+               "sha256": "..."
+            }
+         ]
       }
    ]
 }
 ```
 
-Each entry points to a manifest-based app bundle inside the repo. That makes the catalog easy to host directly from the public main branch later without changing the app bundle format.
+Each release points to a manifest-based app bundle inside the repo, declares the files that belong to that release, and includes a SHA-256 checksum for bundle verification. That makes the catalog easy to host directly from the public main branch later without changing the app bundle format.
 
 ### External App Manifest
 
@@ -262,11 +269,14 @@ Minimal bundle layout:
 
 ```text
 dice/
-   manifest.json
-   app.py
+   0.1.0/
+      manifest.json
+      app.py
 ```
 
 The manifest `entrypoint` uses the format `module_path:ClassName`. For the example above, `app.py` must define a `DiceApp` class that subclasses `VoiceApp`.
+
+For a remote repository, point the assistant at the raw directory root that contains `index.json`. Each release is downloaded file-by-file from the declared bundle path and verified against the catalog checksum before installation.
 
 ### Wake Words
 

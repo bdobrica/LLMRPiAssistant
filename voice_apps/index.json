@@ -2,7 +2,17 @@
   "apps": [
     {
       "id": "dice",
-      "bundle": "apps/dice"
+      "versions": [
+        {
+          "version": "0.1.0",
+          "bundle": "apps/dice/0.1.0",
+          "files": [
+            "app.py",
+            "manifest.json"
+          ],
+          "sha256": "7aea91f19bc20d8edb6c205c6569b84799e82ddb844c608a899187f133a05d20"
+        }
+      ]
     }
   ]
 }

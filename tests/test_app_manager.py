@@ -1,10 +1,18 @@
+import json
+import shutil
+import threading
 import unittest
+from contextlib import contextmanager
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from json import dumps
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from rpi_assistant.app.app_manager import AppManager
 from rpi_assistant.app.app_loader import discover_apps
+from rpi_assistant.app.app_manifest import AppManifest
+from rpi_assistant.app.app_store import calculate_bundle_checksum, list_bundle_files
 from rpi_assistant.app.apps.ask_estonia import QUESTIONS
 from rpi_assistant.app.apps.truth_or_dare import DARES, TRUTHS
 
@@ -52,26 +60,54 @@ class AppManagerTests(unittest.TestCase):
         )
         return bundle_dir
 
-    def create_repository(self, root_dir: Path, bundles: list[tuple[str, Path]]) -> Path:
+    def create_repository(self, root_dir: Path, bundles: dict[str, list[Path]]) -> Path:
         apps_dir = root_dir / "apps"
         apps_dir.mkdir(parents=True, exist_ok=True)
         entries = []
 
-        for app_id, source_bundle in bundles:
-            destination = apps_dir / app_id
-            destination.mkdir(parents=True, exist_ok=True)
-            for source_file in source_bundle.iterdir():
-                destination.joinpath(source_file.name).write_text(
-                    source_file.read_text(encoding="utf-8"),
-                    encoding="utf-8",
+        for app_id, source_bundles in bundles.items():
+            versions = []
+
+            for source_bundle in source_bundles:
+                manifest = AppManifest.load(source_bundle / "manifest.json")
+                destination = apps_dir / app_id / manifest.version
+                shutil.copytree(source_bundle, destination)
+                files = list_bundle_files(destination)
+                versions.append(
+                    {
+                        "version": manifest.version,
+                        "bundle": f"apps/{app_id}/{manifest.version}",
+                        "files": files,
+                        "sha256": calculate_bundle_checksum(destination, files),
+                    }
                 )
-            entries.append({"id": app_id, "bundle": f"apps/{app_id}"})
+
+            entries.append({"id": app_id, "versions": versions})
 
         (root_dir / "index.json").write_text(
             dumps({"apps": entries}),
             encoding="utf-8",
         )
         return root_dir
+
+    @contextmanager
+    def serve_directory(self, directory: Path):
+        class QuietHandler(SimpleHTTPRequestHandler):
+            def log_message(self, format, *args):
+                return
+
+        handler = partial(QuietHandler, directory=str(directory))
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        try:
+            host, port = server.server_address
+            yield f"http://{host}:{port}/"
+        finally:
+            server.shutdown()
+            thread.join(timeout=2)
+            server.server_close()
 
     def test_truth_or_dare_stays_active_until_choice(self):
         manager = AppManager()
@@ -169,7 +205,7 @@ class AppManagerTests(unittest.TestCase):
             source_dir = Path(store_tmp) / "source"
             source_dir.mkdir(parents=True, exist_ok=True)
             bundle = self.create_app_bundle(source_dir)
-            repository_dir = self.create_repository(Path(store_tmp) / "repo", [("dice", bundle)])
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
             manager = AppManager(repository_roots=[repository_dir])
 
             response = manager.handle("list available apps")
@@ -199,7 +235,7 @@ class AppManagerTests(unittest.TestCase):
             source_dir = Path(store_tmp) / "source"
             source_dir.mkdir(parents=True, exist_ok=True)
             bundle = self.create_app_bundle(source_dir)
-            repository_dir = self.create_repository(Path(store_tmp) / "repo", [("dice", bundle)])
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
             manager = AppManager(app_dirs=[Path(install_tmp)], repository_roots=[repository_dir])
 
             response = manager.handle("install app dice")
@@ -236,7 +272,7 @@ class AppManagerTests(unittest.TestCase):
                 source_dir,
                 description="Roll a single six-sided die locally.",
             )
-            repository_dir = self.create_repository(Path(store_tmp) / "repo", [("dice", bundle)])
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
             manager = AppManager(repository_roots=[repository_dir])
 
             response = manager.handle("describe app dice")
@@ -266,7 +302,7 @@ class AppManagerTests(unittest.TestCase):
             )
             repository_dir = self.create_repository(
                 Path(store_tmp) / "repo",
-                [("dice", upgrade_bundle)],
+                {"dice": [upgrade_bundle]},
             )
             manager = AppManager(app_dirs=[Path(install_tmp)], repository_roots=[repository_dir])
             manager.handle(f"install app from {installed_bundle}")
@@ -305,6 +341,89 @@ class AppManagerTests(unittest.TestCase):
         self.assertEqual(response.text, "Installed Dice version 0.2.0.")
         self.assertIsNotNone(roll)
         self.assertEqual(roll.text, "rolled two")
+
+    def test_list_app_versions_returns_all_versions_newest_first(self):
+        with TemporaryDirectory() as store_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            older_bundle = self.create_app_bundle(source_dir, version="0.1.0")
+            newer_source_dir = Path(store_tmp) / "newer_source"
+            newer_source_dir.mkdir(parents=True, exist_ok=True)
+            newer_bundle = self.create_app_bundle(newer_source_dir, version="0.2.0")
+            repository_dir = self.create_repository(
+                Path(store_tmp) / "repo",
+                {"dice": [older_bundle, newer_bundle]},
+            )
+            manager = AppManager(repository_roots=[repository_dir])
+
+            response = manager.handle("list app versions dice")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Available versions for Dice: 0.2.0, 0.1.0.")
+
+    def test_install_command_can_pin_repository_version(self):
+        with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            older_bundle = self.create_app_bundle(
+                source_dir,
+                version="0.1.0",
+                response_text="rolled one",
+            )
+            newer_source_dir = Path(store_tmp) / "newer_source"
+            newer_source_dir.mkdir(parents=True, exist_ok=True)
+            newer_bundle = self.create_app_bundle(
+                newer_source_dir,
+                version="0.2.0",
+                response_text="rolled two",
+            )
+            repository_dir = self.create_repository(
+                Path(store_tmp) / "repo",
+                {"dice": [older_bundle, newer_bundle]},
+            )
+            manager = AppManager(app_dirs=[Path(install_tmp)], repository_roots=[repository_dir])
+
+            response = manager.handle("install app dice@0.1.0")
+            roll = manager.handle("roll test die")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Installed Dice version 0.1.0.")
+        self.assertIsNotNone(roll)
+        self.assertEqual(roll.text, "rolled one")
+
+    def test_remote_repository_install_downloads_bundle(self):
+        with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+
+            with self.serve_directory(repository_dir) as base_url:
+                manager = AppManager(app_dirs=[Path(install_tmp)], repository_roots=[base_url])
+                response = manager.handle("install app dice")
+                roll = manager.handle("roll test die")
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.text, "Installed Dice version 0.1.0.")
+        self.assertIsNotNone(roll)
+        self.assertEqual(roll.text, "rolled")
+
+    def test_checksum_mismatch_blocks_install(self):
+        with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
+            source_dir = Path(store_tmp) / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            bundle = self.create_app_bundle(source_dir)
+            repository_dir = self.create_repository(Path(store_tmp) / "repo", {"dice": [bundle]})
+            index_path = repository_dir / "index.json"
+            index_data = json.loads(index_path.read_text(encoding="utf-8"))
+            index_data["apps"][0]["versions"][0]["sha256"] = "deadbeef"
+            index_path.write_text(json.dumps(index_data), encoding="utf-8")
+            manager = AppManager(app_dirs=[Path(install_tmp)], repository_roots=[repository_dir])
+
+            response = manager.handle("install app dice")
+
+        self.assertIsNotNone(response)
+        self.assertIn("Bundle checksum mismatch", response.text)
 
 
 if __name__ == "__main__":

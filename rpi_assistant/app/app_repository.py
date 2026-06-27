@@ -1,11 +1,15 @@
 """Repository index support for installable voice apps."""
 
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
+from urllib.parse import urljoin
+from urllib.request import urlopen
 
 from .app_manifest import AppManifest
+from .app_store import verify_bundle_checksum
 
 APP_REPOSITORY_INDEX_FILENAME = "index.json"
 DEFAULT_APP_REPOSITORY_ROOTS = (
@@ -14,60 +18,103 @@ DEFAULT_APP_REPOSITORY_ROOTS = (
 
 
 @dataclass(frozen=True)
-class RepositoryApp:
-    """One app entry from a repository index."""
+class RepositoryRelease:
+    """One installable app release from a repository index."""
 
     manifest: AppManifest
-    bundle_dir: Path
+    bundle_ref: str
+    files: List[str]
+    sha256: str
+    repository_root: str | Path
+    is_remote: bool
+
+    def materialize(self, destination_root: Path) -> Path:
+        """Copy or download one repository release into a local staging directory."""
+        destination_root = destination_root.expanduser().resolve()
+        destination_root.mkdir(parents=True, exist_ok=True)
+        staging_dir = destination_root / f".{self.manifest.id}-{self.manifest.version}.repo"
+
+        if staging_dir.exists():
+            shutil.rmtree(staging_dir)
+
+        staging_dir.mkdir(parents=True, exist_ok=True)
+
+        for relative_path in self.files:
+            destination_file = staging_dir / Path(relative_path)
+            destination_file.parent.mkdir(parents=True, exist_ok=True)
+
+            if self.is_remote:
+                file_url = _remote_bundle_file_url(str(self.repository_root), self.bundle_ref, relative_path)
+                destination_file.write_bytes(_read_remote_bytes(file_url))
+            else:
+                source_file = Path(self.repository_root).expanduser().resolve() / self.bundle_ref / relative_path
+                if not source_file.exists():
+                    raise FileNotFoundError(f"Repository bundle file not found: {source_file}")
+                shutil.copy2(source_file, destination_file)
+
+        verify_bundle_checksum(staging_dir, self.files, self.sha256)
+        return staging_dir
 
 
 class AppRepository:
-    """Local repository of installable app bundles."""
+    """Repository of installable app bundles, backed by a local path or remote URL."""
 
-    def __init__(self, root: Path, apps: Dict[str, RepositoryApp]):
+    def __init__(self, root: str | Path, apps: Dict[str, List[RepositoryRelease]]):
         self.root = root
         self.apps = apps
 
     @classmethod
-    def load(cls, root: Path) -> Optional["AppRepository"]:
-        """Load one repository index from disk if it exists."""
-        root = root.expanduser().resolve()
-        index_path = root / APP_REPOSITORY_INDEX_FILENAME
-        if not index_path.exists():
+    def load(cls, root: str | Path) -> Optional["AppRepository"]:
+        """Load one repository index from disk or a remote base URL if it exists."""
+        normalized_root = _normalize_repository_root(root)
+        raw_data = _read_repository_index(normalized_root)
+        if raw_data is None:
             return None
 
-        raw_data = json.loads(index_path.read_text(encoding="utf-8"))
         entries = raw_data.get("apps", [])
         if not isinstance(entries, list):
             raise ValueError("App repository index field 'apps' must be a list")
 
-        apps: Dict[str, RepositoryApp] = {}
+        apps: Dict[str, List[RepositoryRelease]] = {}
         for entry in entries:
             app_id = str(entry.get("id", "")).strip()
-            bundle = str(entry.get("bundle", "")).strip()
-            if not app_id or not bundle:
-                raise ValueError("Repository app entries require 'id' and 'bundle'")
+            versions = entry.get("versions", [])
+            if not app_id or not isinstance(versions, list) or not versions:
+                raise ValueError("Repository app entries require 'id' and non-empty 'versions'")
 
-            bundle_dir = (root / bundle).resolve()
-            manifest = AppManifest.load(bundle_dir / "manifest.json")
-            if manifest.id != app_id:
-                raise ValueError(
-                    f"Repository entry id '{app_id}' does not match manifest id '{manifest.id}'"
-                )
-            apps[app_id] = RepositoryApp(manifest=manifest, bundle_dir=bundle_dir)
+            releases: List[RepositoryRelease] = []
+            for version_entry in versions:
+                releases.append(_load_release(normalized_root, app_id, version_entry))
 
-        return cls(root=root, apps=apps)
+            apps[app_id] = _sort_releases(releases)
 
-    def get(self, app_id: str) -> Optional[RepositoryApp]:
-        """Return one repository app by id."""
-        return self.apps.get(app_id)
+        return cls(root=normalized_root, apps=apps)
 
-    def list(self) -> List[RepositoryApp]:
-        """Return all repository apps sorted by id."""
-        return [self.apps[app_id] for app_id in sorted(self.apps)]
+    def get(self, app_id: str, version: Optional[str] = None) -> Optional[RepositoryRelease]:
+        """Return one repository release by id, optionally pinned to a specific version."""
+        releases = self.apps.get(app_id)
+        if not releases:
+            return None
+
+        if version is None:
+            return releases[0]
+
+        for release in releases:
+            if release.manifest.version == version:
+                return release
+
+        return None
+
+    def list(self) -> List[RepositoryRelease]:
+        """Return the latest release for each app sorted by id."""
+        return [self.apps[app_id][0] for app_id in sorted(self.apps)]
+
+    def list_versions(self, app_id: str) -> List[RepositoryRelease]:
+        """Return all releases for one app, sorted newest-first."""
+        return list(self.apps.get(app_id, []))
 
 
-def load_app_repositories(roots: Sequence[Path]) -> List[AppRepository]:
+def load_app_repositories(roots: Sequence[str | Path]) -> List[AppRepository]:
     """Load all available repositories from the configured roots."""
     repositories: List[AppRepository] = []
     for root in roots:
@@ -75,3 +122,102 @@ def load_app_repositories(roots: Sequence[Path]) -> List[AppRepository]:
         if repository is not None:
             repositories.append(repository)
     return repositories
+
+
+def _load_release(
+    root: str | Path,
+    app_id: str,
+    version_entry: dict,
+) -> RepositoryRelease:
+    bundle_ref = str(version_entry.get("bundle", "")).strip()
+    files = version_entry.get("files", [])
+    sha256 = str(version_entry.get("sha256", "")).strip()
+
+    if not bundle_ref or not isinstance(files, list) or not files or not sha256:
+        raise ValueError(
+            "Repository release entries require 'bundle', non-empty 'files', and 'sha256'"
+        )
+
+    manifest = _load_manifest(root, bundle_ref)
+    if manifest.id != app_id:
+        raise ValueError(
+            f"Repository entry id '{app_id}' does not match manifest id '{manifest.id}'"
+        )
+
+    declared_version = str(version_entry.get("version", "")).strip()
+    if declared_version and declared_version != manifest.version:
+        raise ValueError(
+            f"Repository release version '{declared_version}' does not match manifest version "
+            f"'{manifest.version}'"
+        )
+
+    return RepositoryRelease(
+        manifest=manifest,
+        bundle_ref=bundle_ref,
+        files=[str(file_name) for file_name in files],
+        sha256=sha256,
+        repository_root=root,
+        is_remote=isinstance(root, str),
+    )
+
+
+def _sort_releases(releases: Sequence[RepositoryRelease]) -> List[RepositoryRelease]:
+    sorted_releases: List[RepositoryRelease] = []
+    for release in releases:
+        inserted = False
+        for index, current in enumerate(sorted_releases):
+            if release.manifest.compare_version(current.manifest) > 0:
+                sorted_releases.insert(index, release)
+                inserted = True
+                break
+        if not inserted:
+            sorted_releases.append(release)
+    return sorted_releases
+
+
+def _normalize_repository_root(root: str | Path) -> str | Path:
+    if isinstance(root, Path):
+        return root.expanduser().resolve()
+
+    root_text = str(root).strip()
+    if root_text.startswith(("http://", "https://")):
+        return root_text.rstrip("/") + "/"
+
+    return Path(root_text).expanduser().resolve()
+
+
+def _read_repository_index(root: str | Path) -> Optional[dict]:
+    if isinstance(root, Path):
+        index_path = root / APP_REPOSITORY_INDEX_FILENAME
+        if not index_path.exists():
+            return None
+        return json.loads(index_path.read_text(encoding="utf-8"))
+
+    index_url = urljoin(root, APP_REPOSITORY_INDEX_FILENAME)
+    try:
+        return json.loads(_read_remote_text(index_url))
+    except Exception:
+        return None
+
+
+def _load_manifest(root: str | Path, bundle_ref: str) -> AppManifest:
+    if isinstance(root, Path):
+        return AppManifest.load(root / bundle_ref / "manifest.json")
+
+    manifest_url = _remote_bundle_file_url(root, bundle_ref, "manifest.json")
+    data = json.loads(_read_remote_text(manifest_url))
+    return AppManifest.from_dict(data)
+
+
+def _remote_bundle_file_url(root_url: str, bundle_ref: str, relative_path: str) -> str:
+    bundle_url = urljoin(root_url, bundle_ref.rstrip("/") + "/")
+    return urljoin(bundle_url, relative_path)
+
+
+def _read_remote_text(url: str) -> str:
+    return _read_remote_bytes(url).decode("utf-8")
+
+
+def _read_remote_bytes(url: str) -> bytes:
+    with urlopen(url, timeout=10) as response:
+        return response.read()

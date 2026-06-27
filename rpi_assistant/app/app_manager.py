@@ -13,7 +13,7 @@ from rpi_assistant.app.app_loader import (
 from rpi_assistant.app.app_manifest import AppManifest
 from rpi_assistant.app.app_repository import (
     DEFAULT_APP_REPOSITORY_ROOTS,
-    RepositoryApp,
+    RepositoryRelease,
     load_app_repositories,
 )
 from rpi_assistant.app.app_store import (
@@ -43,6 +43,10 @@ class AppManager:
         re.IGNORECASE,
     )
     DESCRIBE_PATTERN = re.compile(r"^(?:describe|show)\s+app\s+(?P<app_id>[a-zA-Z0-9_-]+)$", re.IGNORECASE)
+    LIST_VERSIONS_PATTERN = re.compile(
+        r"^(?:list|show)\s+app\s+versions\s+(?P<app_id>[a-zA-Z0-9_-]+)$",
+        re.IGNORECASE,
+    )
     LIST_PATTERNS = (
         "list apps",
         "list installed apps",
@@ -59,7 +63,7 @@ class AppManager:
         self,
         apps: Optional[List[VoiceApp]] = None,
         app_dirs: Optional[Sequence[Path]] = None,
-        repository_roots: Optional[Sequence[Path]] = None,
+        repository_roots: Optional[Sequence[str | Path]] = None,
     ):
         self.app_dirs = list(app_dirs) if app_dirs is not None else list(DEFAULT_EXTERNAL_APP_DIRS)
         self.repository_roots = (
@@ -174,12 +178,18 @@ class AppManager:
         self._upgrade_from_source(source_dir, manifest)
         return manifest
 
-    def install_store_app(self, app_id: str) -> AppManifest:
+    def install_store_app(self, app_id: str, version: Optional[str] = None) -> AppManifest:
         """Install an app bundle from the configured repository catalog."""
-        repository_app = self._find_repository_app(app_id)
-        if repository_app is None:
+        repository_release = self._find_repository_release(app_id, version)
+        if repository_release is None:
             raise FileNotFoundError(f"App {app_id} was not found in the app store.")
-        return self.install_app(repository_app.bundle_dir)
+
+        staged_dir = repository_release.materialize(self.app_dirs[0])
+        try:
+            return self.install_app(staged_dir)
+        finally:
+            if staged_dir.exists():
+                shutil.rmtree(staged_dir)
 
     def uninstall_app(self, app_id: str) -> Optional[AppManifest]:
         """Uninstall an external app bundle and unregister it."""
@@ -202,25 +212,31 @@ class AppManager:
         if installed_app.is_builtin:
             raise ValueError(f"Cannot upgrade built-in app {installed_app.name}.")
 
-        repository_app = self._find_repository_app(app_id)
-        if repository_app is None:
+        repository_release = self._find_repository_release(app_id)
+        if repository_release is None:
             raise FileNotFoundError(f"App {app_id} was not found in the app store.")
 
         installed_manifest = installed_app.manifest
         if installed_manifest is None:
             raise ValueError(f"Installed app {installed_app.name} has no manifest metadata.")
-        if repository_app.manifest.compare_version(installed_manifest) <= 0:
+        if repository_release.manifest.compare_version(installed_manifest) <= 0:
             raise ValueError(f"App {installed_app.name} is already up to date.")
 
-        self._upgrade_from_source(repository_app.bundle_dir, repository_app.manifest)
-        return repository_app.manifest
+        staged_dir = repository_release.materialize(self.app_dirs[0])
+        try:
+            self._upgrade_from_source(staged_dir, repository_release.manifest)
+        finally:
+            if staged_dir.exists():
+                shutil.rmtree(staged_dir)
+
+        return repository_release.manifest
 
     def describe_app(self, app_id: str) -> str:
         """Return a description of one installed or catalog app."""
         installed_app = self._find_app(app_id)
-        repository_app = self._find_repository_app(app_id)
+        repository_release = self._find_repository_release(app_id)
 
-        if installed_app is None and repository_app is None:
+        if installed_app is None and repository_release is None:
             raise FileNotFoundError(f"App {app_id} was not found.")
 
         if installed_app is not None:
@@ -231,9 +247,9 @@ class AppManager:
             name = installed_app.name
             triggers = installed_app.triggers
         else:
-            if repository_app is None:
+            if repository_release is None:
                 raise FileNotFoundError(f"App {app_id} was not found.")
-            manifest = repository_app.manifest
+            manifest = repository_release.manifest
             description = manifest.description
             version = manifest.version
             status = "available"
@@ -247,18 +263,50 @@ class AppManager:
             f"Triggers: {trigger_text}."
         )
 
+    def list_app_versions(self, app_id: str) -> str:
+        """Return the available repository versions for one app."""
+        releases: List[RepositoryRelease] = []
+        for repository in self.repositories:
+            releases.extend(repository.list_versions(app_id))
+
+        if not releases:
+            raise FileNotFoundError(f"App {app_id} was not found in the app store.")
+
+        versions = []
+        app_name = releases[0].manifest.name
+        for release in releases:
+            version = release.manifest.version
+            if version not in versions:
+                versions.append(version)
+
+        return f"Available versions for {app_name}: {', '.join(versions)}."
+
     def _find_app(self, app_id: str) -> Optional[VoiceApp]:
         for app in self.apps:
             if app.id == app_id:
                 return app
         return None
 
-    def _find_repository_app(self, app_id: str) -> Optional[RepositoryApp]:
+    def _find_repository_release(
+        self,
+        app_id: str,
+        version: Optional[str] = None,
+    ) -> Optional[RepositoryRelease]:
         for repository in self.repositories:
-            repository_app = repository.get(app_id)
-            if repository_app is not None:
-                return repository_app
+            repository_release = repository.get(app_id, version=version)
+            if repository_release is not None:
+                return repository_release
         return None
+
+    def _parse_store_target(self, target: str) -> tuple[str, Optional[str]]:
+        app_id, separator, version = target.partition("@")
+        app_id = app_id.strip()
+        if not separator:
+            return app_id, None
+        version = version.strip()
+        if not app_id or not version:
+            raise ValueError("App store target must use the format '<app_id>@<version>'")
+        return app_id, version
 
     def _upgrade_from_source(self, source_dir: Path, manifest: AppManifest) -> None:
         existing_bundle_dir, _ = find_installed_app_bundle(manifest.id, self.app_dirs)
@@ -274,7 +322,10 @@ class AppManager:
 
             shutil.rmtree(existing_bundle_dir)
             final_dir = self.app_dirs[0] / manifest.id
-            staged_dir.rename(final_dir)
+            if final_dir.exists():
+                shutil.rmtree(final_dir)
+            shutil.copytree(staged_dir, final_dir)
+            shutil.rmtree(staged_dir)
             upgraded_app.install_dir = final_dir
             upgraded_app.manifest = manifest
             upgraded_app.is_builtin = False
@@ -309,6 +360,16 @@ class AppManager:
                 return AppResponse(text="No app store entries are available.", done=True)
             return AppResponse(text=f"Available apps: {', '.join(names)}.", done=True)
 
+        list_versions_match = self.LIST_VERSIONS_PATTERN.match(normalized)
+        if list_versions_match:
+            app_id = list_versions_match.group("app_id")
+            try:
+                version_text = self.list_app_versions(app_id)
+            except Exception as exc:
+                return AppResponse(text=str(exc), done=True)
+
+            return AppResponse(text=version_text, done=True)
+
         install_match = self.INSTALL_PATTERN.match(normalized)
         if install_match:
             source = install_match.group("source").strip().strip("\"'")
@@ -316,7 +377,8 @@ class AppManager:
                 if self._looks_like_path(source):
                     manifest = self.install_app(Path(source))
                 else:
-                    manifest = self.install_store_app(source)
+                    app_id, version = self._parse_store_target(source)
+                    manifest = self.install_store_app(app_id, version=version)
             except Exception as exc:
                 return AppResponse(text=f"Could not install app: {exc}", done=True)
 
