@@ -69,6 +69,9 @@ class WakeWordRecorder:
     - RECORD: Recording audio after wake word detected
     - PROCESSING: Processing recorded audio (blocks new wake word detection)
     """
+
+    AUDIO_QUEUE_SECONDS = 5.0
+    PROCESSING_DRAIN_SECONDS = 3.0
     
     def __init__(
         self,
@@ -109,8 +112,13 @@ class WakeWordRecorder:
         self.resume_listening_at = 0.0  # Timestamp when to resume listening after processing
         self.skip_chunks = 0  # Number of chunks to skip feeding to model after resuming
         
-        # Thread-safe audio queue for callback -> processing thread
-        self.audio_queue = queue.Queue()
+        # Thread-safe bounded queues. Audio chunks are intentionally dropped when
+        # processing falls behind instead of allowing unbounded memory growth.
+        chunk_seconds = audio_config.chunk_size / audio_config.sample_rate
+        audio_queue_size = max(1, int(self.AUDIO_QUEUE_SECONDS / chunk_seconds))
+        self.audio_queue = queue.Queue(maxsize=audio_queue_size)
+        self.recording_queue = queue.Queue(maxsize=1)
+        self.processing_thread: Optional[threading.Thread] = None
         
         # Pre-roll buffer
         pre_roll_frames = int(recording_config.pre_roll_seconds * audio_config.sample_rate)
@@ -125,6 +133,7 @@ class WakeWordRecorder:
         self.device = pick_input_device(audio_config.device_match)
         self.stream = None
         self.running = False
+        self.processing_drain_seconds = self.PROCESSING_DRAIN_SECONDS
         
         # Thread synchronization
         self.lock = threading.Lock()
@@ -153,6 +162,12 @@ class WakeWordRecorder:
             self.pixels.listen()
         
         self.running = True
+        self.processing_thread = threading.Thread(
+            target=self._recording_worker,
+            name="recording-worker",
+            daemon=True,
+        )
+        self.processing_thread.start()
         
         try:
             self.stream = sd.InputStream(
@@ -212,6 +227,8 @@ class WakeWordRecorder:
                 self.audio_queue.get_nowait()
             except queue.Empty:
                 break
+
+        self._stop_recording_worker()
         
         # Turn off LEDs
         if self.pixels:
@@ -233,6 +250,10 @@ class WakeWordRecorder:
         try:
             if status:
                 print("Audio status:", status)
+
+            with self.lock:
+                if not self.running or self.state == "PROCESSING":
+                    return
             
             # Just enqueue the audio chunk - processing happens in main thread
             # Extract mono channel
@@ -257,26 +278,6 @@ class WakeWordRecorder:
         """
         with self.lock:
             current_state = self.state
-            
-            # Auto-transition from PROCESSING to LISTEN_WAKE after drain period
-            if current_state == "PROCESSING" and time.time() >= self.resume_listening_at:
-                # Clear queue one more time right before resuming to ensure fresh audio
-                cleared = 0
-                while not self.audio_queue.empty():
-                    try:
-                        self.audio_queue.get_nowait()
-                        cleared += 1
-                    except queue.Empty:
-                        break
-                
-                self.state = "LISTEN_WAKE"
-                current_state = "LISTEN_WAKE"
-                # Skip feeding 30 chunks to model to flush its internal prediction buffers
-                # This allows the model's sliding window state to fill with fresh audio
-                self.skip_chunks = 30
-                print(f"\nResuming wake word detection (cleared {cleared} chunks, skipping next 30 for model flush).\n")
-                if self.pixels:
-                    self.pixels.listen()
             
             # Always maintain pre-roll buffer (but only when not processing)
             if current_state != "PROCESSING":
@@ -402,20 +403,70 @@ class WakeWordRecorder:
         # Show processing/thinking animation
         if self.pixels:
             self.pixels.think()
-        
-        # Trigger callback if provided (only if still running)
-        # This may take several seconds (OpenAI API call)
-        if should_callback and self.on_recording_complete:
+
+        if should_callback:
             try:
-                self.on_recording_complete(self.recording_config.output_path)
-            except Exception as e:
-                print(f"\n⚠️  Error processing recording: {e}")
-                # Continue with cleanup even if callback fails
-        
+                self.recording_queue.put_nowait(self.recording_config.output_path)
+                return
+            except queue.Full:
+                print("\n⚠️  Recording worker is busy; dropping completed recording.")
+
+        self._finish_processing()
+
+    def _recording_worker(self) -> None:
+        """Run slow recording completion work off the audio processing loop."""
+        while True:
+            recording_path = self.recording_queue.get()
+            try:
+                if recording_path is None:
+                    return
+
+                if self.on_recording_complete:
+                    try:
+                        self.on_recording_complete(recording_path)
+                    except Exception as e:
+                        print(f"\n⚠️  Error processing recording: {e}")
+            finally:
+                if recording_path is not None:
+                    self._finish_processing()
+                self.recording_queue.task_done()
+
+    def _finish_processing(self) -> None:
+        """Drain stale audio and transition back to wake-word listening."""
         # Reset model state to clear any buffered audio from overflow
         self._reset_model_state()
         
         # Clear the audio queue to drop all buffered overflow chunks
+        cleared = self._clear_audio_queue()
+        
+        print(f"Cleared {cleared} buffered audio chunks from queue.")
+
+        print(f"Waiting {self.processing_drain_seconds:g} seconds for fresh audio...\n")
+        drain_until = time.time() + self.processing_drain_seconds
+        while time.time() < drain_until:
+            with self.lock:
+                if not self.running:
+                    return
+            time.sleep(0.1)
+
+        cleared = self._clear_audio_queue()
+
+        with self.lock:
+            if not self.running:
+                return
+            self.state = "LISTEN_WAKE"
+            self.resume_listening_at = 0.0
+            self.last_wake = time.time()
+            self.skip_chunks = 30
+
+        print(
+            f"\nResuming wake word detection "
+            f"(cleared {cleared} chunks, skipping next 30 for model flush).\n"
+        )
+        if self.pixels:
+            self.pixels.listen()
+
+    def _clear_audio_queue(self) -> int:
         cleared = 0
         while not self.audio_queue.empty():
             try:
@@ -423,15 +474,24 @@ class WakeWordRecorder:
                 cleared += 1
             except queue.Empty:
                 break
-        
-        print(f"Cleared {cleared} buffered audio chunks from queue.")
-        
-        with self.lock:
-            if self.running:
-                # Stay in PROCESSING state for 3 seconds
-                # This gives time for a few fresh chunks to accumulate
-                self.resume_listening_at = time.time() + 3.0
-                self.last_wake = time.time()
-        
-        # Visual indicator
-        print("Waiting 3 seconds for fresh audio...\n")
+        return cleared
+
+    def _stop_recording_worker(self) -> None:
+        worker = self.processing_thread
+        if worker is None or threading.current_thread() is worker:
+            return
+
+        while not self.recording_queue.empty():
+            try:
+                self.recording_queue.get_nowait()
+                self.recording_queue.task_done()
+            except queue.Empty:
+                break
+
+        try:
+            self.recording_queue.put_nowait(None)
+        except queue.Full:
+            pass
+
+        worker.join(timeout=2)
+        self.processing_thread = None
