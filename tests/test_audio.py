@@ -35,6 +35,7 @@ class WakeWordRecorderTests(unittest.TestCase):
         recorder.audio_config = AudioConfig(sample_rate=16000, chunk_size=160, channels=1)
         recorder.recording_config = RecordingConfig(output_path=str(output_path))
         recorder.on_recording_complete = None
+        recorder.on_state_change = None
         recorder.pixels = None
         recorder.model = FakeWakeModel()
         recorder.state = "RECORD"
@@ -135,6 +136,23 @@ class WakeWordRecorderTests(unittest.TestCase):
             self.assertEqual(recorder.processing_drain_seconds, 0.25)
         finally:
             recorder.stop()
+
+    def test_lifecycle_hooks_run_outside_audio_callback(self):
+        recorder = self.create_recorder_shell(Path("/tmp/unused.wav"))
+        states = []
+        recorder.on_state_change = states.append
+
+        recorder._audio_callback(
+            np.ones((160, 1), dtype=np.float32),
+            frames=160,
+            time_info=None,
+            status=None,
+        )
+        self.assertEqual(states, [])
+
+        with recorder.lock:
+            recorder._start_recording(np.ones(160, dtype=np.float32))
+        self.assertEqual(states, ["listening"])
 
 
 if __name__ == "__main__":

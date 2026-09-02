@@ -99,6 +99,15 @@ class AppStoreConfig:
 
 
 @dataclass
+class RPiFaceConfig:
+    """Optional RPiFace lifecycle display integration."""
+
+    enabled: bool = False
+    base_url: str = "http://127.0.0.1:8765"
+    timeout_seconds: float = 0.3
+
+
+@dataclass
 class Config:
     """Main configuration container."""
 
@@ -110,6 +119,7 @@ class Config:
     led: LEDConfig
     logging: LoggingConfig
     app_store: AppStoreConfig
+    rpiface: RPiFaceConfig
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
@@ -339,6 +349,26 @@ def load_config(config_path: Optional[str] = None) -> Config:
         ),
     )
 
+    rpiface_config = RPiFaceConfig(
+        enabled=get_value("rpiface", "enabled", "RPIFACE_ENABLED", False, bool),
+        base_url=get_value(
+            "rpiface",
+            "base_url",
+            "RPIFACE_BASE_URL",
+            "http://127.0.0.1:8765",
+            str,
+        ),
+        timeout_seconds=get_value(
+            "rpiface",
+            "timeout_seconds",
+            "RPIFACE_TIMEOUT_SECONDS",
+            0.3,
+            float,
+        ),
+    )
+    if not 0 < rpiface_config.timeout_seconds < 1:
+        raise ValueError("RPiFace timeout_seconds must be greater than 0 and less than 1")
+
     return Config(
         audio=audio,
         wake_word=wake_word,
@@ -348,4 +378,5 @@ def load_config(config_path: Optional[str] = None) -> Config:
         led=led_config,
         logging=logging_config,
         app_store=app_store_config,
+        rpiface=rpiface_config,
     )

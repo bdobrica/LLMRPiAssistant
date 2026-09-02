@@ -96,6 +96,15 @@ log_file = openai_interactions.log
 # Logging level (DEBUG, INFO, WARNING, ERROR)
 log_level = INFO
 
+[rpiface]
+# Optional deterministic face lifecycle integration. Disabled by default.
+# Environment equivalents: RPIFACE_ENABLED, RPIFACE_BASE_URL,
+# RPIFACE_TIMEOUT_SECONDS.
+enabled = false
+base_url = http://127.0.0.1:8765
+# Must be greater than zero and less than one second. Calls run off the audio path.
+timeout_seconds = 0.3
+
 [app_store]
 # Default remote repository root used for named app installs like "install app dice"
 default_repository_url = https://raw.githubusercontent.com/bdobrica/LLMRPiAssistant/main/voice_apps/

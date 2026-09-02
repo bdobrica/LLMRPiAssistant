@@ -77,6 +77,7 @@ class WakeWordRecorder:
         recording_config: RecordingConfig,
         on_recording_complete: Optional[Callable[[str], None]] = None,
         pixels = None,
+        on_state_change: Optional[Callable[[str], None]] = None,
     ):
         """Initialize wake word recorder.
         
@@ -86,11 +87,13 @@ class WakeWordRecorder:
             recording_config: Recording behavior configuration.
             on_recording_complete: Callback when recording is saved. Receives file path.
             pixels: Optional Pixels instance for LED feedback.
+            on_state_change: Best-effort callback for lifecycle state transitions.
         """
         self.audio_config = audio_config
         self.wake_word_config = wake_word_config
         self.recording_config = recording_config
         self.on_recording_complete = on_recording_complete
+        self.on_state_change = on_state_change
         self.pixels = pixels
         
         # Initialize wake word model
@@ -337,6 +340,7 @@ class WakeWordRecorder:
         self.silence_run = 0.0
         # Seed recording with pre-roll + current chunk
         self.rec = list(self.pre_roll) + current_chunk.tolist()
+        self._notify_state("listening")
     
     def _record_audio(self, mono: np.ndarray) -> None:
         """Continue recording audio and check for stop conditions.
@@ -401,6 +405,7 @@ class WakeWordRecorder:
         # Show processing/thinking animation
         if self.pixels:
             self.pixels.think()
+        self._notify_state("thinking")
 
         if should_callback:
             try:
@@ -463,6 +468,16 @@ class WakeWordRecorder:
         )
         if self.pixels:
             self.pixels.listen()
+        self._notify_state("idle")
+
+    def _notify_state(self, state: str) -> None:
+        """Report a lifecycle transition without affecting audio operation."""
+        if self.on_state_change is None:
+            return
+        try:
+            self.on_state_change(state)
+        except Exception as exc:
+            print(f"\n⚠️  RPiFace lifecycle update skipped: {type(exc).__name__}")
 
     def _clear_audio_queue(self) -> int:
         cleared = 0

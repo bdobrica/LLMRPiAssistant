@@ -154,6 +154,22 @@ The configuration file supports extensive customization:
 - **log_file**: Path to interaction log (default: "openai_interactions.log")
 - **log_level**: Logging verbosity (DEBUG, INFO, WARNING, ERROR)
 
+#### RPiFace (Optional)
+
+RPiFace can mirror the assistant's deterministic lifecycle on a local display:
+
+```ini
+[rpiface]
+enabled = true
+base_url = http://127.0.0.1:8765
+timeout_seconds = 0.3
+```
+
+The feature is disabled by default. Start RPiFace Core separately; the voice
+assistant continues normally if it is stopped or unreachable. Face requests
+run on a dedicated best-effort worker, never in the real-time audio callback.
+The mapped states are `idle`, `listening`, `thinking`, and `speaking`.
+
 ### Environment Variables
 
 All settings can also be set via environment variables (config.ini takes precedence):
@@ -163,6 +179,9 @@ export OPENAI_API_KEY="sk-..."
 export OPENAI_CHAT_MODEL="gpt-4o"
 export WAKEWORD_THRESHOLD="0.6"
 export RECORDING_SILENCE_RMS="0.01"
+export RPIFACE_ENABLED="true"
+export RPIFACE_BASE_URL="http://127.0.0.1:8765"
+export RPIFACE_TIMEOUT_SECONDS="0.3"
 ```
 
 ## Usage

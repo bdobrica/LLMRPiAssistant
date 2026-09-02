@@ -19,6 +19,7 @@ from .config import load_config
 from .connectivity import check_internet_connection
 from .logger import InteractionLogger
 from .openai_client import OpenAIClient
+from .rpiface_client import RPiFaceClient
 
 try:
     from .pixels import Pixels
@@ -35,6 +36,7 @@ def main():
     connection_monitor_thread = None
     connection_state = {"online": None, "first_check": True}  # None = unknown, True = online, False = offline
     stop_monitor = threading.Event()
+    rpiface = None
 
     def cleanup():
         """Cleanup resources before exit."""
@@ -46,6 +48,8 @@ def main():
             recorder.stop()
         if pixels is not None:
             pixels.off()
+        if rpiface is not None:
+            rpiface.close()
 
     def signal_handler(signum, frame):
         """Handle termination signals."""
@@ -60,6 +64,12 @@ def main():
     try:
         # Load configuration
         config = load_config()
+        rpiface = RPiFaceClient(
+            base_url=config.rpiface.base_url,
+            timeout_seconds=config.rpiface.timeout_seconds,
+            enabled=config.rpiface.enabled,
+        )
+        rpiface.set_state("idle")
 
         # Initialize components
         logger = InteractionLogger(config.logging)
@@ -229,6 +239,7 @@ def main():
                         )
 
                         # Play the MP3 audio using mpg123
+                        rpiface.set_state("speaking")
                         result = subprocess.run(
                             ["mpg123", "-a", config.audio_output.device, mp3_path],
                             capture_output=True,
@@ -252,14 +263,17 @@ def main():
                         if pixels:
                             pixels.listen()
                     finally:
+                        rpiface.set_state("idle")
                         openai_client.mark_response_output_finished()
                 else:
+                    rpiface.set_state("idle")
                     openai_client.mark_response_output_finished()
 
                 print("\n" + "=" * 60)
                 print("Listening for wake word...\n")
 
             except Exception as e:
+                rpiface.set_state("idle")
                 error_msg = f"Error processing command: {e}"
                 print(f"\n❌ {error_msg}\n")
                 logger.log_error(error_msg, {"audio_file": audio_path})
@@ -270,6 +284,7 @@ def main():
             config.wake_word,
             config.recording,
             on_recording_complete=on_recording_complete,
+            on_state_change=rpiface.set_state,
             pixels=pixels,
         )
 
