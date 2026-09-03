@@ -4,8 +4,6 @@ This file is intentionally dependency-free so it can be copied into the
 LLMRPiAssistant package without making that project depend on RPiFace.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import queue

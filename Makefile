@@ -1,4 +1,4 @@
-.PHONY: setup update install-deps create-venv update-python install-voicecard install-assistant install-wifi install-service restart-service patch-openwakeword reboot-prompt help
+.PHONY: setup update install-deps create-venv update-python install-voicecard install-assistant install-wifi install-service restart-service patch-openwakeword test-mcp reboot-prompt help
 
 # Variables
 SHELL_PWD := $(shell pwd)
@@ -27,6 +27,11 @@ help:
 	@echo "  make restart-service   - Restart the installed rpi-assistant service if it is running"
 	@echo "  make install-wifi      - Install WiFi provisioning manager"
 	@echo "  make patch-openwakeword - Apply openwakeword bug fix patch"
+	@echo "  make test-mcp          - Run generic MCP manager and tool-loop tests"
+
+test-mcp:
+	PYTHONPATH=$(SHELL_PWD) $(PYTHON) -m unittest \
+		tests.test_mcp_manager tests.test_openai_client tests.test_config
 
 # Complete setup
 setup: install-deps create-venv install-voicecard patch-openwakeword install-assistant install-service reboot-prompt

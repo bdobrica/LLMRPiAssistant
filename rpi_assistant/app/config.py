@@ -4,14 +4,13 @@ Loads configuration from config.ini (if present) with fallback to environment va
 Config.ini takes precedence over environment variables.
 """
 
+import json
 import os
+import re
 from configparser import ConfigParser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-
-from .app_repository import load_default_repository_public_key
-
 
 @dataclass
 class AudioConfig:
@@ -107,6 +106,29 @@ class RPiFaceConfig:
     timeout_seconds: float = 0.3
 
 
+@dataclass(frozen=True)
+class MCPServerConfig:
+    """One generic MCP transport definition; secret values stay in the environment."""
+
+    name: str
+    transport: str
+    command: str = ""
+    args: tuple[str, ...] = ()
+    env_vars: tuple[str, ...] = ()
+    url: str = ""
+    token_env: str = ""
+
+
+@dataclass(frozen=True)
+class MCPConfig:
+    """Optional generic MCP client configuration."""
+
+    enabled: bool = False
+    timeout_seconds: float = 30.0
+    max_tool_rounds: int = 3
+    servers: tuple[MCPServerConfig, ...] = ()
+
+
 @dataclass
 class Config:
     """Main configuration container."""
@@ -120,6 +142,7 @@ class Config:
     logging: LoggingConfig
     app_store: AppStoreConfig
     rpiface: RPiFaceConfig
+    mcp: MCPConfig
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
@@ -316,6 +339,8 @@ def load_config(config_path: Optional[str] = None) -> Config:
         log_level=get_value("logging", "log_level", "LOG_LEVEL", "INFO", str),
     )
 
+    from .app_repository import load_default_repository_public_key
+
     default_public_key = load_default_repository_public_key()
 
     app_store_config = AppStoreConfig(
@@ -369,6 +394,8 @@ def load_config(config_path: Optional[str] = None) -> Config:
     if not 0 < rpiface_config.timeout_seconds < 1:
         raise ValueError("RPiFace timeout_seconds must be greater than 0 and less than 1")
 
+    mcp_config = _load_mcp_config(parser, get_value)
+
     return Config(
         audio=audio,
         wake_word=wake_word,
@@ -379,4 +406,85 @@ def load_config(config_path: Optional[str] = None) -> Config:
         logging=logging_config,
         app_store=app_store_config,
         rpiface=rpiface_config,
+        mcp=mcp_config,
     )
+
+
+def _load_mcp_config(parser: ConfigParser, get_value) -> MCPConfig:
+    enabled = get_value("mcp", "enabled", "MCP_ENABLED", False, bool)
+    timeout = get_value("mcp", "timeout_seconds", "MCP_TIMEOUT_SECONDS", 30.0, float)
+    max_rounds = get_value("mcp", "max_tool_rounds", "MCP_MAX_TOOL_ROUNDS", 3, int)
+    if timeout <= 0:
+        raise ValueError("MCP timeout_seconds must be positive")
+    if not 1 <= max_rounds <= 10:
+        raise ValueError("MCP max_tool_rounds must be between 1 and 10")
+
+    raw_json = os.getenv("MCP_SERVERS_JSON")
+    if raw_json is not None and not parser.has_option("mcp", "servers"):
+        try:
+            entries = json.loads(raw_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError("MCP_SERVERS_JSON must contain valid JSON") from exc
+        if not isinstance(entries, list):
+            raise ValueError("MCP_SERVERS_JSON must contain a JSON array")
+        servers = tuple(_server_from_mapping(entry) for entry in entries)
+    else:
+        names = get_value("mcp", "servers", "MCP_SERVERS", "", str)
+        servers = tuple(
+            _server_from_section(parser, name)
+            for name in (item.strip() for item in names.split(","))
+            if name
+        )
+    if len({server.name for server in servers}) != len(servers):
+        raise ValueError("MCP server names must be unique")
+    return MCPConfig(enabled, timeout, max_rounds, servers)
+
+
+def _server_from_section(parser: ConfigParser, name: str) -> MCPServerConfig:
+    section = f"mcp.server.{name}"
+    if not parser.has_section(section):
+        raise ValueError(f"Missing MCP server section: [{section}]")
+    return _server_from_mapping({"name": name, **dict(parser.items(section))})
+
+
+def _server_from_mapping(value) -> MCPServerConfig:
+    if not isinstance(value, dict):
+        raise TypeError("Each MCP server must be an object")
+    name = str(value.get("name", ""))
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,24}", name):
+        raise ValueError("MCP server name must use 1-24 letters, digits, underscores, or hyphens")
+    transport = str(value.get("transport", "stdio"))
+    if transport not in {"stdio", "streamable-http"}:
+        raise ValueError(f"Unsupported MCP transport for {name}")
+    command = str(value.get("command", ""))
+    url = str(value.get("url", ""))
+    if transport == "stdio" and not command:
+        raise ValueError(f"MCP stdio server {name} requires command")
+    if transport == "streamable-http" and not url.startswith(("http://", "https://")):
+        raise ValueError(f"MCP HTTP server {name} requires an HTTP(S) URL")
+    return MCPServerConfig(
+        name=name,
+        transport=transport,
+        command=command,
+        args=_string_tuple(value.get("args", ())),
+        env_vars=_string_tuple(value.get("env_vars", ())),
+        url=url,
+        token_env=str(value.get("token_env", "")),
+    )
+
+
+def _string_tuple(value) -> tuple[str, ...]:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return ()
+        if stripped.startswith("["):
+            try:
+                value = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                raise ValueError("MCP list setting must be valid JSON") from exc
+        else:
+            value = [item.strip() for item in stripped.split(",")]
+    if not isinstance(value, (list, tuple)) or not all(isinstance(item, str) for item in value):
+        raise ValueError("MCP list setting must contain strings")
+    return tuple(item for item in value if item)

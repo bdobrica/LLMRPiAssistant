@@ -170,6 +170,48 @@ assistant continues normally if it is stopped or unreachable. Face requests
 run on a dedicated best-effort worker, never in the real-time audio callback.
 The mapped states are `idle`, `listening`, `thinking`, and `speaking`.
 
+#### Generic MCP tools (Optional)
+
+MCP is independent of the deterministic RPiFace lifecycle integration. When
+enabled, the assistant initializes every configured server, discovers its tools,
+and exposes them to the chat model as namespaced function tools such as
+`rpiface__set_mood`. A bounded tool loop routes calls to the owning server and
+returns results to the model. One unavailable server does not disable other
+servers or normal chat.
+
+```ini
+[mcp]
+enabled = true
+timeout_seconds = 30
+max_tool_rounds = 3
+servers = rpiface, utility
+
+[mcp.server.rpiface]
+transport = stdio
+command = /opt/venvs/rpiface/bin/rpiface-mcp
+args = []
+
+[mcp.server.utility]
+transport = streamable-http
+url = https://mcp.example.test/mcp
+token_env = UTILITY_MCP_TOKEN
+```
+
+The environment equivalents for global settings are `MCP_ENABLED`,
+`MCP_TIMEOUT_SECONDS`, and `MCP_MAX_TOOL_ROUNDS`. Define all servers through
+`MCP_SERVERS_JSON` when no `servers` option is present in `config.ini`.
+
+```bash
+export MCP_ENABLED=true
+export MCP_SERVERS_JSON='[{"name":"rpiface","transport":"stdio","command":"/opt/venvs/rpiface/bin/rpiface-mcp"}]'
+```
+
+Never put bearer values in the JSON or INI file. `token_env` contains only the
+name of an environment variable; its value is read when the HTTP transport is
+opened and is never included in tool schemas, prompts, messages, or results.
+Stdio children receive only a small safe environment plus names explicitly
+listed in `env_vars`.
+
 ### Environment Variables
 
 All settings can also be set via environment variables (config.ini takes precedence):

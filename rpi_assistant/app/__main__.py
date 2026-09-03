@@ -18,6 +18,7 @@ from .audio import WakeWordRecorder
 from .config import load_config
 from .connectivity import check_internet_connection
 from .logger import InteractionLogger
+from .mcp_manager import MCPClientManager
 from .openai_client import OpenAIClient
 from .rpiface_client import RPiFaceClient
 
@@ -37,6 +38,7 @@ def main():
     connection_state = {"online": None, "first_check": True}  # None = unknown, True = online, False = offline
     stop_monitor = threading.Event()
     rpiface = None
+    mcp_manager = None
 
     def cleanup():
         """Cleanup resources before exit."""
@@ -50,6 +52,8 @@ def main():
             pixels.off()
         if rpiface is not None:
             rpiface.close()
+        if mcp_manager is not None:
+            mcp_manager.close()
 
     def signal_handler(signum, frame):
         """Handle termination signals."""
@@ -73,7 +77,9 @@ def main():
 
         # Initialize components
         logger = InteractionLogger(config.logging)
-        openai_client = OpenAIClient(config.openai)
+        mcp_manager = MCPClientManager(config.mcp)
+        mcp_manager.start()
+        openai_client = OpenAIClient(config.openai, mcp_manager=mcp_manager)
         repository_roots: list[str | Path] = []
         if config.app_store.default_repository_url:
             repository_roots.append(config.app_store.default_repository_url)

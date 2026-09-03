@@ -105,6 +105,28 @@ base_url = http://127.0.0.1:8765
 # Must be greater than zero and less than one second. Calls run off the audio path.
 timeout_seconds = 0.3
 
+[mcp]
+# Optional generic MCP tool support. Disabled until explicitly enabled.
+enabled = false
+timeout_seconds = 30
+# Maximum model -> tool -> model cycles per assistant response (1-10).
+max_tool_rounds = 3
+# Comma-separated names whose settings live in [mcp.server.<name>] sections.
+servers = rpiface
+
+[mcp.server.rpiface]
+# stdio servers require command; args is a JSON array (or comma-separated list).
+transport = stdio
+command = /opt/venvs/rpiface/bin/rpiface-mcp
+args = []
+# Only explicitly named environment variables are inherited by the child.
+env_vars =
+
+# Streamable HTTP alternative:
+# transport = streamable-http
+# url = http://127.0.0.1:8766/mcp
+# token_env = RPIFACE_MCP_ACCESS_TOKEN
+
 [app_store]
 # Default remote repository root used for named app installs like "install app dice"
 default_repository_url = https://raw.githubusercontent.com/bdobrica/LLMRPiAssistant/main/voice_apps/

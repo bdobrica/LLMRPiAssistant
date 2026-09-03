@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -37,6 +38,8 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(config.rpiface.enabled)
         self.assertEqual(config.rpiface.base_url, "http://127.0.0.1:8765")
         self.assertEqual(config.rpiface.timeout_seconds, 0.3)
+        self.assertFalse(config.mcp.enabled)
+        self.assertEqual(config.mcp.servers, ())
 
     def test_load_config_reads_rpiface_section(self):
         with TemporaryDirectory() as tmp_dir:
@@ -53,15 +56,18 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.rpiface.timeout_seconds, 0.2)
 
     def test_load_config_reads_rpiface_environment(self):
-        with TemporaryDirectory() as tmp_dir, patch.dict(
-            "os.environ",
-            {
-                "OPENAI_API_KEY": "test-key",
-                "RPIFACE_ENABLED": "true",
-                "RPIFACE_BASE_URL": "http://127.0.0.1:9999",
-                "RPIFACE_TIMEOUT_SECONDS": "0.25",
-            },
-            clear=True,
+        with (
+            TemporaryDirectory() as tmp_dir,
+            patch.dict(
+                "os.environ",
+                {
+                    "OPENAI_API_KEY": "test-key",
+                    "RPIFACE_ENABLED": "true",
+                    "RPIFACE_BASE_URL": "http://127.0.0.1:9999",
+                    "RPIFACE_TIMEOUT_SECONDS": "0.25",
+                },
+                clear=True,
+            ),
         ):
             config = load_config(str(Path(tmp_dir) / "missing.ini"))
 
@@ -78,6 +84,65 @@ class ConfigTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "less than 1"):
                 load_config(str(config_path))
+
+    def test_loads_multiple_mcp_server_transports(self):
+        with TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "config.ini"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[openai]",
+                        "api_key=test-key",
+                        "[mcp]",
+                        "enabled=true",
+                        "servers=face, utility",
+                        "max_tool_rounds=4",
+                        "[mcp.server.face]",
+                        "transport=stdio",
+                        "command=rpiface-mcp",
+                        'args=["--config", "face.toml"]',
+                        "[mcp.server.utility]",
+                        "transport=streamable-http",
+                        "url=http://127.0.0.1:9000/mcp",
+                        "token_env=UTILITY_MCP_TOKEN",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            config = load_config(str(config_path))
+
+        self.assertTrue(config.mcp.enabled)
+        self.assertEqual(config.mcp.max_tool_rounds, 4)
+        self.assertEqual(len(config.mcp.servers), 2)
+        self.assertEqual(config.mcp.servers[0].args, ("--config", "face.toml"))
+        self.assertEqual(config.mcp.servers[1].token_env, "UTILITY_MCP_TOKEN")
+
+    def test_loads_mcp_servers_from_environment_json(self):
+        with (
+            TemporaryDirectory() as tmp_dir,
+            patch.dict(
+                "os.environ",
+                {
+                    "OPENAI_API_KEY": "test-key",
+                    "MCP_ENABLED": "true",
+                    "MCP_SERVERS_JSON": json.dumps(
+                        [
+                            {
+                                "name": "utility",
+                                "transport": "streamable-http",
+                                "url": "https://mcp.example.test/mcp",
+                                "token_env": "UTILITY_TOKEN",
+                            }
+                        ]
+                    ),
+                },
+                clear=True,
+            ),
+        ):
+            config = load_config(str(Path(tmp_dir) / "missing.ini"))
+
+        self.assertEqual(config.mcp.servers[0].name, "utility")
+        self.assertEqual(config.mcp.servers[0].token_env, "UTILITY_TOKEN")
 
 
 if __name__ == "__main__":

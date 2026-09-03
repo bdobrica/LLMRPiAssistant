@@ -2,17 +2,20 @@
 import json
 from pathlib import Path
 import time
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from openai import OpenAI
 
 from .config import OpenAIConfig
 
+if TYPE_CHECKING:
+    from .mcp_manager import MCPClientManager
+
 
 class OpenAIClient:
     """Client for OpenAI API interactions."""
     
-    def __init__(self, config: OpenAIConfig):
+    def __init__(self, config: OpenAIConfig, mcp_manager: "MCPClientManager | None" = None):
         """Initialize OpenAI client.
         
         Args:
@@ -20,6 +23,7 @@ class OpenAIClient:
         """
         self.config = config
         self.client = OpenAI(api_key=config.api_key)
+        self.mcp_manager = mcp_manager
         self.conversation_history = []
         self.compacted_contexts = []
         self.last_response_output_finished_at: Optional[float] = None
@@ -72,31 +76,52 @@ class OpenAIClient:
             # Add user message to history
             self.conversation_history.append({"role": "user", "content": user_message})
             
-            # Get completion
-            response = self.client.chat.completions.create(
-                model=self.config.chat_model,
-                messages=self.conversation_history,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature,
-            )
-            
-            # Extract response
-            assistant_message = response.choices[0].message.content
-            
-            # Add assistant response to history
-            self.conversation_history.append({"role": "assistant", "content": assistant_message})
-            
-            # Build usage info
-            usage = {
-                "model": self.config.chat_model,
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens,
-            }
-            
-            return assistant_message, usage
+            return self._chat_with_tools()
         except Exception as e:
             raise Exception(f"Chat completion failed: {e}")
+
+    def _chat_with_tools(self) -> tuple[str, dict]:
+        manager = getattr(self, "mcp_manager", None)
+        tools = manager.openai_tools() if manager is not None else []
+        max_rounds = manager.config.max_tool_rounds if manager is not None else 0
+        usage = _empty_usage(self.config.chat_model)
+        tool_rounds = 0
+
+        while True:
+            request = {
+                "model": self.config.chat_model,
+                "messages": self.conversation_history,
+                "max_tokens": self.config.max_tokens,
+                "temperature": self.config.temperature,
+            }
+            if tools and tool_rounds < max_rounds:
+                request["tools"] = tools
+                request["tool_choice"] = "auto"
+            response = self.client.chat.completions.create(**request)
+            _add_usage(usage, response)
+            message = response.choices[0].message
+            tool_calls = list(getattr(message, "tool_calls", None) or [])
+            if not tool_calls:
+                content = message.content or ""
+                self.conversation_history.append({"role": "assistant", "content": content})
+                return content, usage
+
+            self.conversation_history.append(_assistant_tool_message(message, tool_calls))
+            for tool_call in tool_calls:
+                try:
+                    arguments = json.loads(tool_call.function.arguments or "{}")
+                    if not isinstance(arguments, dict):
+                        raise TypeError("tool arguments must be an object")
+                except (json.JSONDecodeError, TypeError):
+                    result = json.dumps(
+                        {"is_error": True, "error": "Invalid tool arguments"}
+                    )
+                else:
+                    result = manager.call_tool(tool_call.function.name, arguments)
+                self.conversation_history.append(
+                    {"role": "tool", "tool_call_id": tool_call.id, "content": result}
+                )
+            tool_rounds += 1
 
     def mark_response_output_finished(self) -> None:
         """Record when the last response finished being presented to the user."""
@@ -275,6 +300,41 @@ def _usage_dict(response: Any, model: str) -> dict:
         "prompt_tokens": getattr(usage, "prompt_tokens", 0) if usage is not None else 0,
         "completion_tokens": getattr(usage, "completion_tokens", 0) if usage is not None else 0,
         "total_tokens": getattr(usage, "total_tokens", 0) if usage is not None else 0,
+    }
+
+
+def _empty_usage(model: str) -> dict:
+    return {
+        "model": model,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+    }
+
+
+def _add_usage(total: dict, response: Any) -> None:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        total[key] += getattr(usage, key, 0) or 0
+
+
+def _assistant_tool_message(message: Any, tool_calls: list[Any]) -> dict:
+    return {
+        "role": "assistant",
+        "content": message.content,
+        "tool_calls": [
+            {
+                "id": call.id,
+                "type": "function",
+                "function": {
+                    "name": call.function.name,
+                    "arguments": call.function.arguments,
+                },
+            }
+            for call in tool_calls
+        ],
     }
 
 
