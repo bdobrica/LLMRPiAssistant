@@ -8,6 +8,20 @@ from rpi_assistant.app.config import load_config
 
 
 class ConfigTests(unittest.TestCase):
+    def test_button_settings_and_correction_window_validation(self):
+        with TemporaryDirectory() as directory, patch.dict("os.environ", {}, clear=True):
+            path = Path(directory) / "config.ini"
+            path.write_text("[openai]\napi_key=test\n")
+            self.assertEqual(load_config(str(path)).recording.interrupt_button_gpio, -1)
+            path.write_text("[openai]\napi_key=test\n[recording]\ninterrupt_button_gpio=17\ncorrection_window_seconds=8\n")
+            config = load_config(str(path)).recording
+            self.assertEqual((config.interrupt_button_gpio, config.correction_window_seconds), (17, 8))
+            for setting in ("interrupt_button_gpio=-2", "interrupt_button_gpio=28",
+                            "correction_window_seconds=0", "correction_window_seconds=nan"):
+                path.write_text(f"[openai]\napi_key=test\n[recording]\n{setting}\n")
+                with self.assertRaises(ValueError):
+                    load_config(str(path))
+
     def test_provider_timeout_defaults_overrides_and_invalid_values(self):
         with TemporaryDirectory() as directory, patch.dict("os.environ", {}, clear=True):
             path = Path(directory) / "config.ini"

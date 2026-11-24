@@ -15,6 +15,7 @@ from openwakeword.vad import VAD
 from openwakeword import MODELS as OWW_models
 
 from .config import AudioConfig, RecordingConfig, WakeWordConfig
+from .playback import PlaybackInterrupted
 
 
 def pick_input_device(match: str) -> int:
@@ -111,7 +112,7 @@ class WakeWordRecorder:
         )
 
         self.follow_up_vad = None
-        if recording_config.follow_up_window_seconds > 0:
+        if recording_config.follow_up_window_seconds > 0 or recording_config.interrupt_button_gpio >= 0:
             try:
                 self.follow_up_vad = VAD(
                     model_path=str(Path(__file__).resolve().parents[1] / "models/silero_vad.onnx"),
@@ -120,7 +121,7 @@ class WakeWordRecorder:
             except Exception as exc:
                 raise RuntimeError(
                     "Follow-up speech model unavailable; run make install-wakeword-models "
-                    "or set follow_up_window_seconds=0"
+                    "or disable both follow-up listening and button interruption"
                 ) from exc
 
         # State management
@@ -145,7 +146,7 @@ class WakeWordRecorder:
         
         # Pre-roll buffer
         pre_roll_frames = int(recording_config.pre_roll_seconds * audio_config.sample_rate)
-        if recording_config.follow_up_window_seconds > 0:
+        if recording_config.follow_up_window_seconds > 0 or recording_config.interrupt_button_gpio >= 0:
             pre_roll_frames = max(pre_roll_frames, int(0.4 * audio_config.sample_rate))
         self.pre_roll = deque(maxlen=pre_roll_frames)
         
@@ -450,6 +451,7 @@ class WakeWordRecorder:
         while True:
             recording_path = self.recording_queue.get()
             allow_follow_up = False
+            correction = False
             try:
                 if recording_path is None:
                     return
@@ -457,14 +459,16 @@ class WakeWordRecorder:
                 if self.on_recording_complete:
                     try:
                         allow_follow_up = self.on_recording_complete(recording_path) is True
+                    except PlaybackInterrupted:
+                        correction = True
                     except Exception as e:
                         print(f"\n⚠️  Error processing recording: {e}")
             finally:
                 if recording_path is not None:
-                    self._finish_processing(allow_follow_up=allow_follow_up)
+                    self._finish_processing(allow_follow_up=allow_follow_up, correction=correction)
                 self.recording_queue.task_done()
 
-    def _finish_processing(self, *, allow_follow_up: bool = False) -> None:
+    def _finish_processing(self, *, allow_follow_up: bool = False, correction: bool = False) -> None:
         """Discard playback audio, then open a follow-up window or resume wake detection."""
         # Reset model state to clear any buffered audio from overflow
         self._reset_model_state()
@@ -474,7 +478,9 @@ class WakeWordRecorder:
         
         print(f"Cleared {cleared} buffered audio chunks from queue.")
 
-        follow_up = allow_follow_up and self.recording_config.follow_up_window_seconds > 0
+        window = (self.recording_config.correction_window_seconds if correction
+                  else self.recording_config.follow_up_window_seconds)
+        follow_up = (allow_follow_up or correction) and window > 0
         delay = (self.recording_config.follow_up_echo_guard_seconds
                  if follow_up else self.processing_drain_seconds)
         print(f"Waiting {delay:g} seconds for fresh audio...\n")
@@ -495,10 +501,10 @@ class WakeWordRecorder:
                 self.follow_up_vad.reset_states()
                 self.follow_up_vad.prediction_buffer.clear()
                 self.state = "FOLLOW_UP"
-                self.follow_up_deadline = time.monotonic() + self.recording_config.follow_up_window_seconds
+                self.follow_up_deadline = time.monotonic() + window
                 self.follow_up_speech_seconds = 0.0
                 self.follow_up_peak_score = 0.0
-                print(f"Follow-up listening for {self.recording_config.follow_up_window_seconds:g} seconds.")
+                print(f"{'Correction' if correction else 'Follow-up'} listening for {window:g} seconds.")
                 if self.pixels:
                     self.pixels.follow_up()
                 self._notify_state("listening")

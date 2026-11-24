@@ -17,6 +17,7 @@ from .audio import WakeWordRecorder
 from .config import load_config
 from .connectivity import check_internet_connection
 from .logger import InteractionLogger
+from .interrupt_button import open_interrupt_button
 from .mcp_manager import MCPClientManager
 from .openai_client import OpenAIClient
 from .playback import AudioPlayback
@@ -40,10 +41,13 @@ def main():
     stop_monitor = threading.Event()
     rpiface = None
     mcp_manager = None
+    interrupt_button = None
 
     def cleanup():
         """Cleanup resources before exit."""
         stop_monitor.set()
+        if interrupt_button is not None:
+            interrupt_button.close()
         if connection_monitor_thread is not None:
             connection_monitor_thread.join(timeout=2)
         if recorder is not None:
@@ -106,6 +110,10 @@ def main():
         print("=" * 60)
 
         playback = AudioPlayback(config.audio_output)
+        try:
+            interrupt_button = open_interrupt_button(config.recording, playback)
+        except Exception as exc:
+            print(f"Interruption button unavailable ({type(exc).__name__}); voice assistant remains enabled.")
 
         def play_audio_prompt(filename: str):
             if recorder is not None:

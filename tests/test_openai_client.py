@@ -2,9 +2,14 @@ import json
 import time
 import unittest
 from types import SimpleNamespace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import Mock
 
-from rpi_assistant.app.config import OpenAIConfig
+from rpi_assistant.app.config import AudioOutputConfig, OpenAIConfig
 from rpi_assistant.app.openai_client import OpenAIClient
+from rpi_assistant.app.playback import PlaybackInterrupted
+from rpi_assistant.app.voice_command import VoiceCommandHandler
 
 
 class FakeCompletions:
@@ -32,6 +37,46 @@ class FakeClient:
 
 
 class OpenAIClientConversationTests(unittest.TestCase):
+    def test_interrupted_tool_answer_retains_result_and_correction_does_not_replay_action(self):
+        tool = SimpleNamespace(id="completed-action", function=SimpleNamespace(name="utility__roll", arguments="{}"))
+        client = self.create_client([
+            SimpleNamespace(content=None, tool_calls=[tool]),
+            "You rolled six. Here is an explanation.", "The result was six.",
+        ], conversation_idle_timeout_seconds=0, conversation_relevance_threshold=0)
+        manager = Mock()
+        manager.config.max_tool_rounds = 1
+        manager.openai_tools.return_value = [{"type": "function", "function": {"name": "utility__roll"}}]
+        manager.call_tool.return_value = '{"result":6}'
+        client.mcp_manager = manager
+        client.transcribe_audio = Mock(side_effect=["Roll a die", "Just tell me that result; don't roll again."])
+        apps = Mock()
+        apps.handle.return_value = None
+        apps.should_classify_app_intent.return_value = False
+        playback = Mock()
+        playback.play.side_effect = [PlaybackInterrupted(), True]
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "reply.wav"
+            client.generate_speech = Mock(side_effect=lambda *args: output.write_bytes(b"fresh audio"))
+            config = SimpleNamespace(openai=client.config, audio_output=AudioOutputConfig(tts_output_path=str(output)))
+            handler = VoiceCommandHandler(config, client, apps, Mock(), playback, Mock())
+            with self.assertRaises(PlaybackInterrupted):
+                handler.process("unused.wav")
+            self.assertFalse(output.exists())
+            self.assertTrue(handler.process("unused.wav", continue_conversation=True))
+        manager.call_tool.assert_called_once_with("utility__roll", {})
+        self.assertEqual(len(client.client.chat.completions.calls), 3)
+        results = [message for message in client.conversation_history if message["role"] == "tool"]
+        self.assertEqual(results, [{"role": "tool", "tool_call_id": "completed-action", "content": '{"result":6}'}])
+        playback.prompt.assert_not_called()
+
+    def test_interrupted_app_result_becomes_available_to_contextual_correction(self):
+        client = self.create_client(["Six was the result."])
+        client.remember_app_response("Roll a die", "You rolled six.")
+        client.get_chat_response("What was that result?", continue_conversation=True)
+        self.assertEqual([message["content"] for message in client.conversation_history[1:3]],
+                         ["Roll a die", "You rolled six."])
+        self.assertEqual(len(client.client.chat.completions.calls), 1)
+
     def test_explicit_followup_bypasses_idle_and_relevance_resets(self):
         client = self.create_client(["manifold", "compact manifold", "cube"],
                                     conversation_idle_timeout_seconds=1,

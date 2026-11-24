@@ -5,25 +5,68 @@ import subprocess
 import threading
 
 
+class PlaybackInterrupted(Exception):
+    """The user stopped a spoken answer and wants to supply a correction."""
+
+
 class AudioPlayback:
     """Serialize local prompts and replies, with bounded player processes."""
 
     def __init__(self, config):
         self.config = config
         self.lock = threading.Lock()
+        self._state_lock = threading.Lock()
+        self._process = None
+        self._interruptible = False
+        self._interrupted = False
+        self._generation = 0
 
-    def play(self, path: str, *, backend: str, timeout: float = 150) -> bool:
+    def interrupt(self) -> bool:
+        """Stop only the currently playing answer; repeated/idle presses do nothing."""
+        with self._state_lock:
+            process = self._process
+            if not self._interruptible or self._interrupted or process is None or process.poll() is not None:
+                return False
+            self._interrupted = True
+            self._generation += 1
+            try:
+                # Stop the player immediately; do not drain queued speech on SIGTERM.
+                process.kill()
+            except ProcessLookupError:
+                pass  # It finished between poll() and kill(); still honor the correction.
+            return True
+
+    def play(self, path: str, *, backend: str, timeout: float = 150, interruptible: bool = False) -> bool:
         if not self.config.enabled:
             return False
+        with self._state_lock:
+            generation = self._generation
         if not self.lock.acquire(timeout=timeout):
             raise TimeoutError("Audio output is busy")
         try:
-            subprocess.run(
-                speech_playback_command(backend, self.config.device, path),
-                check=True, capture_output=True, timeout=timeout,
-            )
+            command = speech_playback_command(backend, self.config.device, path)
+            with self._state_lock:
+                if interruptible and generation != self._generation:
+                    raise PlaybackInterrupted()  # An older queued answer must not resume.
+                self._interrupted = False
+                self._interruptible = interruptible
+                self._process = process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            try:
+                _, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate()
+                raise
+            with self._state_lock:
+                if self._interrupted:
+                    raise PlaybackInterrupted()
+            if process.returncode:
+                raise subprocess.CalledProcessError(process.returncode, command, stderr=stderr)
             return True
         finally:
+            with self._state_lock:
+                self._process = None
+                self._interruptible = False
             self.lock.release()
 
     def prompt(self, filename: str) -> bool:

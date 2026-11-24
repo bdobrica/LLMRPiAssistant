@@ -41,6 +41,7 @@ sys.modules.setdefault("openwakeword.vad", openwakeword_vad_module)
 
 from rpi_assistant.app.audio import WakeWordRecorder
 from rpi_assistant.app.config import AudioConfig, RecordingConfig, WakeWordConfig
+from rpi_assistant.app.playback import PlaybackInterrupted
 
 
 class FakeWakeModel:
@@ -79,6 +80,13 @@ class WakeWordRecorderTests(unittest.TestCase):
                 RecordingConfig(follow_up_window_seconds=0),
             )
         vad.assert_not_called()
+        recorder.stop()
+
+    def test_button_loads_speech_detector_when_normal_followup_is_disabled(self):
+        with patch("rpi_assistant.app.audio.Model"), patch("rpi_assistant.app.audio.VAD") as vad:
+            recorder = WakeWordRecorder(AudioConfig(device_match="fake"), WakeWordConfig(),
+                                        RecordingConfig(follow_up_window_seconds=0, interrupt_button_gpio=17))
+        vad.assert_called_once()
         recorder.stop()
 
     def create_recorder_shell(self, output_path: Path) -> WakeWordRecorder:
@@ -384,6 +392,31 @@ class WakeWordRecorderTests(unittest.TestCase):
             self.assertEqual(recorder.state, "FOLLOW_UP")
         finally:
             release.set()
+            recorder.stop()
+
+    def test_interrupt_opens_correction_window_without_replaying_callback(self):
+        recorder = self.follow_up_recorder(Path("/tmp/unused.wav"))
+        recorder.recording_config = replace(recorder.recording_config, follow_up_window_seconds=0,
+                                            interrupt_button_gpio=17, correction_window_seconds=2)
+        calls = []
+
+        def interrupted(path):
+            calls.append(path)
+            raise PlaybackInterrupted()
+
+        recorder.on_recording_complete = interrupted
+        recorder.processing_thread = threading.Thread(target=recorder._recording_worker, daemon=True)
+        recorder.processing_thread.start()
+        recorder.recording_queue.put("/tmp/unused.wav")
+        try:
+            recorder.recording_queue.join()
+            self.assertEqual(calls, ["/tmp/unused.wav"])
+            self.assertEqual(recorder.state, "FOLLOW_UP")
+            self.assertLessEqual(recorder.follow_up_deadline - time.monotonic(), 2)
+            recorder._check_follow_up(np.ones(1280, dtype=np.float32) * 0.2)
+            self.assertEqual(recorder.state, "RECORD")
+            self.assertTrue(recorder.recording_is_follow_up)
+        finally:
             recorder.stop()
 
 

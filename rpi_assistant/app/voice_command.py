@@ -3,6 +3,8 @@
 from pathlib import Path
 import wave
 
+from .playback import PlaybackInterrupted
+
 
 class VoiceCommandHandler:
     def __init__(self, config, client, apps, logger, playback, rpiface, *, pixels=None, is_online=lambda: None):
@@ -74,9 +76,16 @@ class VoiceCommandHandler:
                     raise RuntimeError("Speech output is empty")
                 stage = "playback"
                 self.rpiface.set_state("speaking")
-                return self.playback.play(str(output), backend=self.config.openai.tts_backend)
+                return self.playback.play(str(output), backend=self.config.openai.tts_backend, interruptible=True)
             finally:
                 output.unlink(missing_ok=True)
+        except PlaybackInterrupted:
+            # Actions already ran before playback. Keep their result for the correction,
+            # without invoking app routing, tools, generation or playback again.
+            if app_response is not None:
+                self.client.remember_app_response(transcription, response)
+            print("Answer interrupted; preparing to listen for a correction.")
+            raise
         except Exception as exc:
             message = f"{stage} failed ({type(exc).__name__})"
             print(f"\n⚠️ {message}")

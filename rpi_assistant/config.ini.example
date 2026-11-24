@@ -52,6 +52,11 @@ processing_drain_seconds = 3.0
 follow_up_window_seconds = 6.0
 # Drop residual speaker audio before opening the window.
 follow_up_echo_guard_seconds = 0.35
+# Optional button: BCM GPIO17 on the ReSpeaker 2-Mics HAT; -1 disables it.
+# Press during spoken answers, wait for green, then speak a correction.
+interrupt_button_gpio = -1
+# Correction window also works when ordinary follow-up listening is disabled.
+correction_window_seconds = 6.0
 # Where to save recorded audio
 output_path = /tmp/command.wav
 

@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from rpi_assistant.app.config import AudioOutputConfig, OpenAIConfig
-from rpi_assistant.app.playback import AudioPlayback
+from rpi_assistant.app.playback import AudioPlayback, PlaybackInterrupted
 from rpi_assistant.app.voice_command import VoiceCommandHandler
 
 
@@ -110,20 +110,44 @@ class VoiceCommandTests(unittest.TestCase):
         self.client.get_chat_response.assert_not_called()
         self.client.generate_speech.assert_called_once_with("You rolled a six.", str(self.output), "alloy")
 
+    def test_interrupt_keeps_completed_action_result_without_retry_or_failure_prompt(self):
+        self.apps.handle.return_value = NS(text="You rolled a six.")
+        self.playback.play.side_effect = PlaybackInterrupted()
+        with self.assertRaises(PlaybackInterrupted):
+            self.handler.process("unused.wav")
+        self.apps.handle.assert_called_once_with("What about a cube?")
+        self.client.generate_speech.assert_called_once()
+        self.client.remember_app_response.assert_called_once_with("What about a cube?", "You rolled a six.")
+        self.playback.prompt.assert_not_called()
+        self.assertFalse(self.output.exists())
+        self.face.set_state.assert_called_with("idle")
+
+        self.apps.handle.return_value = None
+        self.client.transcribe_audio.return_value = "Say that result more briefly."
+        self.playback.play.side_effect = None
+        self.assertTrue(self.handler.process("unused.wav", continue_conversation=True))
+        self.assertEqual([call.args[0] for call in self.apps.handle.call_args_list],
+                         ["What about a cube?", "Say that result more briefly."])
+        self.client.get_chat_response.assert_called_once_with("Say that result more briefly.", continue_conversation=True)
+        self.assertEqual(self.client.remember_app_response.call_count, 1)
+
 
 class PlaybackTests(unittest.TestCase):
     def test_player_timeout_releases_output_for_next_prompt(self):
         player = AudioPlayback(AudioOutputConfig(device="assistant_wm8960"))
-        with patch("rpi_assistant.app.playback.subprocess.run") as run:
-            run.side_effect = [subprocess.TimeoutExpired("aplay", 150), None]
+        with patch("rpi_assistant.app.playback.subprocess.Popen") as popen:
+            process = popen.return_value
+            process.communicate.side_effect = [subprocess.TimeoutExpired("aplay", 150), (None, b""), (None, b"")]
+            process.returncode = 0
             with self.assertRaises(subprocess.TimeoutExpired):
                 player.play("reply.wav", backend="realtime")
             self.assertTrue(player.prompt("request_failed.wav"))
-            self.assertEqual(run.call_args.kwargs["timeout"], 10)
-            self.assertEqual(run.call_args.args[0][:3], ["aplay", "-D", "assistant_wm8960"])
+            process.kill.assert_called_once()
+            self.assertEqual(process.communicate.call_args.kwargs["timeout"], 10)
+            self.assertEqual(popen.call_args.args[0][:3], ["aplay", "-D", "assistant_wm8960"])
         self.assertFalse(player.lock.locked())
 
     def test_disabled_playback_does_not_start_player(self):
-        with patch("rpi_assistant.app.playback.subprocess.run") as run:
+        with patch("rpi_assistant.app.playback.subprocess.Popen") as run:
             self.assertFalse(AudioPlayback(AudioOutputConfig(enabled=False)).prompt("unheard.wav"))
             run.assert_not_called()

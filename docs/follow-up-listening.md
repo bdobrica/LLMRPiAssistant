@@ -39,7 +39,9 @@ indicator; repeating the wake word is unnecessary during the window.
 - Follow-up questions use the existing conversation history and bypass idle/topic
   reset checks for that turn. Ordinary wake-word requests keep their configured
   reset behavior. App routing and active-app state are retained.
-- This does not support interrupting playback. After expiry, use the wake word again.
+- F06 itself does not interrupt playback. F02 adds optional [button interruption](button-interruption.md)
+  with its own correction window; spoken interruption remains unsupported.
+  After expiry, use the wake word again.
 
 ## Validation and rollback
 

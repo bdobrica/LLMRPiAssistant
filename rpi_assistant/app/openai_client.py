@@ -135,6 +135,13 @@ class OpenAIClient:
         """Record when the last response finished being presented to the user."""
         self.last_response_output_finished_at = time.time()
 
+    def remember_app_response(self, user_message: str, response: str) -> None:
+        """Retain an interrupted app's completed result without running its action again."""
+        self.conversation_history.extend([
+            {"role": "user", "content": user_message},
+            {"role": "assistant", "content": response},
+        ])
+
     def compact_conversation(self, reason: str) -> bool:
         """Archive active chat turns for future retrieval and reset chat context."""
         messages = self.conversation_history[1:]

@@ -43,11 +43,17 @@ class RecordingConfig:
     pre_roll_seconds: float = 0.4
     follow_up_window_seconds: float = 6.0
     follow_up_echo_guard_seconds: float = 0.35
+    interrupt_button_gpio: int = -1
+    correction_window_seconds: float = 6.0
     processing_drain_seconds: float = 3.0
     output_path: str = "/tmp/command.wav"
 
     def __post_init__(self):
         import math
+        if self.interrupt_button_gpio < -1 or self.interrupt_button_gpio > 27:
+            raise ValueError("interrupt_button_gpio must be -1 (disabled) or a BCM pin from 0 to 27")
+        if not math.isfinite(self.correction_window_seconds) or self.correction_window_seconds <= 0:
+            raise ValueError("correction_window_seconds must be finite and positive")
         for name in ("follow_up_window_seconds", "follow_up_echo_guard_seconds"):
             value = getattr(self, name)
             if not math.isfinite(value) or value < 0:
@@ -278,6 +284,8 @@ def load_config(config_path: Optional[str] = None) -> Config:
         follow_up_echo_guard_seconds=get_value(
             "recording", "follow_up_echo_guard_seconds", "RECORDING_FOLLOW_UP_ECHO_GUARD", 0.35, float,
         ),
+        interrupt_button_gpio=get_value("recording", "interrupt_button_gpio", "RECORDING_INTERRUPT_BUTTON_GPIO", -1, int),
+        correction_window_seconds=get_value("recording", "correction_window_seconds", "RECORDING_CORRECTION_WINDOW", 6.0, float),
         processing_drain_seconds=get_value(
             "recording",
             "processing_drain_seconds",
