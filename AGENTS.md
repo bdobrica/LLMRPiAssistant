@@ -6,6 +6,8 @@ Prioritize useful features and a usable product over software engineering perfec
 
 Treat the current assistant as a working prototype, not a proven product. Validate everyday voice interactions on hardware, including responsiveness, understandable feedback, and recovery from failures. A passing unit test alone does not establish usability.
 
+Preserve capabilities the owner has demonstrated. Distinguish observed failures from code-level limitations and untested assumptions; reproduce the specific problem before prescribing a replacement architecture. Useful spoken answers and short follow-ups already work on the owner's device.
+
 Target Raspberry Pi Zero 2 W and Raspberry Pi 3 A+ with 512 MB RAM. Keep local audio and controls lightweight; run reasoning and optional SecondContext storage/retrieval on external services. Validate on baseline hardware before claiming support.
 
 ## Planning & Delivery Workflow

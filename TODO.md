@@ -4,26 +4,26 @@ Updated: 2026-11-24. [PLAN.md](PLAN.md) defines scope, architecture, hardware co
 
 ## How to Use This Checklist
 
-Start with **F01** and deliver something the user can try on their Zero 2 W. Install required dependencies, inspect the device revision, preserve configuration, and run relevant checks as part of that feature. There is no separate baseline, CI, benchmarking, or infrastructure milestone to finish first.
+The owner already gets useful spoken answers and successful short follow-ups on the Zero 2 W. Preserve that working experience. Start with **F01** to address the reported difficulty remembering user-provided details, using a concrete failure example before choosing a fix. Install required dependencies, inspect the device revision, preserve configuration, and run relevant checks as part of that feature. There is no separate baseline, CI, benchmarking, or infrastructure milestone to finish first.
 
 The order below expresses product priorities, not a requirement to finish every earlier task before delivering another useful feature. Fix a prerequisite only when it blocks the feature being implemented. Keep the 512 MB constraint and existing security safeguards throughout.
 
 After each successfully implemented item, record a short validation note and commit the implementation with its tests/docs and checklist update. Keep incomplete items unchecked. Do not stage the local June code review.
 
-## Now — Have a Useful Conversation
+## Now — Remember What I Tell You
 
-- [ ] **F01 — Ask a question and continue talking.** Deliver one working voice path on the Zero 2 W: one wake word, a concise spoken answer, two context-aware follow-ups without repeating the wake word, then explicit or idle session closure. Try GPT-Live within this feature; use a supported alternative if a concrete device/API blocker prevents it. Include only the model/SDK updates, bounded audio/context state, and listening feedback needed for this flow. Try the fever question with clarification, an ordinary factual question, and a correction. Check responsiveness and memory while using it, run relevant regression tests, and record what works. A comparison framework, 20-case benchmark, overnight run, and second-board validation are not prerequisites for this first demo.
+- [ ] **F01 — Reliably use details I give during a conversation.** Reproduce a reported memory failure on the deployed version; distinguish same-session recall from recall after inactivity or restart. Use a harmless example with information the model cannot know independently, such as “My screwdriver is in the blue kitchen drawer,” then ask where it is and correct the location. Inspect which turns reach the model and fix the demonstrated context/routing/reset problem in the existing path. Verify both recall and correction, preserve the successful question/follow-up behavior, and add a focused regression test. Keep context bounded on the 512 MB Pi. If the expectation is recall across sessions, use C01 instead of assuming a short-term-context bug. GPT-Live, a voice-stack rewrite, and benchmark infrastructure are not prerequisites.
 
 ## Next — Make Conversation Pleasant and Useful
 
-- [ ] **F02 — Let me interrupt or correct the assistant.** Stop stale playback, accept a correction, and avoid answering its own speaker output. Fix turn-boundary delays or premature cutoffs exposed by actual conversations. Keep already executed actions distinct from cancelled speech.
+- [ ] **F02 — Let me interrupt or correct the assistant.** Stop stale playback, accept a correction, and avoid answering its own speaker output. Fix turn-boundary delays or premature cutoffs exposed by actual conversations. If repeating the wake word is a reported nuisance, add a short follow-up listening window; the successful follow-up report does not establish whether the wake word was repeated. Keep already executed actions distinct from cancelled speech.
 - [ ] **F03 — Tell me when something goes wrong.** Give short, locally playable feedback for unheard speech, lost connectivity, and provider failures. Bound waits/retries and return to listening. Verify recovery after a failed request without replaying old answers.
 - [ ] **F04 — Answer questions that need current information.** Connect search, retain evidence, and give concise attribution. Check consequential answers against authoritative guidance and handle unavailable/conflicting sources honestly. Detailed citation UI can come later.
 - [ ] **F05 — Give me simple controls.** Add volume, stop, mute with truthful capture indication, and a new-conversation command. Close idle cloud sessions and show enough usage information to understand operating cost. Make local controls usable during internet loss without promising offline free-form speech recognition.
 
-## Before Sharing Beyond the Owner's Demo
+## Before Sharing More Widely
 
-These protect actual household use; they do not block developing F01 with synthetic/non-sensitive questions.
+These protect household use; develop them alongside feature work using synthetic/non-sensitive questions where appropriate.
 
 - [ ] **H01 — Keep conversations private.** Make transcript/reply logging opt-in across files and console/journal, retain content-free failure diagnostics, and bound log/audio retention with restrictive permissions and deletion. Do not commit household recordings.
 - [ ] **H02 — Protect Wi-Fi onboarding.** Add per-device setup credentials and authenticated, CSRF-protected changes. Preserve automatic provisioning-service shutdown. Test malformed input, wrong passwords, and NetworkManager failure without exposing credentials.
@@ -54,7 +54,7 @@ Ordinary conversation must remain useful without this service. Run it on a separ
 
 ## Existing Work to Preserve
 
-These describe source implementation, not a claim that every device has received or validated it.
+D01–D06 describe source implementation, not a claim that every device has received or validated it. D07 records the owner’s actual device experience.
 
 - [x] **D01 — Signed remote app catalogs** (`b5ccf23`) and bundle checksum verification.
 - [x] **D02 — Safe bundle paths and manifest IDs** (`1b83125`, `61a5ddd`), with rejection tests.
@@ -62,6 +62,7 @@ These describe source implementation, not a claim that every device has received
 - [x] **D04 — Idle/topic context reset** (`8876e8c`). Partial context management only; F01 must bound the context it uses; R02 addresses further measured resource problems.
 - [x] **D05 — Optional RPiFace lifecycle and generic MCP integration** (`59b97c9`, `d725c62`); optional and not yet deployed on the inspected device.
 - [x] **D06 — Existing Wi-Fi provisioning, LED driver, wake-word selection, app framework, and unit tests.** Retain these foundations; do not recreate them from stale TODO descriptions.
+- [x] **D07 — Useful spoken answers and a short follow-up work on the device.** Owner report, 2026-11-24: “Is a 38.5 degrees C considered a fever?” followed by “What about a 39.5 degrees?” both produced answers the owner judged correct. Preserve this behavior; do not describe ordinary conversation as unimplemented. Reliable recall of supplied details, restart persistence, and wake-word-free continuation were not established by this report.
 
 ## Deferred Until There Is User Demand
 

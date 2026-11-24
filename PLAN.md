@@ -4,23 +4,24 @@ Updated: 2026-11-24. Execution checklist: [TODO.md](TODO.md). Contributor workfl
 
 ## Product Goal
 
-Build a useful household voice assistant that answers ordinary questions intelligently and sustains a short conversation. The supported hardware target is Raspberry Pi Zero 2 W and Raspberry Pi 3 A+, both with 512 MB RAM. Deliver the first owner demo on the available Zero 2 W; validate the Pi 3 A+ before claiming support for it. Newer boards must not hide problems on the baseline hardware.
+Build a useful household voice assistant that answers ordinary questions intelligently and sustains a short conversation. The supported hardware target is Raspberry Pi Zero 2 W and Raspberry Pi 3 A+, both with 512 MB RAM. Improve the already working assistant on the available Zero 2 W; validate the Pi 3 A+ before claiming support for it. Newer boards must not hide problems on the baseline hardware.
 
-Prioritize complete user experiences over architecture expansion. The first deliverable is: wake once, ask a question, hear a concise useful answer, make two context-aware follow-ups, and end the conversation naturally. General questions must not require installing an app or memorizing commands.
+Prioritize complete user experiences over architecture expansion. Useful spoken questions and short follow-ups already work according to the owner. The next improvement is reliable use of details the owner supplies, guided by a concrete memory failure rather than an assumed need to rebuild conversation. General questions must not require installing an app or memorizing commands.
 
-The motivating acceptance scenario is “Is 38.6 degrees Celsius a high fever?” followed by age/symptom clarification and a context-dependent follow-up. Evaluate directness, appropriate uncertainty, authoritative grounding, and escalation when warranted. Do not hardcode one reassuring answer or treat every health question as a refusal. Clinical example answers must be checked against current authoritative guidance.
+The original motivating fever question has now worked on the device, including the open-ended follow-up “What about a 39.5 degrees?” Preserve it as a regression example. Extend answer evaluation with relevant age/symptom clarification and additional context-dependent follow-ups. Evaluate directness, appropriate uncertainty, authoritative grounding, and escalation when warranted. Do not hardcode one reassuring answer or treat every health question as a refusal. Clinical example answers must be checked against current authoritative guidance.
 
 ## Observed Baseline
 
-These are observations from the November 24 review, not release certifications:
+These combine the November 24 source/device review and subsequent owner feedback. Code limitations, observed behavior, and untested expectations are distinct:
 
+- **Owner-confirmed behavior:** useful spoken answers and the two-turn fever exchange work on the device. The owner reports that it does not always remember their answers, but a specific failure sequence is still needed to identify whether the gap is within a conversation or across sessions. The report does not establish wake-word-free listening or persistence after restart.
 - Local revision `d725c62` contains audio-worker, bounded queue, app trust-boundary, conversation-context, RPiFace, and generic MCP changes. The inspected device checkout was `6cbd735`, nine commits behind; deployment must preserve configuration and support rollback.
 - The device was a Zero 2 W running Debian 13.2 with an active assistant service. Its process showed approximately 102 MiB RSS and 105 MiB swap, with one `hey_jarvis` wake-word model. Swap occupancy is not proof of active swapping; measure activity during use.
 - The current pipeline waits for transcription, complete text generation, speech generation, and playback. Audio is discarded during processing. Default post-processing delay plus 30 ignored 80 ms chunks creates approximately 5.4 seconds before wake-word detection resumes.
 - Recording uses a fixed RMS silence threshold and a ten-second maximum. Natural pauses, noise, and longer questions need evaluation.
 - Conversation relevance adds a model request before follow-ups. “Compaction” archives full turns in RAM and clears active context; neither list has a hard size limit, and no persistent retrieval is connected.
 - Processing/playback failures largely reach logs rather than the listener. Full transcripts and replies are written to a file and console without a privacy lifecycle.
-- Local configuration tests could not run successfully because `PyNaCl` was absent. No acoustic benchmark, live answer evaluation, or Pi 3 A+ validation has been completed.
+- Local configuration tests could not run successfully because `PyNaCl` was absent. The agent did not perform an acoustic benchmark or live answer evaluation; the owner subsequently confirmed the successful two-turn exchange above. Pi 3 A+ validation remains outstanding.
 
 ## Hardware and Service Boundaries
 
@@ -34,35 +35,33 @@ Use the existing Python service initially. Avoid a desktop browser, general-purp
 
 Bound all queues, histories, archives, tool results, and caches. Select one wake-word model explicitly in the shipped low-memory profile. Replace long Python float lists with compact audio storage where profiling shows benefit. Measure inference thread counts and optional-library imports before tuning or changing runtimes; do not rewrite working code merely to change language.
 
-## Voice Architecture Decision
+## Voice Architecture Direction
 
-Implement the first usable conversation on the Zero 2 W using GPT-Live, a supported SDK/transport, and the existing audio devices. Keep the current path available for recovery while trying it. Treat this as feature delivery, not a separate architecture research milestone. GPT-Live supports concurrent listening/speaking and backend delegation, but this does not establish echo cancellation, interruption quality, or performance on our hardware.
+Keep the working voice path for the next memory improvement. GPT-Live is an option for a demonstrated latency, interruption, or turn-taking need, not a prerequisite for useful answers or context retention. Do not replace a working subsystem because a newer API exists. Provider retirements still require timely migration of affected components; keep that maintenance distinct from a wholesale voice redesign.
 
-During use, check responsiveness, memory, speaker feedback, and whether sessions close. Investigate capture, resampling, buffering, reconnects, and cost in detail when they cause a concrete problem or as broader release testing approaches. Retain local wake-word detection and open cloud sessions only for intentional conversations. Close sessions on explicit completion or inactivity; provide clear listening and microphone-mute indicators. Physical mute, if advertised, must actually disconnect or disable capture; a software indicator alone is not a hardware guarantee.
+If later evaluating Live or another streaming path, try it on the Zero 2 W and compare the specific experience being improved. Preserve a recoverable working setup. Check speaker echo, bounded buffers, resource use, and session cost while using the feature; perform deeper profiling only when needed. Keep local wake-word detection and close intentional cloud sessions on explicit completion or inactivity.
 
-If Live exposes a concrete hardware, API, or cost blocker, use a supported Realtime or streamed speech/text pipeline. Record the reason and deliver one working path; a formal provider comparison is not required before the owner can try it. Retired speech models cannot be the long-term fallback.
-
-Separate audio transport, short-session state, and tool execution only as needed to deliver this flow. Preserve local app commands and existing MCP behavior. Interruption must stop stale audio and prevent abandoned responses from playing later; it must not silently duplicate or undo an already executed action.
+Preserve existing app commands and MCP behavior. Interruption must stop stale audio without duplicating or silently undoing an executed action. Physical mute, if advertised, must actually disconnect or disable capture; a software indicator alone is not that guarantee.
 
 ## Feature Delivery Sequence
 
-### First — A Conversation the Owner Can Try (F01)
+### First — Reliable Recall of User-Provided Details (F01)
 
-There is no preliminary baseline milestone. Inspect the device revision, preserve its configuration and known working state, install only dependencies needed for the change, and run relevant tests while implementing the feature. Do not require CI setup, a complete dependency audit, benchmark infrastructure, or a full rollback exercise before coding the conversation.
+Start from the owner's reported memory difficulty. Obtain or reproduce a concrete exchange and identify the expected lifetime of the information: the next turn, after a topic change/inactivity, or after a restart. These are different requirements. Successful short follow-ups are already a capability to preserve.
 
-Deliver one wake word, a concise spoken answer, two follow-ups with retained context, and explicit or idle session closure on the existing Zero 2 W. Include the model/SDK changes, bounded recent context/audio, and listening feedback needed to make that work. Remove the extra relevance-classifier request if it obstructs this path. Keep essential security safeguards and avoid sensitive recordings during development.
+Use a harmless explicit fact that cannot be answered from general knowledge, then ask for it and correct it. For example, give the location of a screwdriver, ask where it is, change the location, and ask again. Inspect the deployed code and actual context path before choosing a fix; the newer local context-reset code is not necessarily running on the device. Address the smallest demonstrated issue in history, app routing, or reset behavior. If the desired behavior is cross-session memory, deliver C01 instead.
 
-Try three concrete conversations: the fever question with relevant clarification, an ordinary factual question with a dependent follow-up, and a correction of an earlier detail. Check responsiveness and memory during those attempts and note limitations. This is enough to demonstrate the first feature; interruptions, polished recovery, source lookup, and broad validation remain separately deliverable improvements.
+Keep recent context bounded, retain existing safeguards, and add a focused regression check for the actual failure. There is no preliminary baseline milestone, mandatory voice-provider migration, or broad benchmark required to improve memory. Preserve configuration and run relevant checks as part of the feature. If the reported failure cannot yet be reproduced, leave it open and document the uncertainty instead of inventing a defect or doing a speculative rewrite.
 
 ### Next — Better Conversation (F02–F05)
 
-Support interruption and corrections, fix pauses or echo problems found in use, and provide local spoken failure feedback with bounded waits/retries. Add current-information and authoritative-source lookup, then simple volume/mute/new-conversation controls and usage limits. Implement each as a usable improvement; do not make the whole list a prerequisite for trying the first feature.
+Support interruption and corrections, fix pauses or echo problems found in use, and provide local spoken failure feedback with bounded waits/retries. Add current-information and authoritative-source lookup, then simple volume/mute/new-conversation controls and usage limits. Implement each as an improvement to the already usable assistant. Add wake-word-free continuation if repeated wake words are an actual friction point; do not infer its status from a successful answer follow-up.
 
 Treat retrieved content as evidence, not executable instructions. Speak concise source attribution where useful. Report tool failures honestly and announce action success only after confirmation from the executing code. Detailed citation UI can follow later.
 
 ### Before Wider Household Use — Privacy and Provisioning (H01–H02)
 
-Make full transcript logging opt-in, bound retention, and protect setup credentials and Wi-Fi mutations. These are required before inviting other household users to rely on the device. They can be developed alongside the owner demo rather than forming a general hardening phase before feature development.
+Make full transcript logging opt-in, bound retention, and protect setup credentials and Wi-Fi mutations. These are required before inviting other household users to rely on the device. Develop them alongside useful features rather than treating the existing assistant as unusable until a hardening phase is complete.
 
 ### Then — Useful Daily Actions and Entertainment (H03–H06, E01)
 
@@ -106,11 +105,11 @@ References: [OpenAI deprecations](https://developers.openai.com/api/docs/depreca
 
 ## Feature Checks and Broader Release Validation
 
-For the first demo, use the three conversations described above on the available Zero 2 W, run tests relevant to the changed behavior, and report simple responsiveness/resource observations. Resolve missing test dependencies only as needed for those checks. Do not claim a board, interruption behavior, or failure mode was tested when it was not.
+For the memory improvement, reproduce the reported failure, verify recall and correction of an explicit user-provided detail, and preserve the already successful question/follow-up flow. Run tests relevant to the changed behavior on the available Zero 2 W and report simple responsiveness/resource observations. Resolve missing test dependencies only as needed for those checks. Do not claim a board, interruption behavior, or failure mode was tested when it was not.
 
-After there is a useful feature to evaluate, expand to at least 20 scenarios: ordinary questions, the fever example and relevant follow-ups, corrections, ambiguous audio, long pauses, current-information lookup, local app commands, cancellation, and network/API failures. Include English and, if required by the household, Romanian. Use synthetic or explicitly approved recordings rather than committing household conversations.
+For broader release validation, expand to at least 20 scenarios: ordinary questions, the fever example and relevant follow-ups, corrections, ambiguous audio, long pauses, current-information lookup, local app commands, cancellation, and network/API failures. Include English and, if required by the household, Romanian. Use synthetic or explicitly approved recordings rather than committing household conversations.
 
-The following are provisional broader-release targets, not prerequisites for developing or showing F01, and not observed results. Use them to find actual product problems once the feature works. Record hardware, revision, model, test conditions, and costs as relevant; explain adjustments without creating a separate approval process.
+The following are provisional broader-release targets, not prerequisites for developing or showing F01, and not observed results. Use them to find actual product problems without discounting successful owner use. Record hardware, revision, model, test conditions, and costs as relevant; explain adjustments without creating a separate approval process.
 
 | Measure | Initial target |
 | --- | --- |
@@ -122,7 +121,7 @@ The following are provisional broader-release targets, not prerequisites for dev
 | Operating cost | Measure a standard 20-question session, idle cloud-session time, and projected daily usage; expose configurable session/cost limits before the pilot |
 | Hardware | Repeat core acceptance on both Zero 2 W and Pi 3 A+; do not substitute a newer board or claim an untested board passes |
 
-Use mocks for focused unit tests and real audio/network checks for experience validation. A running systemd service alone does not prove a usable conversation. Deliver tested improvements on the available board while recording broader validation separately; an unavailable second board does not block the owner demo.
+Use mocks for focused unit tests and real audio/network checks for experience validation. A running systemd service alone does not prove a usable conversation. Deliver tested improvements on the available board while recording broader validation separately; an unavailable second board does not block improvements on the working Zero 2 W.
 
 ## Findings Carried Forward from the June Review
 
