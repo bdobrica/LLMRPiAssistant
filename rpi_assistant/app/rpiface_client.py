@@ -80,7 +80,7 @@ class RPiFaceClient:
         self._replace_pending(None)
         self._worker.join(timeout=self.timeout_seconds + 0.1)
 
-    def __enter__(self) -> RPiFaceClient:
+    def __enter__(self) -> "RPiFaceClient":
         return self
 
     def __exit__(self, *_args: object) -> None:

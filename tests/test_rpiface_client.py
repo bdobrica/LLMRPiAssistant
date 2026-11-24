@@ -1,4 +1,6 @@
 import logging
+import subprocess
+import sys
 import threading
 import time
 import unittest
@@ -23,6 +25,16 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class RPiFaceClientTests(unittest.TestCase):
+    def test_import_and_disabled_context_in_fresh_interpreter(self):
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "from rpi_assistant.app.rpiface_client import RPiFaceClient; "
+             "client = RPiFaceClient(enabled=False); "
+             "assert client.__enter__() is client; client.close()"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_disabled_by_default(self):
         client = RPiFaceClient()
         client.set_state("idle")
