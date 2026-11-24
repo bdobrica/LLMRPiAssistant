@@ -9,7 +9,7 @@ LLMRPiAssistant is a fully-featured voice assistant that brings Alexa-like funct
 ### Key Features
 
 - 🎙️ **Wake Word Detection** - Always listening for activation using OpenWakeWord
-- 🗣️ **Speech Recognition** - Powered by OpenAI Whisper for accurate transcription
+- 🗣️ **Speech Recognition** - Powered by OpenAI GPT-Transcribe
 - 🧠 **Conversational AI** - Natural responses using GPT-4o-mini (or any OpenAI chat model)
 - 🎲 **Local Voice Apps** - Built-in stateful experiences such as Truth or Dare and Ask! that run before chat fallback
 - 🔊 **Text-to-Speech** - Realistic voice output with OpenAI TTS
@@ -142,10 +142,14 @@ The configuration file supports extensive customization:
 
 #### OpenAI API
 - **api_key**: Your OpenAI API key (REQUIRED)
-- **whisper_model**: Transcription model (default: "whisper-1")
-- **chat_model**: Conversation model (default: "gpt-4o-mini")
-- **tts_model**: Text-to-speech model (default: "tts-1")
-- **tts_voice**: Voice selection (alloy, echo, fable, onyx, nova, shimmer)
+- **whisper_model**: Recorded-speech model; historical setting name (default: "gpt-transcribe")
+- **chat_model**: Conversation and app-intent model (default: "gpt-6-luna")
+- **tts_model**: Speech-output model (default: "gpt-realtime-2.1-mini")
+- **tts_backend**: `realtime` writes WAV through a short-lived WebSocket session; legacy `speech` uses MP3.
+- **reasoning_effort**: `none` for Luna with existing Chat Completions tools.
+- **tts_timeout_seconds**: Generation deadline (default: 90 seconds).
+- Existing installations must migrate model settings together: see [OpenAI upgrade and recovery](docs/openai-upgrade.md).
+- **tts_voice**: Realtime voice (tested default: "alloy")
 - **system_prompt**: Customize assistant personality
 - **max_tokens**: Response length limit (default: 500)
 - **temperature**: Response creativity (0.0-2.0, default: 0.7)
@@ -153,7 +157,7 @@ The configuration file supports extensive customization:
 #### Audio Output
 - **enabled**: Enable/disable TTS playback (default: true)
 - **device**: ALSA playback device (default: "hw:0,0")
-- **tts_output_path**: Temporary file for audio (default: "/tmp/response.mp3")
+- **tts_output_path**: Temporary file for audio (default: "/tmp/response.wav")
 
 #### Logging
 - **log_file**: Path to interaction log (default: "openai_interactions.log")
@@ -632,7 +636,7 @@ sudo nmcli dev wifi hotspot ifname wlan0 ssid PiAssistant-Setup password ChangeM
 │  • reSpeaker HAT (microphone array)    │
 │  • LED ring (APA102 via SPI)           │
 │  • Speaker (ALSA audio output)         │
-│  • OpenAI API (Whisper, GPT, TTS)      │
+│  • OpenAI API (STT, GPT, Realtime)      │
 │  • NetworkManager (WiFi control)       │
 └─────────────────────────────────────────┘
 ```
@@ -653,7 +657,7 @@ The assistant uses a three-state FSM:
 
 3. **PROCESSING**: Handling API calls
    - Blocks new wake word detection
-   - Transcribes audio (Whisper)
+   - Transcribes recorded audio (GPT-Transcribe)
    - Gets AI response (GPT)
    - Generates speech (TTS)
    - Plays audio response
@@ -750,7 +754,7 @@ Contributions welcome! This project is designed to be a flexible foundation for 
 ## Acknowledgments
 
 - **OpenWakeWord**: Local wake word detection
-- **OpenAI**: Whisper, GPT, and TTS APIs
+- **OpenAI**: Transcriptions, Chat Completions, and Realtime APIs
 - **SeeedStudio**: reSpeaker HAT hardware and drivers
 - **Raspberry Pi Foundation**: Amazing single-board computers
 

@@ -2,9 +2,9 @@
 
 A voice-controlled assistant using:
 - OpenWakeWord for wake word detection
-- OpenAI Whisper for speech transcription
+- OpenAI GPT-Transcribe for speech transcription
 - OpenAI GPT for intelligent responses
-- OpenAI TTS for voice responses
+- OpenAI Realtime for voice responses
 """
 import signal
 import subprocess
@@ -20,6 +20,7 @@ from .connectivity import check_internet_connection
 from .logger import InteractionLogger
 from .mcp_manager import MCPClientManager
 from .openai_client import OpenAIClient
+from .playback import speech_playback_command
 from .rpiface_client import RPiFaceClient
 
 try:
@@ -235,26 +236,26 @@ def main():
                         if pixels:
                             pixels.speak()
 
-                        # Generate TTS as MP3
-                        mp3_path = config.audio_output.tts_output_path
+                        # Generate speech using the configured API workflow
+                        speech_path = config.audio_output.tts_output_path
 
                         openai_client.generate_speech(
                             text=response,
-                            output_path=mp3_path,
+                            output_path=speech_path,
                             voice=config.openai.tts_voice,
                         )
 
-                        # Play the MP3 audio using mpg123
+                        # Realtime WAV uses the same named ALSA output as bundled prompts.
                         rpiface.set_state("speaking")
                         result = subprocess.run(
-                            ["mpg123", "-a", config.audio_output.device, mp3_path],
+                            speech_playback_command(config.openai.tts_backend, config.audio_output.device, speech_path),
                             capture_output=True,
                             text=True,
                         )
 
                         if result.returncode != 0:
-                            print(f"mpg123 stderr: {result.stderr}")
-                            print(f"mpg123 stdout: {result.stdout}")
+                            print(f"Playback stderr: {result.stderr}")
+                            print(f"Playback stdout: {result.stdout}")
                             raise subprocess.CalledProcessError(
                                 result.returncode,
                                 result.args,

@@ -8,6 +8,24 @@ from rpi_assistant.app.config import load_config
 
 
 class ConfigTests(unittest.TestCase):
+    def test_model_workflow_defaults_and_legacy_override(self):
+        with TemporaryDirectory() as directory, patch.dict("os.environ", {}, clear=True):
+            path = Path(directory) / "config.ini"
+            path.write_text("[openai]\napi_key=test\n")
+            config = load_config(str(path))
+            self.assertEqual(config.openai.whisper_model, "gpt-transcribe")
+            self.assertEqual(config.openai.chat_model, "gpt-6-luna")
+            self.assertEqual(config.openai.reasoning_effort, "none")
+            self.assertEqual(config.openai.tts_backend, "realtime")
+            self.assertEqual(config.openai.tts_model, "gpt-realtime-2.1-mini")
+            self.assertEqual(config.audio_output.tts_output_path, "/tmp/response.wav")
+            path.write_text("[openai]\napi_key=test\ntts_backend=speech\ntts_model=tts-1\n"
+                            "reasoning_effort=\ntts_timeout_seconds=45\n")
+            config = load_config(str(path))
+            self.assertEqual(config.openai.tts_backend, "speech")
+            self.assertEqual(config.openai.reasoning_effort, "")
+            self.assertEqual(config.openai.tts_timeout_seconds, 45)
+
     def test_load_config_reads_audio_queue_and_processing_drain_seconds(self):
         with TemporaryDirectory() as tmp_dir:
             config_path = Path(tmp_dir) / "config.ini"

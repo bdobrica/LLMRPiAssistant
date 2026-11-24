@@ -32,6 +32,29 @@ class FakeClient:
 
 
 class OpenAIClientConversationTests(unittest.TestCase):
+    def test_disabled_relevance_preserves_followup_without_extra_request(self):
+        client = self.create_client(["manifold", "compact manifold", "cube"],
+                                    conversation_idle_timeout_seconds=0,
+                                    conversation_relevance_threshold=0)
+        for question in ("What's a manifold?", "What about a compact manifold?", "What about a cube?"):
+            client.get_chat_response(question)
+        self.assertEqual(len(client.client.chat.completions.calls), 3)
+        self.assertEqual(len(client.conversation_history), 7)
+        request = client.client.chat.completions.calls[-1]
+        self.assertEqual(request["reasoning_effort"], "none")
+        self.assertEqual(request["max_completion_tokens"], 500)
+        self.assertNotIn("max_tokens", request)
+
+    def test_classifier_uses_supported_parameters_without_changing_history(self):
+        client = self.create_client(['{"intent":"list_installed","confidence":1}'])
+        result, _ = client.classify_app_intent("List my apps", {})
+        self.assertEqual(result["intent"], "list_installed")
+        self.assertEqual(len(client.conversation_history), 1)
+        request = client.client.chat.completions.calls[0]
+        self.assertEqual(request["reasoning_effort"], "none")
+        self.assertEqual(request["max_completion_tokens"], 120)
+        self.assertEqual(request["response_format"], {"type": "json_object"})
+
     def create_client(self, responses, **config_kwargs):
         config = OpenAIConfig(api_key="test-key", **config_kwargs)
         client = object.__new__(OpenAIClient)

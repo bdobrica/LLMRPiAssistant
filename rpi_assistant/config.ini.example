@@ -55,13 +55,19 @@ output_path = /tmp/command.wav
 # REQUIRED: Set your API key here or via OPENAI_API_KEY environment variable
 api_key = 
 
-# Whisper transcription settings
-# Whisper model to use
-whisper_model = whisper-1
+# Recorded-speech transcription (legacy setting name retained)
+whisper_model = gpt-transcribe
 
 # Chat completion settings
-# Chat model (gpt-4o-mini, gpt-4o, gpt-3.5-turbo, etc.)
-chat_model = gpt-4o-mini
+# Chat and intent model; none is required for Luna Chat Completions tools.
+chat_model = gpt-6-luna
+reasoning_effort = none
+
+# Realtime speech generates WAV, keeping the existing voice.
+tts_backend = realtime
+tts_model = gpt-realtime-2.1-mini
+tts_voice = alloy
+tts_timeout_seconds = 90
 # Maximum tokens in response
 max_tokens = 500
 # Response creativity (0.0-2.0)
@@ -88,7 +94,7 @@ enabled = true
 # For other audio hardware choose its ALSA card name or "default".
 device = assistant_wm8960
 # Where to save TTS response audio file
-tts_output_path = /tmp/response.mp3
+tts_output_path = /tmp/response.wav
 
 [logging]
 # Logging configuration

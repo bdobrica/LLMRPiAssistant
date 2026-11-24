@@ -35,7 +35,7 @@ ml_dtypes==0.7.0
 narwhals==2.29.0
 numpy==2.5.5
 onnxruntime==1.32.0
-openai==3.58.0
+openai[realtime]==3.58.0
 opentelemetry-api==1.45.2
 openwakeword @ https://github.com/dscripka/openWakeWord/archive/368c03716d1e92591906a84949bc477f3a834455.tar.gz#sha256=14dd49836d1b6b9c474a22e48fc7ec4c39c4d8b73227a24156f32b796007a12b
 packaging==26.4
@@ -66,3 +66,6 @@ typing_extensions==4.16.0
 urllib3==2.8.0
 uvicorn==0.54.0
 Werkzeug==3.1.9
+
+# SDK Realtime extra requires websockets >=13,<16.
+websockets==15.0.1

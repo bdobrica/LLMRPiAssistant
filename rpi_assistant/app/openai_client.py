@@ -36,7 +36,7 @@ class OpenAIClient:
         ]
     
     def transcribe_audio(self, audio_file_path: str) -> str:
-        """Transcribe audio file using Whisper.
+        """Transcribe a recorded audio file.
         
         Args:
             audio_file_path: Path to audio file (WAV, MP3, etc.).
@@ -55,7 +55,7 @@ class OpenAIClient:
                 )
             return transcript.text
         except Exception as e:
-            raise Exception(f"Whisper transcription failed: {e}")
+            raise Exception(f"Audio transcription failed: {e}")
     
     def get_chat_response(self, user_message: str) -> tuple[str, dict]:
         """Get chat completion response.
@@ -80,6 +80,12 @@ class OpenAIClient:
         except Exception as e:
             raise Exception(f"Chat completion failed: {e}")
 
+    def _completion_options(self, max_tokens: int, temperature: float) -> dict:
+        options = {"max_completion_tokens": max_tokens, "temperature": temperature}
+        if self.config.reasoning_effort:
+            options["reasoning_effort"] = self.config.reasoning_effort
+        return options
+
     def _chat_with_tools(self) -> tuple[str, dict]:
         manager = getattr(self, "mcp_manager", None)
         tools = manager.openai_tools() if manager is not None else []
@@ -91,8 +97,7 @@ class OpenAIClient:
             request = {
                 "model": self.config.chat_model,
                 "messages": self.conversation_history,
-                "max_tokens": self.config.max_tokens,
-                "temperature": self.config.temperature,
+                **self._completion_options(self.config.max_tokens, self.config.temperature),
             }
             if tools and tool_rounds < max_rounds:
                 request["tools"] = tools
@@ -153,6 +158,8 @@ class OpenAIClient:
             self.compact_conversation("idle_timeout")
             return
 
+        if self.config.conversation_relevance_threshold <= 0:
+            return
         relevance_score = self._conversation_relevance_score(user_message)
         if relevance_score is None:
             return
@@ -191,8 +198,7 @@ class OpenAIClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": json.dumps(payload)},
                 ],
-                max_tokens=80,
-                temperature=0,
+                **self._completion_options(80, 0),
                 response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content or "{}"
@@ -232,8 +238,7 @@ class OpenAIClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": json.dumps(payload)},
                 ],
-                max_tokens=120,
-                temperature=0,
+                **self._completion_options(120, 0),
                 response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content or "{}"
@@ -245,29 +250,19 @@ class OpenAIClient:
         except Exception as e:
             raise Exception(f"App intent classification failed: {e}")
     
-    def generate_speech(self, text: str, output_path: str, voice: str = "alloy") -> None:
-        """Generate speech from text using OpenAI TTS.
-        
-        Args:
-            text: Text to convert to speech.
-            output_path: Path to save the audio file (MP3).
-            voice: Voice to use (alloy, echo, fable, onyx, nova, shimmer).
-        
-        Raises:
-            Exception: If TTS generation fails.
-        """
-        try:
-            response = self.client.audio.speech.create(
-                model=self.config.tts_model,
-                voice=voice,
-                input=text,
-            )
-            
-            # Stream to file
-            response.stream_to_file(output_path)
-        except Exception as e:
-            raise Exception(f"TTS generation failed: {e}")
-    
+    def generate_speech(self, text: str, output_path: str, voice: str = "alloy") -> dict:
+        """Write completed speech: WAV for Realtime, MP3 for legacy Speech API."""
+        if self.config.tts_backend == "realtime":
+            from .realtime_speech import generate_realtime_speech
+            return generate_realtime_speech(self.config, text, output_path, voice)
+        if self.config.tts_backend != "speech":
+            raise ValueError("tts_backend must be realtime or speech")
+        response = self.client.audio.speech.create(
+            model=self.config.tts_model, voice=voice, input=text,
+        )
+        response.stream_to_file(output_path)
+        return {}
+
     def process_voice_command(self, audio_file_path: str) -> tuple[str, str, dict]:
         """Complete pipeline: transcribe audio and get chat response.
         

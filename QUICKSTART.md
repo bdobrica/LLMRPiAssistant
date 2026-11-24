@@ -173,8 +173,8 @@ Default models support:
 ## Next Steps
 
 - Customize system prompt in config.ini for different personalities
-- Try different OpenAI models (gpt-4o, gpt-4o-mini)
-- Experiment with different TTS voices (alloy, echo, fable, onyx, nova, shimmer)
+- See [OpenAI model migration](docs/openai-upgrade.md) for the supported transcription, chat and Realtime speech configuration.
+- The tested Realtime voice is alloy; validate other supported voices on your speaker.
 - See TODO.md for game development features
 
 ## Getting Help

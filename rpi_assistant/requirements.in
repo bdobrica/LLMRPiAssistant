@@ -5,7 +5,7 @@ gpiozero==2.0.1.post3
 lgpio==0.2.2.0
 numpy==2.5.5
 PyNaCl==1.6.2
-openai==3.58.0
+openai[realtime]==3.58.0
 mcp==2.3.0
 sounddevice==0.5.6
 spidev==3.8
@@ -16,3 +16,6 @@ onnxruntime==1.32.0
 openwakeword @ https://github.com/dscripka/openWakeWord/archive/368c03716d1e92591906a84949bc477f3a834455.tar.gz
 # Upstream 0.1.2 has no cp313 wheel: build its small SWIG binding from source.
 speexdsp-ns @ https://github.com/TeaPoly/speexdsp-ns-python/archive/8af784a230e23f4eeaa4a58111774ad0864b1f0b.tar.gz
+
+# SDK Realtime extra requires websockets >=13,<16.
+websockets==15.0.1

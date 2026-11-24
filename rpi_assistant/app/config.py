@@ -50,9 +50,12 @@ class OpenAIConfig:
     """OpenAI API configuration."""
 
     api_key: str
-    whisper_model: str = "whisper-1"
-    chat_model: str = "gpt-4o-mini"
-    tts_model: str = "tts-1"
+    whisper_model: str = "gpt-transcribe"
+    chat_model: str = "gpt-6-luna"
+    tts_model: str = "gpt-realtime-2.1-mini"
+    tts_backend: str = "realtime"
+    tts_timeout_seconds: float = 90.0
+    reasoning_effort: str = "none"
     tts_voice: str = "alloy"
     system_prompt: str = "You are a helpful voice assistant."
     max_tokens: int = 500
@@ -67,7 +70,7 @@ class AudioOutputConfig:
 
     enabled: bool = True
     device: str = "hw:0,0"
-    tts_output_path: str = "/tmp/response.mp3"
+    tts_output_path: str = "/tmp/response.wav"
 
 
 @dataclass
@@ -281,17 +284,20 @@ def load_config(config_path: Optional[str] = None) -> Config:
             "openai",
             "whisper_model",
             "OPENAI_WHISPER_MODEL",
-            "whisper-1",
+            "gpt-transcribe",
             str,
         ),
         chat_model=get_value(
             "openai",
             "chat_model",
             "OPENAI_CHAT_MODEL",
-            "gpt-4o-mini",
+            "gpt-6-luna",
             str,
         ),
-        tts_model=get_value("openai", "tts_model", "OPENAI_TTS_MODEL", "tts-1", str),
+        tts_model=get_value("openai", "tts_model", "OPENAI_TTS_MODEL", "gpt-realtime-2.1-mini", str),
+        tts_backend=get_value("openai", "tts_backend", "OPENAI_TTS_BACKEND", "realtime", str),
+        tts_timeout_seconds=get_value("openai", "tts_timeout_seconds", "OPENAI_TTS_TIMEOUT", 90.0, float),
+        reasoning_effort=get_value("openai", "reasoning_effort", "OPENAI_REASONING_EFFORT", "none", str),
         tts_voice=get_value("openai", "tts_voice", "OPENAI_TTS_VOICE", "alloy", str),
         system_prompt=get_value(
             "openai",
@@ -325,7 +331,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
             "audio_output",
             "tts_output_path",
             "TTS_OUTPUT_PATH",
-            "/tmp/response.mp3",
+            "/tmp/response.wav",
             str,
         ),
     )
