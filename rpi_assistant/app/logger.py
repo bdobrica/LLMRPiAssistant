@@ -119,6 +119,11 @@ class InteractionLogger:
         
         if duration_seconds is not None:
             entry["audio_duration_seconds"] = round(duration_seconds, 2)
+
+        if "lookup" in usage:
+            # Keep the cited evidence with this answer, using the existing interaction log.
+            entry["lookup"] = usage["lookup"]
+            entry["spoken_response"] = usage.get("spoken_response", assistant_response)
         
         self.logger.info(json.dumps(entry))
     

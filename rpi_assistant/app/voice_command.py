@@ -71,7 +71,7 @@ class VoiceCommandHandler:
             # Clear the preceding answer before generation, including legacy Speech output.
             output.unlink(missing_ok=True)
             try:
-                self.client.generate_speech(response, str(output), self.config.openai.tts_voice)
+                self.client.generate_speech(usage.get("spoken_response", response), str(output), self.config.openai.tts_voice)
                 if not output.is_file() or not output.stat().st_size:
                     raise RuntimeError("Speech output is empty")
                 stage = "playback"

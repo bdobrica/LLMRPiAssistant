@@ -1,6 +1,6 @@
 # Product and Implementation Plan
 
-Updated: 2026-11-24. Implementation steps: [TODO.md](TODO.md). Contributor workflow: [AGENTS.md](AGENTS.md).
+Updated: 2026-11-25. Implementation steps: [TODO.md](TODO.md). Contributor workflow: [AGENTS.md](AGENTS.md).
 
 ## Product Vision
 
@@ -86,7 +86,7 @@ F06 builds on the completed modernization without replacing the working Python e
 
 1. **F03 — Understandable failure and recovery.** Bound provider waits; give a short locally playable failure message; return to listening. Reuse existing connectivity prompts where appropriate. Use a configurable 20-second HTTP network-operation timeout with no automatic retries, and a 30-second Realtime generation deadline. Empty transcription and failed requests use bundled voice clips; failures return to wake listening without replaying old audio. These are per-operation limits, not a whole-turn deadline. See [behavior and recovery](docs/failure-recovery.md).
 2. **F02 — Interruption and correction.** The owner selected physical-button interruption first: press during a spoken answer, wait for green, then supply a contextual correction. Stop stale playback without restarting the original request or replaying its completed actions; preserve app/tool results. This does not undo actions or cancel work during thinking. The owner confirmed the physical-button correction flow on the Zero 2 W. Keep spoken interruption disabled until separately validated against speaker echo. See [button configuration and limits](docs/button-interruption.md).
-3. **F04 — Current-information answers.** Add a real lookup source, concise attribution, and honest handling of missing/conflicting evidence. General questions must not require installing an app.
+3. **F04 — Current-information answers.** Use the existing GPT-6 Luna/account with hosted Responses web search, selected as a read-only lookup from the current conversation flow. Bound calls/output, retain cited evidence, name sources aloud and preserve links in displayed/logged answers. Missing evidence produces an explicit inability to verify; unresolved source disagreements remain visible. The lookup reader has no action tools, and co-requested actions are not executed. No extra service, local browser or app installation is required. The owner confirmed sourced speech and a contextual follow-up on the Zero 2 W. See [configuration, evidence and limitations](docs/current-information.md).
 4. **F05 — Simple controls.** Volume, stop, mute with accurate capture indication, and an explicit new-conversation command. Provide local control paths during internet loss without promising offline free-form recognition.
 5. **Everyday usefulness.** Restart-safe timers, reminders/shopping lists, local weather, and one enjoyable trivia/story experience. Choose the next complete feature from household use.
 

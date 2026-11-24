@@ -110,6 +110,14 @@ class VoiceCommandTests(unittest.TestCase):
         self.client.get_chat_response.assert_not_called()
         self.client.generate_speech.assert_called_once_with("You rolled a six.", str(self.output), "alloy")
 
+    def test_sourced_answer_logs_links_but_speaks_the_short_attributed_version(self):
+        display = "Version 3.15.2. [Python.org](https://www.python.org/downloads/)"
+        spoken = "According to python.org, version 3.15.2."
+        self.client.get_chat_response.return_value = (display, {"total_tokens": 2, "spoken_response": spoken})
+        self.assertTrue(self.handler.process("unused.wav"))
+        self.client.generate_speech.assert_called_once_with(spoken, str(self.output), "alloy")
+        self.assertEqual(self.handler.logger.log_complete_interaction.call_args.args[2], display)
+
     def test_interrupt_keeps_completed_action_result_without_retry_or_failure_prompt(self):
         self.apps.handle.return_value = NS(text="You rolled a six.")
         self.playback.play.side_effect = PlaybackInterrupted()

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from openai import OpenAI
 
 from .config import OpenAIConfig
+from .web_lookup import LOOKUP_NAME, LOOKUP_TOOL, lookup, lookup_instructions, spoken_without_links, unavailable
 
 if TYPE_CHECKING:
     from .mcp_manager import MCPClientManager
@@ -91,15 +92,20 @@ class OpenAIClient:
 
     def _chat_with_tools(self) -> tuple[str, dict]:
         manager = getattr(self, "mcp_manager", None)
-        tools = manager.openai_tools() if manager is not None else []
+        tools = list(manager.openai_tools()) if manager is not None else []
         max_rounds = manager.config.max_tool_rounds if manager is not None else 0
+        if self.config.web_search_enabled:
+            tools.append(LOOKUP_TOOL)
+            max_rounds = max(max_rounds, 1)
         usage = _empty_usage(self.config.chat_model)
         tool_rounds = 0
 
         while True:
             request = {
                 "model": self.config.chat_model,
-                "messages": self.conversation_history,
+                "messages": [self.conversation_history[0],
+                             {"role": "system", "content": lookup_instructions(self.config.web_search_enabled)},
+                             *self.conversation_history[1:]],
                 **self._completion_options(self.config.max_tokens, self.config.temperature),
             }
             if tools and tool_rounds < max_rounds:
@@ -111,10 +117,16 @@ class OpenAIClient:
             tool_calls = list(getattr(message, "tool_calls", None) or [])
             if not tool_calls:
                 content = message.content or ""
+                usage["spoken_response"] = spoken_without_links(content)
                 self.conversation_history.append({"role": "assistant", "content": content})
                 return content, usage
 
+            if tool_rounds >= max_rounds:
+                raise RuntimeError("Tool round limit reached")
+
             self.conversation_history.append(_assistant_tool_message(message, tool_calls))
+            if any(call.function.name == LOOKUP_NAME for call in tool_calls):
+                return self._answer_lookup(tool_calls, usage)
             for tool_call in tool_calls:
                 try:
                     arguments = json.loads(tool_call.function.arguments or "{}")
@@ -130,6 +142,41 @@ class OpenAIClient:
                     {"role": "tool", "tool_call_id": tool_call.id, "content": result}
                 )
             tool_rounds += 1
+
+    def _answer_lookup(self, tool_calls, usage: dict) -> tuple[str, dict]:
+        """Finish a lookup with a read-only reader; never dispatch co-requested actions."""
+        evidence = None
+        blocked_actions = False
+        for call in tool_calls:
+            if call.function.name == LOOKUP_NAME and evidence is None:
+                try:
+                    arguments = json.loads(call.function.arguments or "{}")
+                    query = arguments.get("query") if isinstance(arguments, dict) else None
+                except (json.JSONDecodeError, TypeError):
+                    query = None
+                evidence = (lookup(self.client, self.config, query) if self.config.web_search_enabled
+                            else unavailable("disabled"))
+                # Only a bounded answer/source summary enters ordinary conversation.
+                result = {key: evidence[key] for key in ("status", "answer", "sources", "retrieved_at")}
+                result["untrusted_evidence"] = True
+            else:
+                blocked_actions |= call.function.name != LOOKUP_NAME
+                result = {"is_error": True, "error": "Lookup turns are read-only and permit one lookup. Ask separately for an action."}
+            self.conversation_history.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
+        answer, spoken = evidence["answer"], evidence["spoken_answer"]
+        if blocked_actions:
+            note = " I haven't performed any other action."
+            answer += note
+            spoken += note
+        search_usage = evidence.get("usage", {})
+        usage["prompt_tokens"] += search_usage.get("input_tokens", 0)
+        usage["completion_tokens"] += search_usage.get("output_tokens", 0)
+        usage["total_tokens"] += search_usage.get("total_tokens", 0)
+        usage["lookup"] = evidence
+        usage["spoken_response"] = spoken
+        self.conversation_history.append({"role": "assistant", "content": answer})
+        print(f"Current-information lookup: {evidence['status']}; cited sources: {len(evidence['sources'])}.")
+        return answer, usage
 
     def mark_response_output_finished(self) -> None:
         """Record when the last response finished being presented to the user."""

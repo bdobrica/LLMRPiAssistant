@@ -70,6 +70,7 @@ class OpenAIConfig:
     tts_model: str = "gpt-realtime-2.1-mini"
     tts_backend: str = "realtime"
     request_timeout_seconds: float = 20.0
+    web_search_enabled: bool = True
     tts_timeout_seconds: float = 30.0
     reasoning_effort: str = "none"
     tts_voice: str = "alloy"
@@ -328,6 +329,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
         tts_model=get_value("openai", "tts_model", "OPENAI_TTS_MODEL", "gpt-realtime-2.1-mini", str),
         tts_backend=get_value("openai", "tts_backend", "OPENAI_TTS_BACKEND", "realtime", str),
         request_timeout_seconds=get_value("openai", "request_timeout_seconds", "OPENAI_REQUEST_TIMEOUT", 20.0, float),
+        web_search_enabled=get_value("openai", "web_search_enabled", "OPENAI_WEB_SEARCH_ENABLED", True, bool),
         tts_timeout_seconds=get_value("openai", "tts_timeout_seconds", "OPENAI_TTS_TIMEOUT", 30.0, float),
         reasoning_effort=get_value("openai", "reasoning_effort", "OPENAI_REASONING_EFFORT", "none", str),
         tts_voice=get_value("openai", "tts_voice", "OPENAI_TTS_VOICE", "alloy", str),
