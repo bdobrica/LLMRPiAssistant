@@ -111,7 +111,7 @@ def find_installed_app_bundle(
             continue
 
         for bundle_dir in sorted(app_dir.iterdir()):
-            if not bundle_dir.is_dir():
+            if bundle_dir.name.startswith((".", "_")) or not bundle_dir.is_dir():
                 continue
 
             manifest_path = bundle_dir / APP_MANIFEST_FILENAME

@@ -900,6 +900,44 @@ class AppManagerTests(unittest.TestCase):
         self.assertIsNotNone(response)
         self.assertEqual(response.text, "No app store entries are available.")
 
+    def test_rejected_signed_upgrade_is_never_imported_after_restart(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            installed = root / "installed"
+            self.create_app_bundle(installed, response_text="working")
+            candidate = self.create_app_bundle(root / "source", version="0.2.0")
+            repository = self.create_repository(root / "repo", {"dice": [candidate]})
+            private_key = SigningKey.generate().encode(encoder=Base64Encoder).decode()
+            public_key = self.sign_repository(repository, private_key)
+            marker = root / "unexpected-import"
+            malicious = repository / "apps/dice/0.2.0/app.py"
+            malicious.write_text(
+                f"from pathlib import Path\nPath({str(marker)!r}).touch()\n" + malicious.read_text()
+            )
+            options = dict(app_dirs=[installed], repository_roots=[repository],
+                           repository_public_key=public_key, require_repository_signature=True)
+            manager = AppManager(**options)
+            response = manager.handle("upgrade app dice")
+            self.assertIn("Bundle checksum mismatch", response.text)
+            self.assertFalse((installed / ".dice-0.2.0.repo").exists())
+            # Also ignore partial staging left by an interrupted earlier process.
+            shutil.copytree(candidate, installed / ".dice.staged")
+            shutil.copytree(candidate, installed / ".dice-0.2.0.repo")
+            restarted = AppManager(**options)
+            self.assertFalse(marker.exists())
+            self.assertEqual(restarted.handle("roll test die").text, "working")
+
+    def test_missing_repository_file_cleans_partial_staging(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = self.create_app_bundle(root / "source")
+            repository = self.create_repository(root / "repo", {"dice": [candidate]})
+            manager = AppManager(app_dirs=[root / "installed"], repository_roots=[repository])
+            (repository / "apps/dice/0.1.0/manifest.json").unlink()
+            response = manager.handle("install app dice")
+            self.assertIn("Repository bundle file not found", response.text)
+            self.assertFalse((root / "installed/.dice-0.1.0.repo").exists())
+
     def test_checksum_mismatch_blocks_install(self):
         with TemporaryDirectory() as store_tmp, TemporaryDirectory() as install_tmp:
             source_dir = Path(store_tmp) / "source"

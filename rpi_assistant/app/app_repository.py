@@ -51,21 +51,25 @@ class RepositoryRelease:
 
         staging_dir.mkdir(parents=True, exist_ok=True)
 
-        for relative_path in self.files:
-            destination_file = resolve_bundle_file_path(staging_dir, relative_path)
-            destination_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            for relative_path in self.files:
+                destination_file = resolve_bundle_file_path(staging_dir, relative_path)
+                destination_file.parent.mkdir(parents=True, exist_ok=True)
 
-            if self.is_remote:
-                file_url = _remote_bundle_file_url(str(self.repository_root), self.bundle_ref, relative_path)
-                destination_file.write_bytes(_read_remote_bytes(file_url))
-            else:
-                source_bundle_dir = Path(self.repository_root).expanduser().resolve() / self.bundle_ref
-                source_file = resolve_bundle_file_path(source_bundle_dir, relative_path)
-                if not source_file.exists():
-                    raise FileNotFoundError(f"Repository bundle file not found: {source_file}")
-                shutil.copy2(source_file, destination_file)
+                if self.is_remote:
+                    file_url = _remote_bundle_file_url(str(self.repository_root), self.bundle_ref, relative_path)
+                    destination_file.write_bytes(_read_remote_bytes(file_url))
+                else:
+                    source_bundle_dir = Path(self.repository_root).expanduser().resolve() / self.bundle_ref
+                    source_file = resolve_bundle_file_path(source_bundle_dir, relative_path)
+                    if not source_file.exists():
+                        raise FileNotFoundError(f"Repository bundle file not found: {source_file}")
+                    shutil.copy2(source_file, destination_file)
 
-        verify_bundle_checksum(staging_dir, self.files, self.sha256)
+            verify_bundle_checksum(staging_dir, self.files, self.sha256)
+        except Exception:
+            shutil.rmtree(staging_dir)
+            raise
         return staging_dir
 
 

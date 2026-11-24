@@ -114,7 +114,7 @@ def _iter_external_manifest_paths(app_dir: Path) -> Iterable[Path]:
         yield direct_manifest
 
     for child in app_dir.iterdir():
-        if child.name.startswith("_"):
+        if child.name.startswith(("_", ".")):
             continue
         if child.is_dir() and (child / APP_MANIFEST_FILENAME).exists():
             yield child / APP_MANIFEST_FILENAME
