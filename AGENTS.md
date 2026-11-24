@@ -12,6 +12,8 @@ Target Raspberry Pi Zero 2 W and Raspberry Pi 3 A+ with 512 MB RAM. Keep local a
 
 Read [PLAN.md](PLAN.md) for product decisions, constraints, and acceptance gates, and [TODO.md](TODO.md) for ordered implementation items before starting feature work. Keep both documents aligned as decisions change. Implement a bounded item, run relevant checks, and record validation evidence and limitations in TODO.md. Mark it complete only when its acceptance criteria are met.
 
+Start with a user-visible feature. Attach necessary setup, tests, and simple measurements to that work; do not introduce a prerequisite milestone for baselines, CI, benchmarking, or general hardening. Fix concrete blockers as they appear. Broader release validation must not prevent the owner from trying a working feature on the available Pi; state any remaining hardware or reliability limitations honestly.
+
 After each successfully implemented item, commit the implementation, relevant tests/configuration/documentation, and TODO update together. Use a short imperative subject and a brief description explaining the behavior change, item ID, and validation. Do not accumulate completed items into an unrelated large commit. Stage only intended files; preserve unrelated user changes and leave incomplete items unchecked. Local commits do not authorize pushing or deployment.
 
 Never commit `CODE_REVIEW_2026_06_27.md`; its actionable findings belong in PLAN.md and TODO.md. Keep the original ignored locally.
