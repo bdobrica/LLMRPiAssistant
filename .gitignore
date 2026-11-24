@@ -186,3 +186,6 @@ config.ini
 
 # VS Code
 .vscode/
+
+# Local review notes; actionable findings are tracked in PLAN.md and TODO.md
+/CODE_REVIEW_2026_06_27.md

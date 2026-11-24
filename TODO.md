@@ -1,509 +1,80 @@
-# TODO List for LLMRPiAssistant
-
-This document tracks planned improvements, bug fixes, and feature additions, with special focus on game development capabilities.
-
-## ✅ Completed Features
-
-### WiFi Provisioning System (January 2026)
-- ✅ NetworkManager-based WiFi management
-- ✅ Automatic AP fallback when offline
-- ✅ Flask web UI for network configuration
-- ✅ Multi-network memory (remembers all configured networks)
-- ✅ Systemd service integration
-- ✅ Makefile installation target
-- ✅ Comprehensive documentation
-
-**Implementation Details:**
-- Uses NetworkManager for robust WiFi control
-- `piwifi-manager.service` monitors connectivity and manages AP mode
-- `piwifi-flask.service` provides web UI at http://192.168.4.1:8080
-- Remembers unlimited networks via NetworkManager connection profiles
-- Automatic reconnection to any known network
-
-## 🚨 Critical Fixes (High Priority)
-
-### 1. Conversation History Management
-**Status**: Not Started  
-**Priority**: Critical  
-**Issue**: Conversation history grows indefinitely, will eventually exceed context window
-
-**Tasks**:
-- [ ] Add conversation history limit (e.g., last 10 messages)
-- [ ] Implement sliding window for conversation context
-- [ ] Add manual conversation reset command (voice or config)
-- [ ] Track token usage and warn when approaching limits
-- [ ] Consider conversation summarization for long sessions
-
-**Implementation**:
-```python
-# In openai_client.py
-def _trim_conversation_history(self, max_messages=10):
-    """Keep only recent messages plus system prompt."""
-    if len(self.conversation_history) > max_messages + 1:
-        system_prompt = self.conversation_history[0]
-        recent = self.conversation_history[-(max_messages):]
-        self.conversation_history = [system_prompt] + recent
-```
-
-### 2. Missing apa102.py Implementation
-**Status**: Not Started  
-**Priority**: High  
-**Issue**: LED functionality references missing module
-
-**Tasks**:
-- [ ] Locate or implement apa102.py SPI driver
-- [ ] Test LED functionality end-to-end
-- [ ] Add fallback if SPI not available
-- [ ] Document LED hardware requirements
-
-### 3. Audio Output Device Configuration
-**Status**: Not Started  
-**Priority**: High  
-**Issue**: Hardcoded `hw:0,0` may not exist on all systems
-
-**Tasks**:
-- [ ] Test audio device availability on startup
-- [ ] List available ALSA devices if configured device fails
-- [ ] Provide device selection wizard
-- [ ] Fallback to default device if hw:0,0 unavailable
-- [ ] Add text-only mode if no audio output available
-
-## ⚠️ Important Improvements (Medium Priority)
-
-### 4. OpenAI API Error Handling
-**Status**: Not Started  
-**Priority**: High  
-
-**Tasks**:
-- [ ] Add retry logic with exponential backoff
-- [ ] Handle rate limiting (429 errors)
-- [ ] Handle network timeouts gracefully
-- [ ] Add offline mode detection
-- [ ] Queue requests during temporary failures
-- [ ] User feedback for API errors ("Connection issue, please try again")
-
-### 5. Adaptive Silence Detection
-**Status**: Not Started  
-**Priority**: Medium  
-
-**Tasks**:
-- [ ] Measure ambient noise level on startup
-- [ ] Dynamically adjust silence_rms_threshold
-- [ ] Add "calibration mode" for noisy environments
-- [ ] Support manual threshold adjustment via voice command
-- [ ] Log noise levels for debugging
-
-### 6. Wake Word Configuration
-**Status**: Not Started  
-**Priority**: Medium  
-
-**Tasks**:
-- [ ] Document available wake words in config
-- [ ] Allow wake word selection in config.ini
-- [ ] Support custom wake word models
-- [ ] Test all default wake words
-- [ ] Add wake word training guide
-
-### 7. Streaming Response Support
-**Status**: Not Started  
-**Priority**: Medium  
-
-**Tasks**:
-- [ ] Use OpenAI streaming API for faster first-word
-- [ ] Stream TTS generation in chunks
-- [ ] Start speaking while generating rest of response
-- [ ] Reduce perceived latency by 50%+
-
-## 🎮 Game Development Features (High Priority for Your Use Case)
-
-### 8. Multi-Player Support
-**Status**: Not Started  
-**Priority**: Critical for games  
-
-**Tasks**:
-- [ ] Voice identification/registration system
-- [ ] Player profiles with names and stats
-- [ ] Turn tracking and management
-- [ ] Separate conversation contexts per player
-- [ ] "Current player" indicator
-- [ ] Turn timeout and automatic passing
-
-**Suggested Implementation**:
-```python
-class GameSession:
-    def __init__(self, players: list[str]):
-        self.players = players
-        self.current_player_index = 0
-        self.player_contexts = {p: [] for p in players}
-        self.scores = {p: 0 for p in players}
-    
-    def next_turn(self):
-        self.current_player_index = (self.current_player_index + 1) % len(self.players)
-    
-    def current_player(self) -> str:
-        return self.players[self.current_player_index]
-```
-
-### 9. Hybrid Command System
-**Status**: Not Started  
-**Priority**: High  
-
-**Tasks**:
-- [ ] Local command parser for game actions
-- [ ] Pattern matching for common commands:
-  - "roll dice" / "roll d20"
-  - "check score" / "leaderboard"
-  - "start game" / "end game" / "pause"
-  - "next turn" / "pass turn"
-  - "save game" / "load game"
-- [ ] Route to OpenAI only for conversational/creative responses
-- [ ] Reduce latency for frequent commands
-- [ ] Add command aliases and shortcuts
-
-**Example Commands**:
-```python
-GAME_COMMANDS = {
-    r"roll (?:a )?d(\d+)": lambda m: roll_die(int(m.group(1))),
-    r"(check|show) score": lambda m: show_scores(),
-    r"next (turn|player)": lambda m: next_turn(),
-    r"start (.+) game": lambda m: start_game(m.group(1)),
-}
-```
-
-### 10. Game State Persistence
-**Status**: Not Started  
-**Priority**: High  
-
-**Tasks**:
-- [ ] Design game state schema (JSON or SQLite)
-- [ ] Auto-save game state after each turn
-- [ ] Load game state on startup
-- [ ] Support multiple saved games
-- [ ] Game session management (active/paused/completed)
-- [ ] Export game history and statistics
-
-**State Structure**:
-```json
-{
-  "game_type": "trivia",
-  "session_id": "uuid",
-  "started_at": "2026-01-09T...",
-  "players": ["Alice", "Bob", "Charlie"],
-  "current_player": 0,
-  "scores": {"Alice": 5, "Bob": 3, "Charlie": 7},
-  "turn_number": 15,
-  "game_data": { /* game-specific state */ }
-}
-```
-
-### 11. Game Templates
-**Status**: Not Started  
-**Priority**: High  
-
-**Tasks**:
-- [ ] **Trivia Game**
-  - Question categories and difficulty
-  - Score tracking and buzzer system
-  - Time limits per question
-  - Daily/weekly challenges
-  
-- [ ] **Story Adventure Game**
-  - AI-generated branching narratives
-  - Player choices and consequences
-  - Inventory system
-  - Save points and checkpoints
-  
-- [ ] **Word Games**
-  - Rhyme challenge (say words that rhyme)
-  - Story chain (players continue story)
-  - Word association
-  - 20 questions
-  
-- [ ] **Party Games**
-  - Would You Rather
-  - Two Truths and a Lie
-  - Taboo (AI generates words to avoid)
-  - Charades with AI judging
-
-### 12. Scoring & Leaderboards
-**Status**: Not Started  
-**Priority**: Medium  
-
-**Tasks**:
-- [ ] Point system with configurable rules
-- [ ] Achievements and badges
-- [ ] Historical leaderboard (all-time, monthly, weekly)
-- [ ] Statistics tracking (games played, win rate, etc.)
-- [ ] Voice announcements for achievements
-- [ ] Export leaderboard to CSV/PDF
-
-### 13. Low-Latency Mode
-**Status**: Not Started  
-**Priority**: Medium  
-
-**Tasks**:
-- [ ] Response caching for common queries
-- [ ] Local LLM integration (llama.cpp, Ollama)
-- [ ] Hybrid mode: local for fast, OpenAI for creative
-- [ ] Preload game rules and common responses
-- [ ] Optimize audio processing pipeline
-
-## 🔧 Code Quality & Testing
-
-### 14. Unit Tests
-**Status**: Not Started  
-**Priority**: Medium  
-
-**Tasks**:
-- [ ] Test audio processing utilities
-- [ ] Test configuration loading
-- [ ] Mock OpenAI API for testing
-- [ ] Test state machine transitions
-- [ ] Test error handling paths
-- [ ] CI/CD pipeline setup
-
-### 15. Code Improvements
-**Status**: Not Started  
-**Priority**: Low  
-
-**Tasks**:
-- [ ] Extract callback in `__main__.py:on_recording_complete` to method
-- [ ] Convert magic numbers to named constants
-  - `skip_chunks = 30` → `MODEL_FLUSH_CHUNKS`
-  - `resume_listening_at = time.time() + 3.0` → `PROCESSING_DRAIN_SECONDS`
-- [ ] Add type hints to Pixels class
-- [ ] Comprehensive docstrings for all public APIs
-- [ ] Add logging levels for verbose debugging
-
-### 16. Documentation
-**Status**: Mostly Complete  
-**Priority**: Medium  
-
-**Tasks**:
-- [x] Comprehensive README with setup, usage, architecture
-- [x] Configuration reference guide
-- [x] Troubleshooting section
-- [x] WiFi provisioning documentation
-- [ ] API documentation (Sphinx or MkDocs)
-- [ ] Game development guide
-- [ ] Video tutorial for setup
-- [ ] Example game implementations
-- [ ] Contributing guidelines
-
-## 🚀 Advanced Features
-
-### 17. Config UI via Flask
-**Status**: Not Started  
-**Priority**: Medium  
-
-**Tasks**:
-- [ ] Extend piwifi webapp to include config.ini editor
-- [ ] Web UI for editing assistant settings:
-  - OpenAI API key and models
-  - Wake word threshold
-  - Recording parameters
-  - TTS voice selection
-- [ ] Hot-reload mechanism to apply config changes without restart
-- [ ] Signal-based reload (send SIGHUP to rpi-assistant service)
-- [ ] Config validation before applying
-- [ ] Backup/restore config functionality
-
-**Suggested Implementation:**
-```python
-# Add to webapp.py
-@app.route("/settings")
-def settings():
-    config = load_config("../config.ini")
-    return render_template("settings.html", config=config)
-
-@app.post("/settings/save")
-def save_settings():
-    # Validate and save config
-    # Send reload signal: subprocess.run(["systemctl", "reload", "rpi-assistant"])
-```
-
-### 18. Multi-Language Support
-**Status**: Not Started  
-**Priority**: Low  
-
-**Tasks**:
-- [ ] Detect language in transcription
-- [ ] Support multiple TTS voices per language
-- [ ] Translate responses on-the-fly
-- [ ] Language-specific wake words
-
-### 19. Web Dashboard
-**Status**: Not Started  
-**Priority**: Low  
-
-**Tasks**:
-- [ ] Real-time status monitoring
-- [ ] Game statistics visualization
-- [ ] Configuration UI (see #17)
-- [ ] Remote control (start/stop/pause)
-- [ ] Live transcription view
-- [ ] Conversation history browser
-
-### 20. Skills/Plugins System
-**Status**: Not Started  
-**Priority**: Low  
-
-**Tasks**:
-- [ ] Plugin architecture for extensibility
-- [ ] Built-in skills:
-  - Timer/alarm
-  - Weather
-  - Calculator
-  - Music control
-  - Smart home integration
-- [ ] Skill marketplace or registry
-
-### 21. Voice Activity Detection (VAD)
-**Status**: Not Started  
-**Priority**: Low  
-
-**Tasks**:
-- [ ] Replace simple RMS silence detection with ML-based VAD
-- [ ] Use WebRTC VAD or Silero VAD
-- [ ] Better handling of background noise
-- [ ] Reduced false stops during natural pauses
-
-### 22. Conversation Memory
-**Status**: Not Started  
-**Priority**: Medium  
-
-**Tasks**:
-- [ ] Semantic memory (embeddings database)
-- [ ] Remember facts across sessions
-- [ ] Personalization per user
-- [ ] Context from previous games/sessions
-
-## 📊 Monitoring & Analytics
-
-### 23. Performance Metrics
-**Status**: Not Started  
-**Priority**: Low  
-
-**Tasks**:
-- [ ] Track latency metrics (wake-to-response time)
-- [ ] API call duration tracking
-- [ ] Token usage statistics and cost estimation
-- [ ] Audio quality metrics
-- [ ] System resource usage
-
-### 24. Error Tracking
-**Status**: Not Started  
-**Priority**: Medium  
-
-**Tasks**:
-- [ ] Structured error logging
-- [ ] Error categorization
-- [ ] Alert system for critical errors
-- [ ] Automatic error reports
-
-## 🎯 Game-Specific Priorities
-
-For your use case (games with friends), focus on these first:
-
-**Phase 1 (MVP for games):**
-1. ✅ Working voice assistant (DONE!)
-2. Multi-player support (#8)
-3. Hybrid command system (#9)
-4. Game state persistence (#10)
-5. Conversation history management (#1)
-
-**Phase 2 (First playable games):**
-6. Trivia game template (#11)
-7. Scoring & leaderboards (#12)
-8. Audio output fixes (#3)
-
-**Phase 3 (Enhanced gameplay):**
-9. Story adventure game (#11)
-10. Low-latency mode (#13)
-11. API error handling (#4)
-12. More game templates (#11)
-
-**Phase 4 (Polish):**
-13. Web dashboard (#18)
-14. Achievements system (#12)
-15. Voice commands for game control (#9)
-
-## 💡 Implementation Tips
-
-### For Multi-Player Games
-
-```python
-# Suggested architecture
-class GameEngine:
-    def __init__(self, game_type: str, players: list[str]):
-        self.session = GameSession(game_type, players)
-        self.command_parser = CommandParser()
-        self.state_manager = StateManager()
-        
-    def process_voice_input(self, transcription: str, player: str):
-        # Try local command first
-        if cmd := self.command_parser.parse(transcription):
-            return self.execute_command(cmd, player)
-        
-        # Fall back to OpenAI for conversational responses
-        return self.get_ai_response(transcription, player)
-```
-
-### For State Persistence
-
-```python
-# Auto-save after each turn
-def after_turn_hook(self):
-    self.state_manager.save(f"games/{self.session.id}.json")
-
-# Load game on startup
-def load_game(session_id: str):
-    state = StateManager.load(f"games/{session_id}.json")
-    return GameEngine.from_state(state)
-```
-
-### For Hybrid Commands
-
-```python
-# Fast local commands
-LOCAL_COMMANDS = {
-    "roll": lambda: random.randint(1, 6),
-    "score": lambda: get_scores(),
-    "next": lambda: next_turn(),
-}
-
-# Use OpenAI for:
-# - Story generation
-# - Trivia question generation
-# - Creative responses
-# - Judging player answers
-```
-
-## 📅 Suggested Timeline
-
-**Week 1-2**: Critical fixes (#1, #2, #3, #4)  
-**Week 3-4**: Multi-player support (#8)  
-**Week 5-6**: Hybrid commands and game state (#9, #10)  
-**Week 7-8**: First game template (Trivia) (#11)  
-**Week 9-10**: Scoring system and polish (#12)  
-**Week 11-12**: Additional games and testing (#11)  
-
-## 🤝 Contributing
-
-This is YOUR project! Priorities are based on your goals. As you implement features:
-
-- Mark tasks as complete with ✅
-- Add new ideas as they come up
-- Update priorities based on what's most fun
-- Document lessons learned
-
-## 📝 Notes
-
-- Focus on what makes games fun first, optimize later
-- Test with friends early and often
-- Start simple (1-2 players) before scaling
-- Voice interaction is slower than buttons - design accordingly
-- Plan for both competitive and cooperative games
-- Consider recording sessions for playback/highlights
-
-Good luck building awesome voice-controlled games! 🎮🎙️
+# Implementation TODO
+
+Updated: 2026-11-24. [PLAN.md](PLAN.md) defines scope, architecture, hardware constraints, and release gates. [AGENTS.md](AGENTS.md) defines the contributor workflow.
+
+## How to Use This Checklist
+
+Work in milestone order unless a dependency or imminent provider shutdown requires an explicitly documented change. Each ID is a bounded implementation item; split it into smaller IDs if it cannot be delivered and validated in one focused change. Future milestones are backlog, not prerequisites for starting the conversation demo.
+
+Mark an item complete only after its acceptance criteria pass. Add a short validation note with the environment and remaining limitations, then commit the implementation and documentation together. Mention the item ID in the commit description; never mark untested hardware acceptance complete. Do not stage the local June code review.
+
+## M0 — Establish the Baseline
+
+- [ ] **B01 — Make local tests reproducible.** Document/install the development dependencies, including PyNaCl and the separate RPiFace prerequisite for the relevant integration test. Run the existing suite; distinguish missing dependencies, integration prerequisites, and actual failures. Add a lightweight automated check using the same commands.
+- [ ] **B02 — Record a device baseline.** Capture revision, ARM64 OS/Python/package versions, audio configuration, RSS, swap I/O, CPU, and end-to-end timing on the Zero 2 W. Keep credentials and household transcripts out of results. Record the Pi 3 A+ as untested until measured.
+- [ ] **B03 — Make device updates reversible.** Preserve local configuration and uncommitted work, retain a known-good dependency set/revision, deploy the newer fixes, and prove service startup plus rollback. A dependency refresh must not silently replace the working wake-word stack.
+- [ ] **B04 — Establish acceptance scenarios.** Add at least 20 repeatable question/conversation/failure cases from PLAN.md, including the fever scenario, five-turn context, corrections, and local app commands. Record expected behavior and critical failures, not exact wording.
+- [ ] **B05 — Add private diagnostics.** Record per-stage/first-audio latency, failures, buffer drops, resource snapshots, and provider usage without message content by default. Make transcript/response logging opt-in in both file logs and console/journal output; add bounded retention, restrictive permissions, and deletion checks. Audio artifacts must have a bounded lifecycle too.
+
+## M1 — Ship the Conversation Demo
+
+Prerequisite: reproducible baseline and acceptance cases. Start migration work early enough to meet the provider deadlines in PLAN.md. Retain existing app trust-boundary regression tests throughout.
+
+- [ ] **V01 — Prototype supported streaming voice on the Zero 2 W.** Add a selectable GPT-Live path using existing capture/playback hardware, a compatible SDK, and bounded buffers. Measure resampling, echo, latency, memory, reconnects, and cost; preserve the existing path for comparison.
+- [ ] **V02 — Select the primary voice path.** Compare the prototype with the PLAN.md targets and document the decision. If it fails, evaluate a supported Realtime or streamed pipeline; do not claim hardware compatibility from documentation alone. Avoid maintaining multiple production paths without a demonstrated need.
+- [ ] **V03 — Migrate models and SDK requests.** Replace retiring chat, speech, and transcription models as applicable to the chosen path. Validate request parameters, structured output, tool calls, and ARM64 dependencies; update configuration examples and record the tested versions.
+- [ ] **V04 — Make app-intent compatibility explicit.** Configure a supported intent model/capability path. Test unsupported response formats, malformed JSON, unknown app IDs, and API failure. Failed classification must never become a claim that an install/launch succeeded.
+- [ ] **V05 — Implement a conversation session.** Add clear idle/listening/thinking/speaking/follow-up transitions, a configurable follow-up window, and explicit completion/inactivity closure. Demonstrate five turns after one wake word with visible/audible listening feedback.
+- [ ] **V06 — Bound short-term context.** Remove the routine relevance-model call; limit recent messages/tokens and archived data, preserving complete tool exchanges. Add a new-conversation command and tests for long same-topic sessions, topic changes, and retention expiry.
+- [ ] **V07 — Fix turn boundaries and re-listening.** Replace the fixed drain/30-chunk dead period with measured handling of playback tail and stale audio. Evaluate lightweight VAD/noise handling, natural pauses, silence-only input, and questions exceeding ten seconds. Verify that the assistant does not transcribe its own reply.
+- [ ] **V08 — Support interruption and cancellation.** Stop playback promptly, discard stale queued output, and handle corrections during a response. Define what happens to in-flight tools; never duplicate an action on retry or treat interrupted speech as proof the action was cancelled.
+- [ ] **V09 — Provide failure feedback and recovery.** Add packaged local prompts for unheard speech, lost connection, provider timeout/rate limit, and playback failure. Set bounded request/retry budgets, return to a usable state, and test reconnects without replaying obsolete answers.
+- [ ] **V10 — Tune spoken answer behavior.** Prefer concise useful answers, offer elaboration, and ask relevant clarification without interrogating the user. Evaluate the fever scenario against current authoritative guidance, including different ages/symptoms, uncertainty, and appropriate escalation.
+- [ ] **V11 — Add grounded information lookup.** Wire a supported search tool for current questions and authoritative evidence where needed. Retain source metadata, speak brief attribution when useful, and test unavailable/conflicting sources plus malicious instructions embedded in retrieved text.
+- [ ] **V12 — Add local control and session limits.** Implement volume, stop, microphone mute, accurate capture indicators, inactivity closure, and configurable session/usage limits. Verify local/physical controls during internet loss and report limits of offline voice commands.
+- [ ] **V13 — Ship a low-memory device profile.** Explicitly select one wake model, bound audio/context/tool buffers, and reduce measured allocation/import/inference overhead. Test openWakeWord upgrades and patch compatibility separately. Record peak RSS, MemAvailable, and swap activity during conversation.
+- [ ] **V14 — Validate and document the demo.** Run the PLAN.md scenarios, latency/cost measurements, 100-turn endurance, and overnight idle/reconnect checks on the Zero 2 W and Pi 3 A+. Update setup/troubleshooting instructions. Leave this item open if a required board or gate has not been tested.
+
+## M2 — Make It Useful in a Household
+
+Prerequisite: M1 conversation acceptance. Provisioning protection may be implemented earlier and is required before a shared household pilot.
+
+- [ ] **H01 — Protect Wi-Fi setup.** Generate per-device setup credentials, authenticate configuration changes, add CSRF protection, and restrict the provisioning lifecycle. Preserve and test existing service shutdown after connection. Test invalid SSIDs, wrong passwords, command failures, and recovery without leaking credentials in exceptions/logs.
+- [ ] **H02 — Simplify setup and audio selection.** Provide a lightweight phone-accessible settings/status interface with microphone/speaker checks, device selection, volume, model settings, and privacy controls. Validate changes and recover from bad configuration; expose citations from V11 without requiring a browser on the Pi.
+- [ ] **H03 — Implement persistent timers.** Support create/list/cancel, reliable alarms during internet loss, restart recovery, and local cancellation. Define overdue-timer behavior and test it; announce creation only after successful scheduling.
+- [ ] **H04 — Implement reminders and shopping lists.** Persist acknowledged changes, clarify ambiguous times using the configured timezone, prevent duplicate writes, and recover after restart. Test rejected writes and unavailable speech services.
+- [ ] **H05 — Add location-aware weather.** Use an explicit user-configured location and a real provider/tool. State freshness, handle unavailable data, and avoid fabricated forecasts.
+- [ ] **H06 — Run a household pilot.** Have someone other than the developer complete setup and representative daily tasks. Record practical failures, latency, cost, and privacy feedback; fix the highest-impact blockers before expanding scope.
+
+## M3 — Optional SecondContext Integration
+
+Prerequisite: M1; keep this off the critical path for ordinary conversation. Use a separate server, and commit changes to the sibling repository separately.
+
+- [ ] **C01 — Verify and prepare the backend.** Update SecondContext's supported Go/model dependencies, configure authentication and deployment separately, and measure latency/availability. Verify its current contract rather than assuming full OpenAI API compatibility.
+- [ ] **C02 — Add an optional adapter.** Support the non-streaming Responses contract, voice instructions, stable subject/session identity, and deliberate recent-turn input without duplicate ingestion. Preserve local tools and fall back to normal answers on bounded backend failure.
+- [ ] **C03 — Implement explicit remember and recall.** Start with user-approved preferences/household facts. Verify persistence across restart, subject isolation, source provenance, and correction of stale facts. Do not automatically retain health discussions or all transcripts.
+- [ ] **C04 — Implement truthful memory deletion.** Confirm destructive requests and verify backend completion. Resolve selective deletion with an authorized endpoint change if needed: current service scope does not grant individual-memory deletion. Handle permanent subject fencing after full purge and document backup/provider-retention boundaries.
+- [ ] **C05 — Add household reference knowledge.** Ingest selected manuals on the backend, retrieve cited passages, and distinguish documentary sources from remembered conversations. Test irrelevant, stale, and conflicting evidence plus backend outages.
+
+## M4 — Lightweight Entertainment
+
+- [ ] **E01 — Ship one polished conversational game.** Use existing app interfaces for short trivia or collaborative storytelling, with pause/resume/stop and bounded state. Test interruptions and game-to-general-question transitions on the baseline Pi before adding more games.
+
+## Existing Work to Preserve
+
+These describe source implementation, not a claim that every device has received or validated it.
+
+- [x] **D01 — Signed remote app catalogs** (`b5ccf23`) and bundle checksum verification.
+- [x] **D02 — Safe bundle paths and manifest IDs** (`1b83125`, `61a5ddd`), with rejection tests.
+- [x] **D03 — Audio processing worker and bounded configurable queue** (`43af12f`, `ee99660`). This does not yet provide interruption or natural follow-up listening.
+- [x] **D04 — Idle/topic context reset** (`8876e8c`). Partial context management only; V06 handles remaining unbounded histories/archives.
+- [x] **D05 — Optional RPiFace lifecycle and generic MCP integration** (`59b97c9`, `d725c62`); optional and not yet deployed on the inspected device.
+- [x] **D06 — Existing Wi-Fi provisioning, LED driver, wake-word selection, app framework, and unit tests.** Retain these foundations; do not recreate them from stale TODO descriptions.
+
+## Deferred Until There Is User Demand
+
+Multiplayer speaker identification, leaderboards, achievements, marketplace expansion, local general-purpose LLMs, elaborate dashboards, broad refactors, and automatic extraction of every conversation. Revisit only when household use demonstrates a concrete benefit within the hardware and cost constraints.
+
+## Completion Record
+
+For each newly completed item, append a concise entry here: `ID — behavior delivered; checks and device/revision used; remaining limitations.` The implementation commit should mention the same ID. No new implementation milestones have been completed by creating these planning documents.
