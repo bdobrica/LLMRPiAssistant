@@ -6,11 +6,29 @@ Updated: 2026-11-24. Product decisions: [PLAN.md](PLAN.md). Contributor workflow
 
 Useful spoken answers and contextual follow-ups already work on the owner's Zero 2 W. Preserve them. No short-term-memory defect has been demonstrated; no conversational-memory rebuild is scheduled.
 
-**Proposed next feature: F06, follow-up listening without another wake word.** Keep the 512 MB target throughout. Handle concrete prerequisites within delivery, with no separate baseline, CI, benchmarking, or evaluation-platform milestone. The order below is a recommendation for review, not a requirement to finish every earlier item before another useful feature.
+**Next delivery: modernize the existing working assistant through U01, U02, and R01. Then add F06, follow-up listening without another wake word.** The owner requested upgrading the software stack before adding features. Keep the 512 MB target and existing conversation behavior throughout. Modernization delivers a supported, reproducible working installation; it must not grow into a separate CI, benchmarking, evaluation-platform, or broad-refactoring project.
 
 For each completed item, record validation evidence and commit implementation, relevant tests/config/docs, and checklist update together. Keep unfinished items unchecked. Never stage the local June code review or credentials. Planning changes do not count as runtime implementation; a local commit is not deployment approval.
 
-## Next Feature: Natural Follow-Up Listening
+## First: Modernize the Working Stack
+
+- [ ] **U01 — Update the OS and validate ReSpeaker audio.**
+  - Target current stable Raspberry Pi OS Lite 64-bit, including kernel/firmware, matching headers, security updates, ALSA/PortAudio, NetworkManager, and required system libraries. The Pi is already on Trixie; kernel 6.18 is the current release line. Refresh metadata before choosing exact package versions.
+  - Prepare a recoverable image/backup and kernel/audio rollback before a device update. Record the actual card, driver binding, overlays, and mixer configuration.
+  - Correct the stale driver URL and installer assumptions. The current patch fails forward/reverse checks against HinTak v6.14 revision 34477ad; do not interpret that as already applied or continue after failure.
+  - Test the kernel-provided WM8960/overlay path for this card, or port the patch against an exact vendor revision and build against the selected kernel headers. Remove obsolete patch/install steps only when their replacement works. Avoid an installer that forces an older kernel.
+  - **Acceptance:** reboot on the selected kernel; verify microphone capture, playback, wake detection, Wi-Fi, LEDs, and a spoken conversation. Record exact versions and recovery instructions. Patch applicability, successful compilation, and working audio are distinct checks; none proves the next.
+- [ ] **U02 — Upgrade and record the Python dependency set.**
+  - Review all direct requirements and resolved dependencies; select current stable ARM64-compatible versions in a separate environment, including OpenAI SDK, wake-word/inference libraries, audio, NumPy, Flask, GPIO/SPI, signing, and MCP.
+  - Adapt changed APIs and resolve real inference-runtime packaging. openWakeWord 0.6.0's Linux tflite-runtime dependency has no published CPython 3.13 wheel at review time; explicitly resolve this compatibility issue. Do not declare success from a no-dependencies install or mocked test alone.
+  - Complete FIX01/FIX03, retain FIX02, and retire obsolete patches. Pin the tested set and document any justified older-version exception with a follow-up path.
+  - **Acceptance:** reproduce installation, run relevant tests, load the actual wake model, and exercise capture/playback, GPIO/LEDs, local apps, signatures, and configured MCP tools. Check the assistant still fits 512 MB hardware. Resolve optional integration-test prerequisites or report them explicitly.
+- [ ] **R01 — Migrate to supported OpenAI models and workflows.**
+  - Evaluate current transcription, reasoning, intent-routing, and speech models with real API calls; initial candidates and shutdown dates are in PLAN.md. Confirm endpoint/parameter support, account access, cost, and spoken quality before selecting defaults.
+  - Implement the required TTS workflow change: OpenAI's recommended gpt-realtime-2.1-mini replacement uses Realtime, not the existing Speech endpoint. Test audio format/playback, session cleanup, failure recovery, and tool/structured-output compatibility.
+  - **Acceptance:** the fever/manifold follow-ups still use prior context; transcription, spoken replies, and existing app actions work on the updated configuration. Record model IDs, SDK version, API results, resource observations, and rollback. No SecondContext integration or automated judge is required.
+
+## Next Feature After Modernization: Natural Follow-Up Listening
 
 - [ ] **F06 — Ask a follow-up without repeating the wake word.**
   - Add a configurable, disableable listening window after playback finishes, reusing existing conversation history.
@@ -19,13 +37,13 @@ For each completed item, record validation evidence and commit implementation, r
   - **Acceptance:** on the Zero 2 W, try manifold → compact manifold → cube without another wake word, let the window expire, and start a fresh interaction normally. Check silence, disabled-window behavior, and speaker echo. Record observations and limitations; interruption belongs to F02.
   - **Testing:** focused state-transition tests and an explicit live OpenAI test for contextual answers. Keep API quality checks separate from microphone/playback checks. Judges are optional; SecondContext is not required.
 
-## Concrete Fixes Accompanying Delivery
+## Concrete Fixes Included in Modernization
 
-These are reproduced defects or compatibility failures, not a general hardening phase. FIX01 is required to run the current checkout on the Pi. Resolve FIX02 before relying on app-installation rejection. FIX03 protects the working environment during installation/update work.
+These are reproduced defects or compatibility failures. FIX01 is required to run the current checkout on the Pi. Resolve FIX02 before relying on app-installation rejection. FIX03 is the wake-word compatibility work within U02; each fix can be committed independently.
 
 - [ ] **FIX01 — Start successfully with RPiFace disabled.** Fix the self-referential annotation that raises NameError under Python 3.13.5. Add an import regression check independent of whether RPiFace is enabled. Run lifecycle client tests; separately identify the optional rpiface MCP test prerequisite.
 - [ ] **FIX02 — Never load a rejected app bundle.** Clean staging after checksum/download failure and exclude incomplete/staging directories from discovery. **Acceptance:** a validly signed catalog with an altered bundle is rejected, and restarting AppManager neither imports it nor disrupts a previously installed app. Retain signature, path, and manifest checks.
-- [ ] **FIX03 — Preserve a working wake-word dependency set.** Record/constrain tested versions for the Pi; deployed openWakeWord is 0.4.0, while the import fails against 0.6.0. Keep the working version unless deliberately testing newer exports, assets, inference dependencies, and patch behavior. **Acceptance:** actual package import/model loading and wake detection on the Pi; mocked audio tests alone are insufficient.
+- [ ] **FIX03 — Update wake-word integration for the chosen modern runtime.** Adapt the old model-registry import and verify assets, inference dependencies, and patch behavior. Resolve openWakeWord/Python compatibility during U02; the installed 0.4.0 is a recovery reference, not a permanent target. **Acceptance:** actual package import/model loading and wake detection on the Pi; mocked audio tests alone are insufficient.
 
 ## Next Experience Improvements
 
@@ -53,7 +71,6 @@ Develop these alongside useful features, using synthetic/non-sensitive conversat
 
 ## Maintenance Tied to Working Features
 
-- [ ] **R01 — Replace models before provider shutdowns.** Recheck PLAN.md's announced dates: TTS and chat in January 2027, transcription in February 2027. Use live OpenAI tests to compare affected behavior, including contextual follow-ups and app/tool compatibility. Record models and tested SDK versions; preserve a recoverable configuration. This maintenance must not wait for optional features.
 - [ ] **R02 — Address measured performance and retained-state growth.** Keep one wake model and bounded audio buffers. Replace unbounded active/archive retention with a deliberate policy preserving the agreed conversation experience; the RAM archive is not persistent memory. Optimize allocations/imports/threads when measurements justify it, recording before/after observations on 512 MB hardware.
 - [ ] **R03 — Validate broader release readiness.** After features are usable, expand everyday scenarios, longer-use/reconnection checks, cost observations, and validation on both boards. Derive useful targets from actual results. Record untested configurations; add lightweight CI if it prevents encountered regressions. Do not build a monitoring or judging platform as a prerequisite.
 
@@ -82,7 +99,7 @@ These are status notes, not newly completed implementation tasks:
 
 ## Completion Record
 
-No new runtime feature has been implemented by revising these documents. F01 remains retired: the presumed memory defect was not demonstrated. F06 describes a separate convenience feature. The former baseline milestones remain removed.
+No runtime upgrade or new feature has been implemented by revising these documents. The modernization review inspected the device and upstream sources and dry-checked the ReSpeaker patch; it did not upgrade packages, reboot the Pi, or validate audio on kernel 6.18. F01 remains retired: the presumed memory defect was not demonstrated. F06 describes a separate convenience feature. U01/U02/R01 implement the owner's requested modernization priority; the former baseline milestones remain removed.
 
 For each newly completed item, append: `ID — behavior delivered; checks, model/device/revision where relevant; remaining limitations.` Mention the same item and validation in its focused commit.
 

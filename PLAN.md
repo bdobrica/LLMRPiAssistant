@@ -34,7 +34,41 @@ The assistant suite produced 64 passes, one RPiFace import error, and one failur
 
 The Pi service was active. One snapshot showed about 102 MiB RSS and 105 MiB swap; swap occupancy alone does not prove active swapping or poor responsiveness. The review did not run an acoustic latency benchmark, live model-quality evaluation, or Pi 3 A+ hardware tests.
 
-## Proposed Next Delivery: Easier Follow-Up Conversation
+## First Delivery: Modernize the Working Assistant
+
+Bring the existing product onto a current, supported stack before adding follow-up listening. The older versions reflect the project's initial development, not a requirement to retain them. This is a concrete compatibility and migration delivery: its result is the same useful assistant running on maintained OS components, libraries, and model APIs.
+
+Work through **U01 (OS and audio), U02 (Python dependencies), and R01 (OpenAI models)** in focused commits. Choose current stable versions compatible with the target boards, document any necessary exception, and record the tested combination. A temporary fallback is a recovery option, not the long-term upgrade policy. Keep the existing 512 MB hardware; update software rather than assuming a newer Pi is needed.
+
+### U01 — OS, Kernel, and ReSpeaker Audio
+
+Target Raspberry Pi OS Lite 64-bit on the supported stable release. The device already runs Debian 13/Trixie with kernel 6.12.47; the [current official Lite image](https://www.raspberrypi.com/software/operating-systems/) uses Trixie/kernel 6.18. The device's cached APT index offered kernel and headers 6.18.34 on November 24; refresh package metadata during implementation before selecting exact versions. Include security updates, firmware, matching headers, ALSA/PortAudio, NetworkManager, and required build/system libraries. Use the distribution-supported Python rather than replacing it merely to obtain the highest version number.
+
+The audio path needs explicit work before a kernel switch:
+
+- The running card is identified as seeed-2mic-voicecard with a WM8960 codec. It binds to the simple-card driver, but out-of-tree WM8960/Seeed modules are also loaded. Do not infer that removing the vendor installation is already safe.
+- The Makefile's seeed-studio driver URL returned repository-not-found. The device's separate driver checkout uses [HinTak/seeed-voicecard](https://github.com/HinTak/seeed-voicecard), at revision 1a07cfa from its v6.13 line.
+- A fresh HinTak v6.14 checkout at 34477ad9e462ed00a7ebc853e4cf1934b9e73e81 fails both forward and reverse checks for this repository's patch. The patch is not currently reusable as-is; no kernel 6.18 module build or boot/audio test has been completed.
+- The installer masks checkout/patch failures and the upstream installation script assumes older kernel package names. Correct the source/revision selection and installation flow; abort on genuine patch/build failure rather than continuing or downgrading the kernel.
+- Evaluate the kernel-provided WM8960 driver and [wm8960-soundcard overlay](https://github.com/raspberrypi/linux/blob/rpi-6.18.y/arch/arm/boot/dts/overlays/README) for this card. If suitable, retire the custom patch; otherwise port it against an exact driver revision and build against the selected kernel headers. Neither path is accepted until microphone and speaker operation are verified after boot.
+
+Prepare a recoverable image/backup and an explicit kernel/audio rollback before updating the device. A successful patch application or compilation alone is not hardware validation. Finish with boot, capture, playback, wake detection, Wi-Fi, LEDs, and an ordinary spoken conversation on the selected OS/kernel.
+
+### U02 — Current, Reproducible Python Dependencies
+
+Review every direct requirement and its resolved dependencies: OpenAI SDK, openWakeWord/inference runtime, NumPy, sounddevice, Flask, GPIO/SPI packages, PyNaCl, and MCP. Resolve and test a current stable set in an isolated ARM64 environment before replacing the working environment. Pin the tested result so subsequent installs reproduce it; do not treat today's installed versions as the intended endpoint.
+
+Update application code for changed APIs, remove obsolete monkey patches, and retain only patches with a documented purpose and upstream revision. In particular, openWakeWord 0.6.0 changes the exported model registry and declares a Linux tflite-runtime dependency; the published [tflite-runtime files](https://pypi.org/project/tflite-runtime/#files) do not provide a CPython 3.13 wheel at review time. Resolve the inference/runtime packaging path explicitly rather than bypassing dependencies and declaring success. Verify real model loading and audio operation, not only mocked imports. Include FIX01/FIX03 and retain the reviewed app-installation fix FIX02.
+
+### R01 — Supported OpenAI Models and API Workflows
+
+Migrate transcription, reasoning/app routing, and speech output together as a tested configuration. Initial candidates are [GPT-Transcribe for recorded speech](https://developers.openai.com/api/docs/guides/speech-to-text), [GPT-6 Luna for efficient reasoning](https://developers.openai.com/api/docs/models/gpt-6-luna), and the supported speech-output path recommended by OpenAI. Confirm account availability, endpoint/parameter compatibility, quality, latency, and cost with real API calls before selecting defaults.
+
+The [TTS migration guide](https://developers.openai.com/api/docs/guides/text-to-speech) directs tts-1 users to gpt-realtime-2.1-mini through the Realtime API; that model cannot simply replace tts-1 in the existing Speech endpoint call. Implement the necessary audio/session adapter while preserving the current conversation behavior. A full redesign of wake detection or input turn-taking is not required solely to migrate speech output. SecondContext and automated judges remain optional.
+
+**Completion:** a reproducible, supported stack preserves the demonstrated contextual conversation on the Zero 2 W, with working ReSpeaker audio and documented recovery. Record versions, live API results, and a short resource/responsiveness check. State Pi 3 A+ validation separately. Then deliver F06; avoid expanding modernization into unrelated refactoring or infrastructure work.
+
+## First New Feature After Modernization: Easier Follow-Up Conversation
 
 **F06: after answering, briefly listen for the next question without requiring another wake word.** Reuse the existing conversation history and voice pipeline. This adds convenience to a capability that already works.
 
@@ -42,7 +76,7 @@ The intended flow is wake word → question → spoken answer → short follow-u
 
 Try the owner's existing conversations on the Zero 2 W. Confirm earlier turns remain available, the assistant does not answer its own playback, and ordinary wake-word use still works afterward. Change drain/flush timing only as needed for this behavior, checking speaker echo. Interruption during playback is separate.
 
-Attach the startup and dependency corrections to delivery of a runnable checkout. Fix the reproduced installation bypass in its own focused commit. These are bounded corrections, not a baseline, infrastructure, or general-hardening milestone. Preserve device configuration and a recoverable working version when deployment is undertaken.
+Complete the startup, dependency, and installation corrections during modernization. F06 builds on that tested stack and should not repeat the migration work.
 
 ## Subsequent Product Priorities
 
@@ -76,7 +110,7 @@ Before broader distribution, expand scenarios, test longer use/reconnection, che
 
 Keep the existing Python service. Use measured problems to justify allocation, thread, import, or runtime changes. Preserve app commands, catalog signatures, checksums, safe bundle paths, and manifest validation. Avoid heavyweight local MCP processes unless their benefit and resource use justify them.
 
-A streaming/realtime voice path is an option if it solves an observed interaction problem. A newer API alone is not a reason to replace the working pipeline. Keep cloud sessions intentional and avoid unnecessary idle traffic. Advertise physical mute only if the hardware actually disables capture.
+Adopt API workflow changes required by supported models during R01, including the speech-output migration. Broader streaming input or turn-taking changes should serve a specific interaction improvement. Keep cloud sessions intentional and avoid unnecessary idle traffic. Advertise physical mute only if the hardware actually disables capture.
 
 ## Optional SecondContext Integration
 
@@ -96,10 +130,10 @@ Provider retirements are time-sensitive maintenance even when existing behavior 
 
 Recheck dates and replacement compatibility when implementing R01. Test transcription, speech output, ordinary answers, structured app-intent output, token parameters, and tool calls affected by the change. Do not replace a model by name alone or let a routing failure become a false action-success claim.
 
-Record a tested ARM64 dependency set. The openWakeWord export mismatch is documented in its [0.6.0 source](https://raw.githubusercontent.com/dscripka/openWakeWord/v0.6.0/openwakeword/__init__.py). Preserve the working environment while testing compatibility separately. Upgrade SDK/MCP components when required by features or support needs, not simply to match the newest version.
+U02 establishes a current tested ARM64 dependency set; afterward, maintain it with deliberate updates. The openWakeWord export mismatch is documented in its [0.6.0 source](https://raw.githubusercontent.com/dscripka/openWakeWord/v0.6.0/openwakeword/__init__.py). Preserve a recoverable working environment while testing replacements, and document compatibility exceptions rather than silently freezing old versions.
 
 ## Review Findings and Delivery Workflow
 
 The local `CODE_REVIEW_2026_06_27.md` must never be committed. Preserve its implemented signature/path/manifest protections and audio-worker improvements. Correct its overstatement that context growth is fixed: full archived messages remain in RAM. Carry forward classifier compatibility, privacy, and provisioning issues; the new review also reproduced a password appearing in provisioning exceptions. Existing LEDs, wake-word selection, apps, and tests are foundations to retain.
 
-Implement one bounded TODO item, run appropriate checks, and record behavior, evidence, and limitations. Mark it complete only when its acceptance criteria are met. Commit implementation, tests, relevant configuration/docs, and TODO update together with a short imperative subject and brief description of behavior and validation. Keep unrelated changes out of the commit. Local commits do not authorize pushing or deployment.
+The owner's requested order is modernization first (U01, U02, R01), then F06 and the other useful additions. Implement one bounded TODO item, run appropriate checks, and record behavior, evidence, and limitations. Mark it complete only when its acceptance criteria are met. Commit implementation, tests, relevant configuration/docs, and TODO update together with a short imperative subject and brief description of behavior and validation. Keep unrelated changes out of the commit. Local commits do not authorize pushing or deployment.
