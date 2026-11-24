@@ -5,11 +5,13 @@ import threading
 import time
 import wave
 from collections import deque
+from pathlib import Path
 from typing import Callable, Optional
 
 import numpy as np
 import sounddevice as sd
 from openwakeword.model import Model
+from openwakeword.vad import VAD
 from openwakeword import MODELS as OWW_models
 
 from .config import AudioConfig, RecordingConfig, WakeWordConfig
@@ -66,7 +68,8 @@ class WakeWordRecorder:
     
     States:
     - LISTEN_WAKE: Listening for wake word
-    - RECORD: Recording audio after wake word detected
+    - FOLLOW_UP: Locally waiting for speech after successful playback
+    - RECORD: Recording audio after wake word or follow-up speech detected
     - PROCESSING: Processing recorded audio (blocks new wake word detection)
     """
 
@@ -75,7 +78,7 @@ class WakeWordRecorder:
         audio_config: AudioConfig,
         wake_word_config: WakeWordConfig,
         recording_config: RecordingConfig,
-        on_recording_complete: Optional[Callable[[str], None]] = None,
+        on_recording_complete: Optional[Callable[[str], bool | None]] = None,
         pixels = None,
         on_state_change: Optional[Callable[[str], None]] = None,
     ):
@@ -85,7 +88,7 @@ class WakeWordRecorder:
             audio_config: Audio device configuration.
             wake_word_config: Wake word detection configuration.
             recording_config: Recording behavior configuration.
-            on_recording_complete: Callback when recording is saved. Receives file path.
+            on_recording_complete: Callback when recording is saved. Return True after successful playback.
             pixels: Optional Pixels instance for LED feedback.
             on_state_change: Best-effort callback for lifecycle state transitions.
         """
@@ -107,10 +110,28 @@ class WakeWordRecorder:
             ncpu=1,
         )
 
+        self.follow_up_vad = None
+        if recording_config.follow_up_window_seconds > 0:
+            try:
+                self.follow_up_vad = VAD(
+                    model_path=str(Path(__file__).resolve().parents[1] / "models/silero_vad.onnx"),
+                    n_threads=1,
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    "Follow-up speech model unavailable; run make install-wakeword-models "
+                    "or set follow_up_window_seconds=0"
+                ) from exc
+
         # State management
         self.state = "LISTEN_WAKE"
         self.last_wake = 0.0
         self.resume_listening_at = 0.0  # Timestamp when to resume listening after processing
+        self.follow_up_deadline = 0.0
+        self.follow_up_speech_seconds = 0.0
+        self.follow_up_peak_score = 0.0
+        self.recording_is_follow_up = False
+        self.follow_up_cancelled = False
         self.skip_chunks = 0  # Number of chunks to skip feeding to model after resuming
         
         # Thread-safe bounded queues. Audio chunks are intentionally dropped when
@@ -124,6 +145,8 @@ class WakeWordRecorder:
         
         # Pre-roll buffer
         pre_roll_frames = int(recording_config.pre_roll_seconds * audio_config.sample_rate)
+        if recording_config.follow_up_window_seconds > 0:
+            pre_roll_frames = max(pre_roll_frames, int(0.4 * audio_config.sample_rate))
         self.pre_roll = deque(maxlen=pre_roll_frames)
         
         # Recording buffers
@@ -189,6 +212,7 @@ class WakeWordRecorder:
                     mono = self.audio_queue.get(timeout=0.1)
                     self._process_chunk(mono)
                 except queue.Empty:
+                    self._expire_follow_up()
                     # No audio available, just continue
                     continue
         except Exception as e:
@@ -237,16 +261,12 @@ class WakeWordRecorder:
             self.pixels.off()
     
     def _reset_model_state(self) -> None:
-        """Reset openwakeword model internal state to clear buffers."""
+        """Clear prediction and feature buffers using the installed model API."""
         try:
-            # Reset prediction state for all models
-            for model in self.model.models.values():
-                if hasattr(model, 'prediction_buffer'):
-                    model.prediction_buffer.reset()
-        except Exception:
-            # If reset fails, just continue - not critical
-            pass
-    
+            self.model.reset()
+        except Exception as exc:
+            print(f"Wake model reset failed: {type(exc).__name__}")
+
     def _audio_callback(self, indata, frames, time_info, status):
         """Callback for audio stream processing."""
         try:
@@ -287,6 +307,8 @@ class WakeWordRecorder:
         
         if current_state == "LISTEN_WAKE":
             self._check_wake_word(mono)
+        elif current_state == "FOLLOW_UP":
+            self._check_follow_up(mono)
         elif current_state == "RECORD":
             self._record_audio(mono)
         # PROCESSING state: skip all processing to avoid buffer overflow
@@ -328,7 +350,7 @@ class WakeWordRecorder:
                         self._start_recording(mono)
                         break
     
-    def _start_recording(self, current_chunk: np.ndarray) -> None:
+    def _start_recording(self, current_chunk: np.ndarray, *, follow_up: bool = False) -> None:
         """Start recording audio.
         
         Args:
@@ -337,10 +359,14 @@ class WakeWordRecorder:
         Note: Must be called with lock held.
         """
         self.state = "RECORD"
+        self.recording_is_follow_up = follow_up
+        self.follow_up_cancelled = False
         self.rec_start = time.time()
         self.silence_run = 0.0
         # Seed recording with pre-roll + current chunk
-        self.rec = list(self.pre_roll) + current_chunk.tolist()
+        self.rec = list(self.pre_roll)
+        if not follow_up:
+            self.rec += current_chunk.tolist()
         self._notify_state("listening")
     
     def _record_audio(self, mono: np.ndarray) -> None:
@@ -351,12 +377,14 @@ class WakeWordRecorder:
         """
         level = rms(mono)
         chunk_s = len(mono) / self.audio_config.sample_rate
+        speech = (self._follow_up_voice(mono) if self.recording_is_follow_up
+                  else level >= self.recording_config.silence_rms_threshold)
         
         with self.lock:
             self.rec.extend(mono.tolist())
             
             # Update silence tracking
-            if level < self.recording_config.silence_rms_threshold:
+            if not speech:
                 self.silence_run += chunk_s
             else:
                 self.silence_run = 0.0
@@ -421,22 +449,23 @@ class WakeWordRecorder:
         """Run slow recording completion work off the audio processing loop."""
         while True:
             recording_path = self.recording_queue.get()
+            allow_follow_up = False
             try:
                 if recording_path is None:
                     return
 
                 if self.on_recording_complete:
                     try:
-                        self.on_recording_complete(recording_path)
+                        allow_follow_up = self.on_recording_complete(recording_path) is True
                     except Exception as e:
                         print(f"\n⚠️  Error processing recording: {e}")
             finally:
                 if recording_path is not None:
-                    self._finish_processing()
+                    self._finish_processing(allow_follow_up=allow_follow_up)
                 self.recording_queue.task_done()
 
-    def _finish_processing(self) -> None:
-        """Drain stale audio and transition back to wake-word listening."""
+    def _finish_processing(self, *, allow_follow_up: bool = False) -> None:
+        """Discard playback audio, then open a follow-up window or resume wake detection."""
         # Reset model state to clear any buffered audio from overflow
         self._reset_model_state()
         
@@ -445,9 +474,12 @@ class WakeWordRecorder:
         
         print(f"Cleared {cleared} buffered audio chunks from queue.")
 
-        print(f"Waiting {self.processing_drain_seconds:g} seconds for fresh audio...\n")
-        drain_until = time.time() + self.processing_drain_seconds
-        while time.time() < drain_until:
+        follow_up = allow_follow_up and self.recording_config.follow_up_window_seconds > 0
+        delay = (self.recording_config.follow_up_echo_guard_seconds
+                 if follow_up else self.processing_drain_seconds)
+        print(f"Waiting {delay:g} seconds for fresh audio...\n")
+        drain_until = time.monotonic() + delay
+        while time.monotonic() < drain_until:
             with self.lock:
                 if not self.running:
                     return
@@ -457,6 +489,19 @@ class WakeWordRecorder:
 
         with self.lock:
             if not self.running:
+                return
+            self.pre_roll.clear()
+            if follow_up and not self.follow_up_cancelled:
+                self.follow_up_vad.reset_states()
+                self.follow_up_vad.prediction_buffer.clear()
+                self.state = "FOLLOW_UP"
+                self.follow_up_deadline = time.monotonic() + self.recording_config.follow_up_window_seconds
+                self.follow_up_speech_seconds = 0.0
+                self.follow_up_peak_score = 0.0
+                print(f"Follow-up listening for {self.recording_config.follow_up_window_seconds:g} seconds.")
+                if self.pixels:
+                    self.pixels.follow_up()
+                self._notify_state("listening")
                 return
             self.state = "LISTEN_WAKE"
             self.resume_listening_at = 0.0
@@ -470,6 +515,54 @@ class WakeWordRecorder:
         if self.pixels:
             self.pixels.listen()
         self._notify_state("idle")
+
+    def _follow_up_voice(self, mono: np.ndarray) -> bool:
+        score = float(self.follow_up_vad.predict(float_to_int16(mono)))
+        self.follow_up_peak_score = max(self.follow_up_peak_score, score)
+        return score >= 0.5
+
+    def _check_follow_up(self, mono: np.ndarray) -> None:
+        """Use local voice activity detection; silence never creates a recording."""
+        if self._expire_follow_up():
+            return
+        with self.lock:
+            if not self.running or self.state != "FOLLOW_UP":
+                return
+            if self._follow_up_voice(mono):
+                self.follow_up_speech_seconds += len(mono) / self.audio_config.sample_rate
+            else:
+                self.follow_up_speech_seconds = 0.0
+            # VAD rejects noise; one normal block allows brief replies without clipping onset.
+            if self.follow_up_speech_seconds >= 0.08:
+                print("Follow-up speech detected -> recording...")
+                self._start_recording(mono, follow_up=True)
+                if self.pixels:
+                    self.pixels.wakeup()
+
+    def _expire_follow_up(self) -> bool:
+        with self.lock:
+            expired = self.running and self.state == "FOLLOW_UP" and time.monotonic() >= self.follow_up_deadline
+        if expired:
+            self.cancel_follow_up()
+        return expired
+
+    def cancel_follow_up(self) -> None:
+        """Quietly return to wake listening, also before connectivity prompts play."""
+        with self.lock:
+            self.follow_up_cancelled = True
+            if self.state != "FOLLOW_UP":
+                return
+            self.state = "LISTEN_WAKE"
+            self.follow_up_deadline = 0.0
+            self.follow_up_speech_seconds = 0.0
+            self.pre_roll.clear()
+            self.skip_chunks = 0
+            self.last_wake = 0.0
+            self._clear_audio_queue()
+            if self.pixels:
+                self.pixels.listen()
+            self._notify_state("idle")
+        print(f"Follow-up window closed; listening for wake word (peak speech score {self.follow_up_peak_score:.3f}).")
 
     def _notify_state(self, state: str) -> None:
         """Report a lifecycle transition without affecting audio operation."""

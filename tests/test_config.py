@@ -8,6 +8,18 @@ from rpi_assistant.app.config import load_config
 
 
 class ConfigTests(unittest.TestCase):
+    def test_followup_settings_can_be_configured_and_disabled(self):
+        with TemporaryDirectory() as directory, patch.dict("os.environ", {}, clear=True):
+            path = Path(directory) / "config.ini"
+            path.write_text("[openai]\napi_key=test\n[recording]\nfollow_up_window_seconds=0\n"
+                            "follow_up_echo_guard_seconds=0.5\n")
+            config = load_config(str(path))
+            self.assertEqual(config.recording.follow_up_window_seconds, 0)
+            self.assertEqual(config.recording.follow_up_echo_guard_seconds, 0.5)
+            path.write_text("[openai]\napi_key=test\n[recording]\nfollow_up_window_seconds=nan\n")
+            with self.assertRaisesRegex(ValueError, "finite and nonnegative"):
+                load_config(str(path))
+
     def test_model_workflow_defaults_and_legacy_override(self):
         with TemporaryDirectory() as directory, patch.dict("os.environ", {}, clear=True):
             path = Path(directory) / "config.ini"

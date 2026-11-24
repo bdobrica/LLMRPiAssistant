@@ -47,6 +47,11 @@ pre_roll_seconds = 0.4
 # How long to keep dropping stale audio after command processing/TTS before
 # resuming wake-word detection
 processing_drain_seconds = 3.0
+# After successful spoken playback: listen without a wake word for this long.
+# Set to 0 to disable. Steady green LEDs mark this window; silence closes it.
+follow_up_window_seconds = 6.0
+# Drop residual speaker audio before opening the window.
+follow_up_echo_guard_seconds = 0.35
 # Where to save recorded audio
 output_path = /tmp/command.wav
 

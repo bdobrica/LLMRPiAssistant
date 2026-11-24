@@ -21,10 +21,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--live", action="store_true", help="Authorize paid OpenAI calls")
     parser.add_argument("--config", required=True)
-    parser.add_argument("--speech-output", required=True, help="Generated WAV path; does not play it")
+    parser.add_argument("--follow-up-only", action="store_true", help="Only test contextual continuation; no audio or app calls")
+    parser.add_argument("--speech-output", help="Generated WAV path; does not play it")
     args = parser.parse_args()
     if not args.live:
         parser.error("Pass --live to authorize paid API calls")
+    if not args.follow_up_only and not args.speech_output:
+        parser.error("--speech-output is required for the full smoke check")
     config = replace(load_config(args.config).openai,
                      conversation_idle_timeout_seconds=0, conversation_relevance_threshold=0)
     client = OpenAIClient(config)
@@ -39,6 +42,12 @@ def main():
         return result
 
     try:
+        if args.follow_up_only:
+            for index, question in enumerate(("What is a manifold?", "What about a compact manifold?", "What about a cube?")):
+                report(question, lambda: client.get_chat_response(question, continue_conversation=index > 0))
+            assert len(client.conversation_history) == 7
+            print("Three contextual API turns complete; acoustic follow-up checks remain separate.")
+            return
         report("transcription", lambda: client.transcribe_audio(
             str(root / "rpi_assistant/app/audio_prompts/online.mp3")))
         for questions in (("What's a manifold?", "What about a compact manifold?", "What about a cube?"),

@@ -170,6 +170,13 @@ Default models support:
 - "hey jarvis"
 - "timer"
 
+## Follow-Up Questions
+
+After the answer finishes and the LEDs turn green, ask another question without
+repeating the wake word. The window lasts six seconds; silence closes it. Set
+`[recording] follow_up_window_seconds = 0` to disable it. See
+[follow-up listening](docs/follow-up-listening.md) for settings and checks.
+
 ## Next Steps
 
 - Customize system prompt in config.ini for different personalities

@@ -140,6 +140,12 @@ The configuration file supports extensive customization:
   - Adjust based on environment noise
 - **pre_roll_seconds**: Audio captured before wake word (default: 0.4)
 
+#### Follow-up conversation
+After a spoken answer, steady green LEDs indicate a six-second window for another
+question without the wake word. Silence returns to normal wake-word listening.
+Set `[recording] follow_up_window_seconds = 0` to disable it. See
+[follow-up listening](docs/follow-up-listening.md) for timing, noise limits and checks.
+
 #### OpenAI API
 - **api_key**: Your OpenAI API key (REQUIRED)
 - **whisper_model**: Recorded-speech model; historical setting name (default: "gpt-transcribe")

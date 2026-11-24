@@ -116,6 +116,8 @@ def main():
                 return
 
             try:
+                if recorder is not None:
+                    recorder.cancel_follow_up()
                 subprocess.run(
                     ["mpg123", "-a", config.audio_output.device, str(prompt_path)],
                     capture_output=True,
@@ -163,8 +165,9 @@ def main():
         connection_monitor_thread = threading.Thread(target=monitor_connection, daemon=True)
         connection_monitor_thread.start()
 
-        def on_recording_complete(audio_path: str):
-            """Handle completed voice recording."""
+        def on_recording_complete(audio_path: str) -> bool:
+            """Return True only after successful spoken playback."""
+            playback_succeeded = False
             print("\n🔄 Processing voice command...")
 
             try:
@@ -203,7 +206,10 @@ def main():
                         else classifier_usage["total_tokens"],
                     }
                 else:
-                    response, usage = openai_client.get_chat_response(transcription)
+                    response, usage = openai_client.get_chat_response(
+                        transcription,
+                        continue_conversation=bool(recorder and recorder.recording_is_follow_up),
+                    )
 
                 # Log the interaction
                 audio_file = Path(audio_path)
@@ -263,8 +269,7 @@ def main():
                                 result.stderr,
                             )
 
-                        if pixels:
-                            pixels.listen()
+                        playback_succeeded = True
                     except Exception as e:
                         print(f"\n⚠️  TTS playback error: {e}")
                         if pixels:
@@ -277,13 +282,14 @@ def main():
                     openai_client.mark_response_output_finished()
 
                 print("\n" + "=" * 60)
-                print("Listening for wake word...\n")
+                return playback_succeeded
 
             except Exception as e:
                 rpiface.set_state("idle")
                 error_msg = f"Error processing command: {e}"
                 print(f"\n❌ {error_msg}\n")
                 logger.log_error(error_msg, {"audio_file": audio_path})
+                return False
 
         # Start wake word recorder
         recorder = WakeWordRecorder(

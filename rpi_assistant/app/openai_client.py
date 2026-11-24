@@ -57,7 +57,7 @@ class OpenAIClient:
         except Exception as e:
             raise Exception(f"Audio transcription failed: {e}")
     
-    def get_chat_response(self, user_message: str) -> tuple[str, dict]:
+    def get_chat_response(self, user_message: str, *, continue_conversation: bool = False) -> tuple[str, dict]:
         """Get chat completion response.
         
         Args:
@@ -71,7 +71,8 @@ class OpenAIClient:
             Exception: If chat completion fails.
         """
         try:
-            self._prepare_conversation_for(user_message)
+            if not continue_conversation:
+                self._prepare_conversation_for(user_message)
 
             # Add user message to history
             self.conversation_history.append({"role": "user", "content": user_message})

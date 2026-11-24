@@ -68,6 +68,10 @@ class LedPattern(object):
         pixels = [0, 0, 0, 24] * self.pixels_number
         self.show(pixels)
 
+    def follow_up(self):
+        """Steady green: ready for a question without the wake word."""
+        self.show([0, 0, 32, 0] * self.pixels_number)
+
     def think(self):
         """Smooth rotating gradient with pulsing effect."""
         angle = 0

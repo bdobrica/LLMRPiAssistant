@@ -32,6 +32,18 @@ class FakeClient:
 
 
 class OpenAIClientConversationTests(unittest.TestCase):
+    def test_explicit_followup_bypasses_idle_and_relevance_resets(self):
+        client = self.create_client(["manifold", "compact manifold", "cube"],
+                                    conversation_idle_timeout_seconds=1,
+                                    conversation_relevance_threshold=1)
+        client.get_chat_response("What's a manifold?")
+        client.last_response_output_finished_at = time.time() - 10
+        client.get_chat_response("What about a compact manifold?", continue_conversation=True)
+        client.get_chat_response("What about a cube?", continue_conversation=True)
+        self.assertEqual(len(client.conversation_history), 7)
+        self.assertEqual(len(client.client.chat.completions.calls), 3)
+        self.assertEqual(client.compacted_contexts, [])
+
     def test_disabled_relevance_preserves_followup_without_extra_request(self):
         client = self.create_client(["manifold", "compact manifold", "cube"],
                                     conversation_idle_timeout_seconds=0,

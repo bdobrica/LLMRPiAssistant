@@ -41,8 +41,17 @@ class RecordingConfig:
     silence_hold_seconds: float = 0.8
     silence_rms_threshold: float = 0.007
     pre_roll_seconds: float = 0.4
+    follow_up_window_seconds: float = 6.0
+    follow_up_echo_guard_seconds: float = 0.35
     processing_drain_seconds: float = 3.0
     output_path: str = "/tmp/command.wav"
+
+    def __post_init__(self):
+        import math
+        for name in ("follow_up_window_seconds", "follow_up_echo_guard_seconds"):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be finite and nonnegative")
 
 
 @dataclass
@@ -254,6 +263,12 @@ def load_config(config_path: Optional[str] = None) -> Config:
             "RECORDING_PRE_ROLL",
             0.4,
             float,
+        ),
+        follow_up_window_seconds=get_value(
+            "recording", "follow_up_window_seconds", "RECORDING_FOLLOW_UP_WINDOW", 6.0, float,
+        ),
+        follow_up_echo_guard_seconds=get_value(
+            "recording", "follow_up_echo_guard_seconds", "RECORDING_FOLLOW_UP_ECHO_GUARD", 0.35, float,
         ),
         processing_drain_seconds=get_value(
             "recording",

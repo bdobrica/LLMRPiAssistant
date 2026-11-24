@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install pinned LiteRT model assets; run once during setup, never at startup."""
+"""Install pinned wake and follow-up speech model assets; run once during setup, never at startup."""
 
 import hashlib
 import json
@@ -14,7 +14,10 @@ def main() -> None:
     destination = Path(openwakeword.__file__).parent / "resources/models"
     destination.mkdir(parents=True, exist_ok=True)
     for asset in json.loads(manifest.read_text()):
-        target = destination / asset["file"]
+        asset_directory = (manifest.parent / "models"
+                           if asset.get("destination") == "assistant" else destination)
+        asset_directory.mkdir(parents=True, exist_ok=True)
+        target = asset_directory / asset["file"]
         if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == asset["sha256"]:
             continue
         with urlopen(asset["url"], timeout=60) as response:

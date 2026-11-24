@@ -43,6 +43,9 @@ class Pixels:
         else:
             self.put(self.pattern.listen)
 
+    def follow_up(self):
+        self.put(self.pattern.follow_up)
+
     def think(self):
         self.put(self.pattern.think)
 

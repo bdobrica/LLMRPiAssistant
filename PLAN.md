@@ -76,11 +76,11 @@ The [TTS migration guide](https://developers.openai.com/api/docs/guides/text-to-
 
 **F06: after answering, briefly listen for the next question without requiring another wake word.** Reuse the existing conversation history and voice pipeline. This adds convenience to a capability that already works.
 
-The intended flow is wake word → question → spoken answer → short follow-up window → another answer, or return to wake-word listening when the window expires. Make the window configurable and disableable. Start listening after playback finishes; silence should end the window quietly. Do not send idle room audio to a provider just to keep the feature alive.
+The intended flow is wake word → question → spoken answer → short follow-up window → another answer, or return to wake-word listening when the window expires. The completed F06 implementation uses a six-second window with a configurable 0.35-second echo guard, green readiness LEDs and a small local Silero speech detector; setting the window to zero disables it. Explicit follow-up turns retain context without an idle/topic reset. See [usage and recovery](docs/follow-up-listening.md). The window opens after successful playback and closes quietly on silence, with no idle cloud traffic.
 
-Try the owner's existing conversations on the Zero 2 W. Confirm earlier turns remain available, the assistant does not answer its own playback, and ordinary wake-word use still works afterward. Change drain/flush timing only as needed for this behavior, checking speaker echo. Interruption during playback is separate.
+The owner confirmed multi-turn follow-ups without repeated wake words, retained context, and a fresh wake-word question after expiry on the Zero 2 W. Acoustic checks passed speaker-echo rejection, silent expiry and disabled behavior. A missed short utterance led to reducing the required confident speech onset to one 80 ms block; the owner accepted the corrected experience. Interruption during playback remains separate.
 
-Complete the startup, dependency, and installation corrections during modernization. F06 builds on that tested stack and should not repeat the migration work.
+F06 builds on the completed modernization without replacing the working Python environments. R01 rollback is retained; see TODO.md for validation and remaining hardware/noise limits.
 
 ## Subsequent Product Priorities
 
