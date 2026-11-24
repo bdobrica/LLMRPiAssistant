@@ -84,8 +84,9 @@ count = 12
 # Audio output configuration for TTS playback
 # Enable/disable audio output
 enabled = true
-# ALSA device for playback (e.g., hw:0,0, default, plughw:0,0)
-device = hw:0,0
+# ReSpeaker 2-Mic v1 PCM configured by make install-voicecard (32-bit playback).
+# For other audio hardware choose its ALSA card name or "default".
+device = assistant_wm8960
 # Where to save TTS response audio file
 tts_output_path = /tmp/response.mp3
 

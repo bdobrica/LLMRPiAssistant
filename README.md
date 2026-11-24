@@ -36,7 +36,11 @@ LLMRPiAssistant is a fully-featured voice assistant that brings Alexa-like funct
 
 ### Quick Setup
 
-The included Makefile automates the entire installation process:
+For the WM8960 ReSpeaker 2-Mic v1, use the Raspberry Pi kernel audio driver.
+See [OS/audio upgrade and recovery](docs/audio-upgrade.md) before updating an
+existing device. Other HAT revisions need their own audio setup.
+
+The included Makefile installs the assistant and configures this audio path:
 
 ```bash
 # Complete installation and setup
@@ -47,7 +51,7 @@ This will:
 1. Install system dependencies (portaudio, alsa-utils, ffmpeg)
 2. Create Python virtual environment at `/opt/venvs/rpi-assistant`
 3. Install Python packages
-4. Clone and install seeed-voicecard driver (with patch applied)
+4. Configure the kernel WM8960 overlay and preserve the ALSA card name
 5. Configure the assistant as a CLI command
 6. Install rpi-assistant as a systemd service
 
@@ -88,11 +92,8 @@ sudo python3 -m venv /opt/venvs/rpi-assistant
 sudo /opt/venvs/rpi-assistant/bin/pip install --upgrade pip
 sudo /opt/venvs/rpi-assistant/bin/pip install -r rpi-assistant/requirements.txt
 
-# 3. Install seeed-voicecard driver
-git clone https://github.com/seeed-studio-projects/seeed-voicecard.git
-cd seeed-voicecard
-git apply ../seeed-voicecard.patch
-sudo ./install.sh
+# 3. Configure kernel audio (ReSpeaker 2-Mic v1 / WM8960 only)
+make install-voicecard
 
 # 4. Reboot
 sudo reboot
@@ -674,7 +675,6 @@ LLMRPiAssistant/
 ├── QUICKSTART.md
 ├── TODO.md
 ├── openwakeword.patch      # Bug fix for OpenWakeWord
-├── seeed-voicecard.patch   # Kernel module fixes
 │
 ├── rpi_assistant/          # Main voice assistant application (Python package)
 │   ├── __init__.py

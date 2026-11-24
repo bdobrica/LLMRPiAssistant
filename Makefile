@@ -1,4 +1,4 @@
-.PHONY: setup update install-deps create-venv update-python install-voicecard install-assistant install-wifi install-service restart-service patch-openwakeword test-mcp reboot-prompt help
+.PHONY: setup update upgrade-os prepare-audio install-deps create-venv update-python install-voicecard install-assistant install-wifi install-service restart-service patch-openwakeword test-mcp reboot-prompt help
 
 # Variables
 SHELL_PWD := $(shell pwd)
@@ -7,8 +7,6 @@ PYTHON := $(VENV_DIR)/bin/python3
 PIP := $(VENV_DIR)/bin/pip
 APP_DIR := $(SHELL_PWD)/rpi_assistant
 REQUIREMENTS_FILE := $(APP_DIR)/requirements.txt
-VOICECARD_DIR := $(SHELL_PWD)/seeed-voicecard
-VOICECARD_PATCH := $(SHELL_PWD)/seeed-voicecard.patch
 OPENWAKEWORD_PATCH := $(SHELL_PWD)/openwakeword.patch
 SCRIPTS_DIR := $(SHELL_PWD)/scripts
 SYSTEMD_DIR := $(SHELL_PWD)/systemd
@@ -18,10 +16,12 @@ help:
 	@echo "Available targets:"
 	@echo "  make setup             - Complete installation and setup"
 	@echo "  make update            - Refresh an existing installation after pulling new code"
+	@echo "  make upgrade-os        - Update Raspberry Pi OS and configure WM8960 audio (reboot separately)"
+	@echo "  make prepare-audio     - Snapshot audio config and disable legacy Seeed DKMS rebuilds"
 	@echo "  make install-deps      - Install system dependencies"
 	@echo "  make create-venv       - Create Python virtual environment"
 	@echo "  make update-python     - Update Python packages in the existing virtual environment"
-	@echo "  make install-voicecard - Install and patch seeed-voicecard"
+	@echo "  make install-voicecard - Configure kernel WM8960 overlay for ReSpeaker 2-Mic v1"
 	@echo "  make install-assistant - Install rpi-assistant as CLI command"
 	@echo "  make install-service   - Install rpi-assistant as systemd service"
 	@echo "  make restart-service   - Restart the installed rpi-assistant service if it is running"
@@ -34,10 +34,31 @@ test-mcp:
 		tests.test_mcp_manager tests.test_openai_client tests.test_config
 
 # Complete setup
-setup: install-deps create-venv install-voicecard patch-openwakeword install-assistant install-service reboot-prompt
+setup:
+	$(MAKE) prepare-audio
+	$(MAKE) install-deps
+	$(MAKE) create-venv
+	$(MAKE) install-voicecard
+	$(MAKE) patch-openwakeword
+	$(MAKE) install-assistant
+	$(MAKE) install-service
+	$(MAKE) reboot-prompt
 
 # Update an existing installation after pulling changes
 update: install-deps update-python patch-openwakeword install-assistant install-service restart-service
+
+# OS/audio migration is explicit and does not change the Python environment.
+# Recursive calls keep these steps ordered even with make -j.
+prepare-audio:
+	sudo python3 "$(SCRIPTS_DIR)/setup-wm8960.py" --prepare
+
+upgrade-os:
+	$(MAKE) prepare-audio
+	sudo apt-get update
+	sudo apt-get full-upgrade
+	sudo apt-get install linux-image-rpi-v8 linux-headers-rpi-v8 alsa-utils libportaudio2 portaudio19-dev network-manager
+	$(MAKE) install-voicecard
+	@echo "OS/audio update prepared. Reboot, then run the checks in docs/audio-upgrade.md."
 
 # Install system dependencies
 install-deps:
@@ -64,19 +85,9 @@ update-python:
 	sudo $(PIP) install --upgrade pip
 	sudo $(PIP) install -r $(REQUIREMENTS_FILE)
 
-# Clone, patch, and install seeed-voicecard
+# Use kernel-provided WM8960 support; never run the obsolete vendor installer.
 install-voicecard:
-	@echo "=== Installing seeed-voicecard driver ==="
-	@if [ ! -d "$(VOICECARD_DIR)" ]; then \
-		echo "Cloning seeed-voicecard repository..."; \
-		git clone https://github.com/seeed-studio-projects/seeed-voicecard.git; \
-	else \
-		echo "seeed-voicecard directory already exists"; \
-	fi
-	@echo "Applying patch..."
-	cd seeed-voicecard && git checkout v6.14 && git apply $(VOICECARD_PATCH) || echo "Patch may already be applied"
-	@echo "Running seeed-voicecard install script..."
-	cd seeed-voicecard && sudo ./install.sh
+	sudo python3 "$(SCRIPTS_DIR)/setup-wm8960.py" --apply --assistant-config "$(APP_DIR)/config.ini"
 
 # Install rpi-assistant as CLI command
 install-assistant:
