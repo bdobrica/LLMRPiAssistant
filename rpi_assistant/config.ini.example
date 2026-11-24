@@ -72,7 +72,10 @@ reasoning_effort = none
 tts_backend = realtime
 tts_model = gpt-realtime-2.1-mini
 tts_voice = alloy
-tts_timeout_seconds = 90
+# HTTP network-operation timeout; automatic API retries are disabled.
+request_timeout_seconds = 20
+# Total Realtime speech-generation deadline.
+tts_timeout_seconds = 30
 # Maximum tokens in response
 max_tokens = 500
 # Response creativity (0.0-2.0)

@@ -7,7 +7,6 @@ A voice-controlled assistant using:
 - OpenAI Realtime for voice responses
 """
 import signal
-import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -20,7 +19,8 @@ from .connectivity import check_internet_connection
 from .logger import InteractionLogger
 from .mcp_manager import MCPClientManager
 from .openai_client import OpenAIClient
-from .playback import speech_playback_command
+from .playback import AudioPlayback
+from .voice_command import VoiceCommandHandler
 from .rpiface_client import RPiFaceClient
 
 try:
@@ -105,26 +105,15 @@ def main():
         print("🤖 RPI Voice Assistant")
         print("=" * 60)
 
+        playback = AudioPlayback(config.audio_output)
+
         def play_audio_prompt(filename: str):
-            """Play a pre-generated audio prompt."""
-            if not config.audio_output.enabled:
-                return
-
-            prompt_path = Path(__file__).parent / "audio_prompts" / filename
-            if not prompt_path.exists():
-                print(f"⚠️  Audio prompt not found: {prompt_path}")
-                return
-
+            if recorder is not None:
+                recorder.cancel_follow_up()
             try:
-                if recorder is not None:
-                    recorder.cancel_follow_up()
-                subprocess.run(
-                    ["mpg123", "-a", config.audio_output.device, str(prompt_path)],
-                    capture_output=True,
-                    check=True
-                )
-            except subprocess.CalledProcessError as e:
-                print(f"⚠️  Error playing audio prompt: {e}")
+                playback.prompt(filename)
+            except Exception as exc:
+                print(f"Local prompt unavailable ({type(exc).__name__})")
 
         def monitor_connection():
             """Monitor internet connection and handle state changes."""
@@ -165,131 +154,15 @@ def main():
         connection_monitor_thread = threading.Thread(target=monitor_connection, daemon=True)
         connection_monitor_thread.start()
 
+        handler = VoiceCommandHandler(
+            config, openai_client, app_manager, logger, playback, rpiface,
+            pixels=pixels, is_online=lambda: connection_state["online"],
+        )
+
         def on_recording_complete(audio_path: str) -> bool:
-            """Return True only after successful spoken playback."""
-            playback_succeeded = False
-            print("\n🔄 Processing voice command...")
-
-            try:
-                transcription = openai_client.transcribe_audio(audio_path)
-                app_response = app_manager.handle(transcription)
-                classifier_usage = None
-
-                if app_response is None and app_manager.should_classify_app_intent(transcription):
-                    try:
-                        classified_intent, classifier_usage = openai_client.classify_app_intent(
-                            transcription,
-                            app_manager.app_intent_context(),
-                        )
-                        if classified_intent is not None:
-                            app_response = app_manager.handle_classified_intent(
-                                classified_intent,
-                                transcription,
-                            )
-                    except Exception as e:
-                        print(f"\n⚠️  App intent classification skipped: {e}")
-
-                if app_response is not None:
-                    response = app_response.text
-                    usage = {
-                        "model": "local_app"
-                        if classifier_usage is None
-                        else f"local_app via {classifier_usage['model']}",
-                        "prompt_tokens": 0
-                        if classifier_usage is None
-                        else classifier_usage["prompt_tokens"],
-                        "completion_tokens": 0
-                        if classifier_usage is None
-                        else classifier_usage["completion_tokens"],
-                        "total_tokens": 0
-                        if classifier_usage is None
-                        else classifier_usage["total_tokens"],
-                    }
-                else:
-                    response, usage = openai_client.get_chat_response(
-                        transcription,
-                        continue_conversation=bool(recorder and recorder.recording_is_follow_up),
-                    )
-
-                # Log the interaction
-                audio_file = Path(audio_path)
-                duration = None
-                if audio_file.exists():
-                    import wave
-
-                    with wave.open(str(audio_file), 'rb') as wf:
-                        duration = wf.getnframes() / wf.getframerate()
-
-                logger.log_complete_interaction(
-                    audio_path,
-                    transcription,
-                    response,
-                    usage,
-                    duration
-                )
-
-                # Display results
-                print(f"\n📝 You said: \"{transcription}\"")
-                print(f"\n💬 Assistant: {response}")
-                print(f"\n📊 Tokens: {usage['total_tokens']} "
-                      f"(prompt: {usage['prompt_tokens']}, "
-                      f"completion: {usage['completion_tokens']})")
-
-                # Generate and play TTS response
-                if config.audio_output.enabled:
-                    try:
-                        print("\n🔊 Generating speech...")
-                        if pixels:
-                            pixels.speak()
-
-                        # Generate speech using the configured API workflow
-                        speech_path = config.audio_output.tts_output_path
-
-                        openai_client.generate_speech(
-                            text=response,
-                            output_path=speech_path,
-                            voice=config.openai.tts_voice,
-                        )
-
-                        # Realtime WAV uses the same named ALSA output as bundled prompts.
-                        rpiface.set_state("speaking")
-                        result = subprocess.run(
-                            speech_playback_command(config.openai.tts_backend, config.audio_output.device, speech_path),
-                            capture_output=True,
-                            text=True,
-                        )
-
-                        if result.returncode != 0:
-                            print(f"Playback stderr: {result.stderr}")
-                            print(f"Playback stdout: {result.stdout}")
-                            raise subprocess.CalledProcessError(
-                                result.returncode,
-                                result.args,
-                                result.stdout,
-                                result.stderr,
-                            )
-
-                        playback_succeeded = True
-                    except Exception as e:
-                        print(f"\n⚠️  TTS playback error: {e}")
-                        if pixels:
-                            pixels.listen()
-                    finally:
-                        rpiface.set_state("idle")
-                        openai_client.mark_response_output_finished()
-                else:
-                    rpiface.set_state("idle")
-                    openai_client.mark_response_output_finished()
-
-                print("\n" + "=" * 60)
-                return playback_succeeded
-
-            except Exception as e:
-                rpiface.set_state("idle")
-                error_msg = f"Error processing command: {e}"
-                print(f"\n❌ {error_msg}\n")
-                logger.log_error(error_msg, {"audio_file": audio_path})
-                return False
+            return handler.process(
+                audio_path, continue_conversation=bool(recorder and recorder.recording_is_follow_up),
+            )
 
         # Start wake word recorder
         recorder = WakeWordRecorder(

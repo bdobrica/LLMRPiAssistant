@@ -17,8 +17,8 @@ def check_internet_connection(host: str = "8.8.8.8", port: int = 53, timeout: in
         True if connection successful, False otherwise
     """
     try:
-        socket.setdefaulttimeout(timeout)
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+        with socket.create_connection((host, port), timeout=timeout):
+            pass
         return True
     except (socket.error, socket.timeout):
         return False

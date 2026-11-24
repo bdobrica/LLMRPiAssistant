@@ -22,7 +22,9 @@ class OpenAIClient:
             config: OpenAI configuration including API key.
         """
         self.config = config
-        self.client = OpenAI(api_key=config.api_key)
+        self.client = OpenAI(
+            api_key=config.api_key, timeout=config.request_timeout_seconds, max_retries=0,
+        )
         self.mcp_manager = mcp_manager
         self.conversation_history = []
         self.compacted_contexts = []

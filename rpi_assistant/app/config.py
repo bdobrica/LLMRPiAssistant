@@ -63,7 +63,8 @@ class OpenAIConfig:
     chat_model: str = "gpt-6-luna"
     tts_model: str = "gpt-realtime-2.1-mini"
     tts_backend: str = "realtime"
-    tts_timeout_seconds: float = 90.0
+    request_timeout_seconds: float = 20.0
+    tts_timeout_seconds: float = 30.0
     reasoning_effort: str = "none"
     tts_voice: str = "alloy"
     system_prompt: str = "You are a helpful voice assistant."
@@ -71,6 +72,13 @@ class OpenAIConfig:
     temperature: float = 0.7
     conversation_idle_timeout_seconds: float = 300.0
     conversation_relevance_threshold: float = 0.35
+
+    def __post_init__(self):
+        import math
+        for name in ("request_timeout_seconds", "tts_timeout_seconds"):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be finite and positive")
 
 
 @dataclass
@@ -311,7 +319,8 @@ def load_config(config_path: Optional[str] = None) -> Config:
         ),
         tts_model=get_value("openai", "tts_model", "OPENAI_TTS_MODEL", "gpt-realtime-2.1-mini", str),
         tts_backend=get_value("openai", "tts_backend", "OPENAI_TTS_BACKEND", "realtime", str),
-        tts_timeout_seconds=get_value("openai", "tts_timeout_seconds", "OPENAI_TTS_TIMEOUT", 90.0, float),
+        request_timeout_seconds=get_value("openai", "request_timeout_seconds", "OPENAI_REQUEST_TIMEOUT", 20.0, float),
+        tts_timeout_seconds=get_value("openai", "tts_timeout_seconds", "OPENAI_TTS_TIMEOUT", 30.0, float),
         reasoning_effort=get_value("openai", "reasoning_effort", "OPENAI_REASONING_EFFORT", "none", str),
         tts_voice=get_value("openai", "tts_voice", "OPENAI_TTS_VOICE", "alloy", str),
         system_prompt=get_value(

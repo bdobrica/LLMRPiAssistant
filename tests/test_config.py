@@ -8,6 +8,23 @@ from rpi_assistant.app.config import load_config
 
 
 class ConfigTests(unittest.TestCase):
+    def test_provider_timeout_defaults_overrides_and_invalid_values(self):
+        with TemporaryDirectory() as directory, patch.dict("os.environ", {}, clear=True):
+            path = Path(directory) / "config.ini"
+            path.write_text("[openai]\napi_key=test\n")
+            config = load_config(str(path)).openai
+            self.assertEqual(config.request_timeout_seconds, 20)
+            self.assertEqual(config.tts_timeout_seconds, 30)
+            with patch.dict("os.environ", {"OPENAI_REQUEST_TIMEOUT": "7"}):
+                self.assertEqual(load_config(str(path)).openai.request_timeout_seconds, 7)
+                path.write_text("[openai]\napi_key=test\nrequest_timeout_seconds=12\n")
+                self.assertEqual(load_config(str(path)).openai.request_timeout_seconds, 12)
+            for name in ("request_timeout_seconds", "tts_timeout_seconds"):
+                for value in ("0", "-1", "nan", "inf"):
+                    path.write_text(f"[openai]\napi_key=test\n{name}={value}\n")
+                    with self.assertRaisesRegex(ValueError, "finite and positive"):
+                        load_config(str(path))
+
     def test_followup_settings_can_be_configured_and_disabled(self):
         with TemporaryDirectory() as directory, patch.dict("os.environ", {}, clear=True):
             path = Path(directory) / "config.ini"

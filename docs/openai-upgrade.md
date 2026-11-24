@@ -36,7 +36,8 @@ reasoning_effort = none
 tts_backend = realtime
 tts_model = gpt-realtime-2.1-mini
 tts_voice = alloy
-tts_timeout_seconds = 90
+request_timeout_seconds = 20
+tts_timeout_seconds = 30
 
 [audio_output]
 device = assistant_wm8960
@@ -61,8 +62,9 @@ Each answer opens one short-lived session, sends only the completed answer text,
 requests verbatim reading, and closes after completion. It sends no microphone
 audio or idle traffic. Audio chunks go to a temporary mono 24 kHz, 16-bit WAV,
 bounded to 120 seconds of audio. Only a completed, nonempty response replaces the
-output file. Errors/timeouts discard partial output and return to the existing
-error handling; playback starts only after successful generation.
+output file. Errors/timeouts discard partial output; playback starts only after
+successful generation. F03 adds [local failure feedback and bounded waits](failure-recovery.md),
+including removal of the preceding generated answer before each generation.
 
 `aplay` converts the WAV through the configured ALSA PCM. Keep `assistant_wm8960`
 for this ReSpeaker board: its forced 32-bit hardware format fixes quiet playback

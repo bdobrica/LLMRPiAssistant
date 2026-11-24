@@ -84,7 +84,7 @@ F06 builds on the completed modernization without replacing the working Python e
 
 ## Subsequent Product Priorities
 
-1. **F03 — Understandable failure and recovery.** Bound provider waits; give a short locally playable failure message; return to listening. Reuse existing connectivity prompts where appropriate.
+1. **F03 — Understandable failure and recovery.** Bound provider waits; give a short locally playable failure message; return to listening. Reuse existing connectivity prompts where appropriate. Use a configurable 20-second HTTP network-operation timeout with no automatic retries, and a 30-second Realtime generation deadline. Empty transcription and failed requests use bundled voice clips; failures return to wake listening without replaying old audio. These are per-operation limits, not a whole-turn deadline. See [behavior and recovery](docs/failure-recovery.md).
 2. **F02 — Interruption and correction.** Stop stale playback and accept a correction without duplicating an action already executed. Evaluate speech interruption on hardware before promising it.
 3. **F04 — Current-information answers.** Add a real lookup source, concise attribution, and honest handling of missing/conflicting evidence. General questions must not require installing an app.
 4. **F05 — Simple controls.** Volume, stop, mute with accurate capture indication, and an explicit new-conversation command. Provide local control paths during internet loss without promising offline free-form recognition.
