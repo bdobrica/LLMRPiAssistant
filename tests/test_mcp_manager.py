@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import logging
 import sys
 import threading
@@ -18,10 +19,10 @@ class MCPClientManagerTests(unittest.TestCase):
             timeout_seconds=20,
             servers=(
                 MCPServerConfig(
-                    name="face",
+                    name="other",
                     transport="stdio",
                     command=sys.executable,
-                    args=("-m", "rpiface.mcp.server"),
+                    args=(str(generic_server),),
                 ),
                 MCPServerConfig(
                     name="utility",
@@ -35,13 +36,27 @@ class MCPClientManagerTests(unittest.TestCase):
         try:
             manager.start()
             names = {tool["function"]["name"] for tool in manager.openai_tools()}
-            self.assertIn("face__set_mood", names)
+            self.assertIn("other__echo_text", names)
             self.assertIn("utility__echo_text", names)
             result = json.loads(
                 manager.call_tool("utility__echo_text", {"text": "hello"})
             )
             self.assertFalse(result["is_error"])
             self.assertEqual(result["structured_content"], {"echo": "hello"})
+        finally:
+            manager.close()
+
+    @unittest.skipUnless(importlib.util.find_spec("rpiface"), "Optional rpiface package is not installed")
+    def test_optional_rpiface_discovery(self):
+        config = MCPConfig(enabled=True, timeout_seconds=20, servers=(
+            MCPServerConfig("face", "stdio", command=sys.executable,
+                            args=("-m", "rpiface.mcp.server")),
+        ))
+        manager = MCPClientManager(config)
+        try:
+            manager.start()
+            names = {tool["function"]["name"] for tool in manager.openai_tools()}
+            self.assertIn("face__set_mood", names)
         finally:
             manager.close()
 

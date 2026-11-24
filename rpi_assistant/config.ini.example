@@ -25,7 +25,7 @@ threshold = 0.5
 cooldown_seconds = 1.0
 
 # Comma-separated list of wake word models to load
-# Leave empty or comment out to load all default models
+# Empty or omitted selects hey_jarvis only to limit memory use.
 # Example models: hey_jarvis, alexa, hey_mycroft, hey_rhasspy
 # Use fewer models to reduce memory usage on limited devices
 # models = hey_jarvis

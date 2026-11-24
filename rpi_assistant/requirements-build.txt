@@ -1,0 +1,2 @@
+# PEP 517 build backend used for the pinned source dependencies.
+setuptools==84.2.1

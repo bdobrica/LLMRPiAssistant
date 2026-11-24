@@ -17,7 +17,7 @@ Preserve these capabilities. There is no demonstrated short-term-memory defect t
 
 ## What the Review Established
 
-The November 24 review compared local runtime changes through `d725c62` with deployed revision `6cbd735`. The deployed checkout was clean and inspected source hashes matched that revision. These versions must not be treated as interchangeable.
+The November 24 review compared local runtime changes through `d725c62` with deployed revision `6cbd735`. The deployed checkout was clean and inspected source hashes matched that revision. These versions must not be treated as interchangeable. The following table records the initial findings before U01/U02; completed fixes and current deployment validation are recorded in TODO.md.
 
 | Evidence | Meaning for development |
 | --- | --- |
@@ -58,7 +58,11 @@ Preserve a recoverable image when available and record the recovery approach. Th
 
 Review every direct requirement and its resolved dependencies: OpenAI SDK, openWakeWord/inference runtime, NumPy, sounddevice, Flask, GPIO/SPI packages, PyNaCl, and MCP. Resolve and test a current stable set in an isolated ARM64 environment before replacing the working environment. Pin the tested result so subsequent installs reproduce it; do not treat today's installed versions as the intended endpoint.
 
-Update application code for changed APIs, remove obsolete monkey patches, and retain only patches with a documented purpose and upstream revision. In particular, openWakeWord 0.6.0 changes the exported model registry and declares a Linux tflite-runtime dependency; the published [tflite-runtime files](https://pypi.org/project/tflite-runtime/#files) do not provide a CPython 3.13 wheel at review time. Resolve the inference/runtime packaging path explicitly rather than bypassing dependencies and declaring success. Verify real model loading and audio operation, not only mocked imports. Include FIX01/FIX03 and retain the reviewed app-installation fix FIX02.
+The U02 candidate uses current pinned ARM64 dependencies on Python 3.13, including OpenAI 3.58.0, MCP 2.3.0, NumPy 2.5.5 and LiteRT 2.4.0. Released openWakeWord 0.6.0 still requires tflite-runtime without a CPython 3.13 wheel; use the pinned upstream LiteRT revision rather than bypassing dependencies. Build its mandatory SpeexDSP binding from pinned source, because its published wheels also stop at Python 3.12. Record these source exceptions and replace them with compatible stable releases when available. Full pins, build prerequisites and rollback are in [the Python upgrade guide](docs/python-upgrade.md).
+
+The old site-packages patch is retired. The candidate uses the modern wake-word API, verified setup-time model assets and one selected model by default. A real Zero 2 W probe loaded LiteRT, ran inference at a mean 27 ms per 80 ms input block, captured/played audio and initialized LGPIO LEDs, with about 194 MiB peak probe RSS. This is a short hardware check, not an end-to-end latency or long-running memory result. The owner confirmed normal wake detection, LEDs, audible replies and contextual follow-ups on the candidate; U02 is complete on the Zero 2 W. See TODO.md for limits and measurements. FIX01 and FIX02 are committed; retain their startup and rejected-bundle protections.
+
+Installation must also fit the board: the first bulk install used the 208 MB RAM-backed /tmp, filled swap and lost responsiveness. The owner restored Wi-Fi through provisioning after restarting. Prepare wheels off-device when needed, pause the assistant during installation, and keep pip temporary files on SD-backed /var/tmp. The original environment and service file remain available for rollback after candidate acceptance. Pi 3 A+ and longer-running behavior remain untested.
 
 ### R01 — Supported OpenAI Models and API Workflows
 

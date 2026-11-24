@@ -10,7 +10,7 @@ from typing import Callable, Optional
 import numpy as np
 import sounddevice as sd
 from openwakeword.model import Model
-from openwakeword import models as OWW_models
+from openwakeword import MODELS as OWW_models
 
 from .config import AudioConfig, RecordingConfig, WakeWordConfig
 
@@ -96,16 +96,17 @@ class WakeWordRecorder:
         self.on_state_change = on_state_change
         self.pixels = pixels
         
-        # Initialize wake word model
-        if wake_word_config.models:
-            self.model = Model(
-                wakeword_model_paths=[
-                    OWW_models[m]["model_path"] for m in wake_word_config.models
-                    ]
-            )
-        else:
-            self.model = Model()  # Load all default models
-        
+        # One wake word by default keeps inference small on 512 MB boards.
+        model_names = wake_word_config.models or ["hey_jarvis"]
+        unknown = set(model_names) - OWW_models.keys()
+        if unknown:
+            raise ValueError(f"Unknown wake word model(s): {', '.join(sorted(unknown))}")
+        self.model = Model(
+            wakeword_models=list(model_names),
+            inference_framework="tflite",
+            ncpu=1,
+        )
+
         # State management
         self.state = "LISTEN_WAKE"
         self.last_wake = 0.0

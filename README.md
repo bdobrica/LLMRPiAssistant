@@ -36,6 +36,10 @@ LLMRPiAssistant is a fully-featured voice assistant that brings Alexa-like funct
 
 ### Quick Setup
 
+For Python dependency upgrades, use a separate environment and follow
+[the Python upgrade guide](docs/python-upgrade.md). The pinned set targets
+Raspberry Pi OS 64-bit with Python 3.13; wake models are fetched during setup.
+
 For the WM8960 ReSpeaker 2-Mic v1, use the Raspberry Pi kernel audio driver.
 See [OS/audio upgrade and recovery](docs/audio-upgrade.md) before updating an
 existing device. Other HAT revisions need their own audio setup.
@@ -674,7 +678,6 @@ LLMRPiAssistant/
 ├── README.md
 ├── QUICKSTART.md
 ├── TODO.md
-├── openwakeword.patch      # Bug fix for OpenWakeWord
 │
 ├── rpi_assistant/          # Main voice assistant application (Python package)
 │   ├── __init__.py

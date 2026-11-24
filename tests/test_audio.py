@@ -3,6 +3,7 @@ import sys
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import ModuleType
@@ -15,9 +16,9 @@ sounddevice_module.InputStream = object
 sys.modules.setdefault("sounddevice", sounddevice_module)
 
 openwakeword_module = ModuleType("openwakeword")
-openwakeword_module.models = {}
+openwakeword_module.MODELS = {"hey_jarvis": {}, "alexa": {}}
 openwakeword_model_module = ModuleType("openwakeword.model")
-openwakeword_model_module.Model = object
+openwakeword_model_module.Model = lambda **kwargs: object()
 sys.modules.setdefault("openwakeword", openwakeword_module)
 sys.modules.setdefault("openwakeword.model", openwakeword_model_module)
 
@@ -30,6 +31,24 @@ class FakeWakeModel:
 
 
 class WakeWordRecorderTests(unittest.TestCase):
+    def test_default_loads_only_one_model_with_modern_api(self):
+        with patch("rpi_assistant.app.audio.Model") as model:
+            recorder = WakeWordRecorder(AudioConfig(device_match="fake"), WakeWordConfig(), RecordingConfig())
+        model.assert_called_once_with(wakeword_models=["hey_jarvis"], inference_framework="tflite", ncpu=1)
+        recorder.stop()
+
+    def test_configured_model_selection_is_preserved(self):
+        with patch("rpi_assistant.app.audio.Model") as model:
+            recorder = WakeWordRecorder(AudioConfig(device_match="fake"), WakeWordConfig(models=["alexa"]), RecordingConfig())
+        model.assert_called_once_with(wakeword_models=["alexa"], inference_framework="tflite", ncpu=1)
+        recorder.stop()
+
+    def test_unknown_model_does_not_silently_load_defaults(self):
+        with patch("rpi_assistant.app.audio.Model") as model:
+            with self.assertRaisesRegex(ValueError, "Unknown wake word"):
+                WakeWordRecorder(AudioConfig(), WakeWordConfig(models=["typo"]), RecordingConfig())
+        model.assert_not_called()
+
     def create_recorder_shell(self, output_path: Path) -> WakeWordRecorder:
         recorder = object.__new__(WakeWordRecorder)
         recorder.audio_config = AudioConfig(sample_rate=16000, chunk_size=160, channels=1)

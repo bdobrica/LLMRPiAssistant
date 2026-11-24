@@ -1,0 +1,42 @@
+[
+  {
+    "file": "embedding_model.tflite",
+    "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/embedding_model.tflite",
+    "sha256": "c0aea21eb84a4ce90a08c870da41b7a7173b45269e6a3207c71d67c40f3a59d8"
+  },
+  {
+    "file": "melspectrogram.tflite",
+    "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/melspectrogram.tflite",
+    "sha256": "96fa0adccb6e8cf95cb14465409a1a2898ee4a96a85bb9ed3c7eb0e68bf163e8"
+  },
+  {
+    "file": "alexa_v0.1.tflite",
+    "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.tflite",
+    "sha256": "7333a317a790070a7f3432b81d9439c779481cc4ebd67c73da7174ea3cf48397"
+  },
+  {
+    "file": "hey_mycroft_v0.1.tflite",
+    "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_mycroft_v0.1.tflite",
+    "sha256": "bf9e43136afd3ca323698820a6e32a47f885ef4c30a3b8b577ec71688a9d64d8"
+  },
+  {
+    "file": "hey_jarvis_v0.1.tflite",
+    "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_jarvis_v0.1.tflite",
+    "sha256": "14bff778604985e1b5c19f0f7bbe477a69cf281d8db34b232b3b972411f710e2"
+  },
+  {
+    "file": "hey_rhasspy_v0.1.tflite",
+    "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_rhasspy_v0.1.tflite",
+    "sha256": "01d2526b45068f565aa3849d6ec2b7abae099154fc1b496f9ef20de9ef241fe9"
+  },
+  {
+    "file": "timer_v0.1.tflite",
+    "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/timer_v0.1.tflite",
+    "sha256": "21d5b0267e97df64870b7aca312e2043ebed248d365698926a115a3694ff9626"
+  },
+  {
+    "file": "weather_v0.1.tflite",
+    "url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/weather_v0.1.tflite",
+    "sha256": "4178991c7aeb76670f5a56559eb4129a6f3ae6207886db8bd8094fea7d362c3f"
+  }
+]

@@ -7,7 +7,8 @@ This is a quick reference for common tasks. See [README.md](README.md) for full 
 These audio steps target ReSpeaker 2-Mic v1 (WM8960). For OS/kernel updates,
 run `make upgrade-os`, then reboot and perform the capture/playback checks in
 [the audio upgrade guide](docs/audio-upgrade.md). This does not upgrade the
-assistant's Python dependencies or models.
+assistant's Python dependencies or models. For a separate candidate Python
+installation and rollback, see [the Python upgrade guide](docs/python-upgrade.md).
 
 ```bash
 # Complete installation (run once)

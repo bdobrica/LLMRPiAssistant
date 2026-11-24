@@ -1,4 +1,4 @@
-.PHONY: setup update upgrade-os prepare-audio install-deps create-venv update-python install-voicecard install-assistant install-wifi install-service restart-service patch-openwakeword test-mcp reboot-prompt help
+.PHONY: setup update upgrade-os prepare-audio install-deps create-venv update-python install-voicecard install-assistant install-wifi install-service restart-service install-wakeword-models test-mcp reboot-prompt help
 
 # Variables
 SHELL_PWD := $(shell pwd)
@@ -7,7 +7,6 @@ PYTHON := $(VENV_DIR)/bin/python3
 PIP := $(VENV_DIR)/bin/pip
 APP_DIR := $(SHELL_PWD)/rpi_assistant
 REQUIREMENTS_FILE := $(APP_DIR)/requirements.txt
-OPENWAKEWORD_PATCH := $(SHELL_PWD)/openwakeword.patch
 SCRIPTS_DIR := $(SHELL_PWD)/scripts
 SYSTEMD_DIR := $(SHELL_PWD)/systemd
 
@@ -26,7 +25,7 @@ help:
 	@echo "  make install-service   - Install rpi-assistant as systemd service"
 	@echo "  make restart-service   - Restart the installed rpi-assistant service if it is running"
 	@echo "  make install-wifi      - Install WiFi provisioning manager"
-	@echo "  make patch-openwakeword - Apply openwakeword bug fix patch"
+	@echo "  make install-wakeword-models - Download and verify pinned wake model assets"
 	@echo "  make test-mcp          - Run generic MCP manager and tool-loop tests"
 
 test-mcp:
@@ -39,13 +38,19 @@ setup:
 	$(MAKE) install-deps
 	$(MAKE) create-venv
 	$(MAKE) install-voicecard
-	$(MAKE) patch-openwakeword
+	$(MAKE) install-wakeword-models
 	$(MAKE) install-assistant
 	$(MAKE) install-service
 	$(MAKE) reboot-prompt
 
 # Update an existing installation after pulling changes
-update: install-deps update-python patch-openwakeword install-assistant install-service restart-service
+update:
+	$(MAKE) install-deps
+	$(MAKE) update-python
+	$(MAKE) install-wakeword-models
+	$(MAKE) install-assistant
+	$(MAKE) install-service
+	$(MAKE) restart-service
 
 # OS/audio migration is explicit and does not change the Python environment.
 # Recursive calls keep these steps ordered even with make -j.
@@ -64,7 +69,7 @@ upgrade-os:
 install-deps:
 	@echo "=== Installing system dependencies ==="
 	sudo apt-get update
-	sudo apt-get install -y python3-venv python3-pip libportaudio2 portaudio19-dev alsa-utils git mpg123 build-essential libffi-dev
+	sudo apt-get install -y python3-venv python3-pip libportaudio2 portaudio19-dev alsa-utils git mpg123 build-essential libffi-dev python3-dev swig libspeexdsp-dev liblgpio-dev
 
 # Create Python virtual environment
 create-venv:
@@ -82,8 +87,8 @@ update-python:
 		exit 1; \
 	fi
 	@echo "=== Installing Python packages ==="
-	sudo $(PIP) install --upgrade pip
-	sudo $(PIP) install -r $(REQUIREMENTS_FILE)
+	sudo env TMPDIR=/var/tmp $(PIP) install pip==26.3
+	sudo env TMPDIR=/var/tmp $(PIP) install --no-cache-dir --build-constraint "$(APP_DIR)/requirements-build.txt" -r $(REQUIREMENTS_FILE)
 
 # Use kernel-provided WM8960 support; never run the obsolete vendor installer.
 install-voicecard:
@@ -128,24 +133,9 @@ install-wifi:
 	@echo "=== Installing WiFi provisioning manager ==="
 	@bash $(SCRIPTS_DIR)/install-wifi.sh
 
-# Apply openwakeword bug fix patch
-patch-openwakeword:
-	@echo "=== Applying openwakeword bug fix patch ==="
-	@OPENWAKEWORD_MODEL=$$(find $(VENV_DIR)/lib -name "model.py" -path "*/openwakeword/model.py" 2>/dev/null | head -n1); \
-	if [ -z "$$OPENWAKEWORD_MODEL" ]; then \
-		echo "⚠️  Warning: openwakeword model.py not found. Skipping patch."; \
-		echo "   Run 'make patch-openwakeword' after installing openwakeword."; \
-	else \
-		echo "Found openwakeword at: $$OPENWAKEWORD_MODEL"; \
-		if grep -q "Fix kwargs for AudioFeatures" "$$OPENWAKEWORD_MODEL"; then \
-			echo "✅ Patch already applied"; \
-		else \
-			echo "Applying patch..."; \
-			cd "$$(dirname $$OPENWAKEWORD_MODEL)" && sudo patch -p1 < $(OPENWAKEWORD_PATCH) && \
-			echo "✅ Patch applied successfully" || \
-			echo "❌ Failed to apply patch"; \
-		fi \
-	fi
+# Fetch assets at setup time; startup never downloads models.
+install-wakeword-models:
+	sudo $(PYTHON) "$(SCRIPTS_DIR)/download-wakeword-models.py"
 
 # Prompt for reboot
 reboot-prompt:
@@ -154,6 +144,6 @@ reboot-prompt:
 	@echo "Setup complete!"
 	@echo "========================================"
 	@echo ""
-	@echo "The seeed-voicecard driver requires a system reboot to load kernel modules."
+	@echo "The WM8960 overlay requires a reboot after initial audio setup."
 	@read -p "Press any key to reboot now..." dummy
 	sudo reboot
