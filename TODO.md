@@ -1,75 +1,89 @@
 # Implementation TODO
 
-Updated: 2026-11-24. [PLAN.md](PLAN.md) defines scope, architecture, hardware constraints, and release gates. [AGENTS.md](AGENTS.md) defines the contributor workflow.
+Updated: 2026-11-24. Product decisions: [PLAN.md](PLAN.md). Contributor workflow: [AGENTS.md](AGENTS.md).
 
-## How to Use This Checklist
+## Working Agreement
 
-The owner already gets useful spoken answers and successful short follow-ups on the Zero 2 W. Preserve that working experience. Start with **F01** to address the reported difficulty remembering user-provided details, using a concrete failure example before choosing a fix. Install required dependencies, inspect the device revision, preserve configuration, and run relevant checks as part of that feature. There is no separate baseline, CI, benchmarking, or infrastructure milestone to finish first.
+Useful spoken answers and contextual follow-ups already work on the owner's Zero 2 W. Preserve them. No short-term-memory defect has been demonstrated; no conversational-memory rebuild is scheduled.
 
-The order below expresses product priorities, not a requirement to finish every earlier task before delivering another useful feature. Fix a prerequisite only when it blocks the feature being implemented. Keep the 512 MB constraint and existing security safeguards throughout.
+**Proposed next feature: F06, follow-up listening without another wake word.** Keep the 512 MB target throughout. Handle concrete prerequisites within delivery, with no separate baseline, CI, benchmarking, or evaluation-platform milestone. The order below is a recommendation for review, not a requirement to finish every earlier item before another useful feature.
 
-After each successfully implemented item, record a short validation note and commit the implementation with its tests/docs and checklist update. Keep incomplete items unchecked. Do not stage the local June code review.
+For each completed item, record validation evidence and commit implementation, relevant tests/config/docs, and checklist update together. Keep unfinished items unchecked. Never stage the local June code review or credentials. Planning changes do not count as runtime implementation; a local commit is not deployment approval.
 
-## Now — Remember What I Tell You
+## Next Feature: Natural Follow-Up Listening
 
-- [ ] **F01 — Reliably use details I give during a conversation.** Reproduce a reported memory failure on the deployed version; distinguish same-session recall from recall after inactivity or restart. Use a harmless example with information the model cannot know independently, such as “My screwdriver is in the blue kitchen drawer,” then ask where it is and correct the location. Inspect which turns reach the model and fix the demonstrated context/routing/reset problem in the existing path. Verify both recall and correction, preserve the successful question/follow-up behavior, and add a focused regression test. Keep context bounded on the 512 MB Pi. If the expectation is recall across sessions, use C01 instead of assuming a short-term-context bug. GPT-Live, a voice-stack rewrite, and benchmark infrastructure are not prerequisites.
+- [ ] **F06 — Ask a follow-up without repeating the wake word.**
+  - Add a configurable, disableable listening window after playback finishes, reusing existing conversation history.
+  - Capture a follow-up during that window; expire quietly back to wake-word detection on silence. Avoid idle cloud traffic and reacting to the assistant's own playback.
+  - Review drain/flush timing and the newer topic/idle resets against this experience. Preserve demonstrated context behavior; do not silently introduce additional context loss when deploying newer code.
+  - **Acceptance:** on the Zero 2 W, try manifold → compact manifold → cube without another wake word, let the window expire, and start a fresh interaction normally. Check silence, disabled-window behavior, and speaker echo. Record observations and limitations; interruption belongs to F02.
+  - **Testing:** focused state-transition tests and an explicit live OpenAI test for contextual answers. Keep API quality checks separate from microphone/playback checks. Judges are optional; SecondContext is not required.
 
-## Next — Make Conversation Pleasant and Useful
+## Concrete Fixes Accompanying Delivery
 
-- [ ] **F02 — Let me interrupt or correct the assistant.** Stop stale playback, accept a correction, and avoid answering its own speaker output. Fix turn-boundary delays or premature cutoffs exposed by actual conversations. If repeating the wake word is a reported nuisance, add a short follow-up listening window; the successful follow-up report does not establish whether the wake word was repeated. Keep already executed actions distinct from cancelled speech.
-- [ ] **F03 — Tell me when something goes wrong.** Give short, locally playable feedback for unheard speech, lost connectivity, and provider failures. Bound waits/retries and return to listening. Verify recovery after a failed request without replaying old answers.
-- [ ] **F04 — Answer questions that need current information.** Connect search, retain evidence, and give concise attribution. Check consequential answers against authoritative guidance and handle unavailable/conflicting sources honestly. Detailed citation UI can come later.
-- [ ] **F05 — Give me simple controls.** Add volume, stop, mute with truthful capture indication, and a new-conversation command. Close idle cloud sessions and show enough usage information to understand operating cost. Make local controls usable during internet loss without promising offline free-form speech recognition.
+These are reproduced defects or compatibility failures, not a general hardening phase. FIX01 is required to run the current checkout on the Pi. Resolve FIX02 before relying on app-installation rejection. FIX03 protects the working environment during installation/update work.
 
-## Before Sharing More Widely
+- [ ] **FIX01 — Start successfully with RPiFace disabled.** Fix the self-referential annotation that raises NameError under Python 3.13.5. Add an import regression check independent of whether RPiFace is enabled. Run lifecycle client tests; separately identify the optional rpiface MCP test prerequisite.
+- [ ] **FIX02 — Never load a rejected app bundle.** Clean staging after checksum/download failure and exclude incomplete/staging directories from discovery. **Acceptance:** a validly signed catalog with an altered bundle is rejected, and restarting AppManager neither imports it nor disrupts a previously installed app. Retain signature, path, and manifest checks.
+- [ ] **FIX03 — Preserve a working wake-word dependency set.** Record/constrain tested versions for the Pi; deployed openWakeWord is 0.4.0, while the import fails against 0.6.0. Keep the working version unless deliberately testing newer exports, assets, inference dependencies, and patch behavior. **Acceptance:** actual package import/model loading and wake detection on the Pi; mocked audio tests alone are insufficient.
 
-These protect household use; develop them alongside feature work using synthetic/non-sensitive questions where appropriate.
+## Next Experience Improvements
 
-- [ ] **H01 — Keep conversations private.** Make transcript/reply logging opt-in across files and console/journal, retain content-free failure diagnostics, and bound log/audio retention with restrictive permissions and deletion. Do not commit household recordings.
-- [ ] **H02 — Protect Wi-Fi onboarding.** Add per-device setup credentials and authenticated, CSRF-protected changes. Preserve automatic provisioning-service shutdown. Test malformed input, wrong passwords, and NetworkManager failure without exposing credentials.
+- [ ] **F03 — Tell me when a request fails, then recover.** Bound provider timeouts/retries and give short locally playable feedback for unheard speech or a failed request. Reuse existing offline/online prompts where appropriate. **Acceptance:** inject transcription/model/TTS failure, return to listening, and handle a subsequent request without replaying stale audio.
+- [ ] **F02 — Let me interrupt or correct the assistant.** Stop stale playback and accept a correction without responding to speaker echo or duplicating an executed action. **Acceptance:** interrupt an answer on the Pi, give a correction, and hear an answer using the updated context. Report physical-control and speech-interruption support separately.
+- [ ] **F04 — Answer questions requiring current information.** Connect a real lookup source, retain evidence, and give concise attribution. **Acceptance:** answer using retrieved evidence and handle unavailable/conflicting sources honestly. Treat retrieved text as evidence, not executable instructions; detailed citation UI can follow.
+- [ ] **F05 — Give me simple controls.** Add volume, stop, mute with truthful capture indication, and explicit new-conversation control. Provide local control paths during internet loss. **Acceptance:** verify advertised controls on hardware, including whether capture actually stops; do not promise offline free-form recognition.
 
-## Then — Add Everyday Features
+## Everyday Use and Entertainment
 
-Choose the next feature from real use; these need not wait for every conversation refinement.
+Choose the next complete feature from actual use; these can proceed independently of optional memory work.
 
-- [ ] **H03 — Set and cancel reliable timers.** Persist acknowledged timers, ring through internet loss, handle restart/overdue timers, and provide local cancellation. Announce creation only when scheduling succeeds.
-- [ ] **H04 — Remember reminders and shopping-list items.** Persist changes, clarify ambiguous times using the configured timezone, and prevent duplicate writes. Test restart and failure behavior.
-- [ ] **H05 — Tell me the weather here.** Use an explicitly configured location and a real data source. Handle stale/unavailable information without inventing forecasts.
-- [ ] **H06 — Make setup manageable from a phone.** Add lightweight settings/status and microphone/speaker checks, recoverable configuration changes, and optional detailed citations. Do not require a browser on the Pi.
-- [ ] **E01 — Play one enjoyable game.** Extend the existing apps with short trivia or collaborative storytelling, pause/resume/stop, and bounded state. Try it with someone before expanding the game framework.
+- [ ] **H03 — Set and cancel reliable timers.** Persist acknowledged timers, ring through internet loss, handle restart/overdue timers, and provide local cancellation. Announce creation only after scheduling succeeds.
+- [ ] **H04 — Keep reminders and shopping lists.** Persist changes, clarify ambiguous times using the configured timezone, and prevent duplicate writes. Test restart, cancellation, and failure behavior.
+- [ ] **H05 — Tell me the weather here.** Use an explicitly configured location and real data source. Handle stale/unavailable information without inventing forecasts.
+- [ ] **E01 — Play one enjoyable game.** Extend existing apps with short trivia or collaborative storytelling, pause/resume/stop, and bounded state. Try the experience with someone before expanding the framework.
+- [ ] **H06 — Make setup manageable from a phone.** Add lightweight settings/status and microphone/speaker checks with recoverable configuration changes. No browser is required on the Pi.
 
-## Optional — Personal Memory with SecondContext
+## Before Wider Household Use
 
-Ordinary conversation must remain useful without this service. Run it on a separate host and commit sibling-repository changes separately.
+Develop these alongside useful features, using synthetic/non-sensitive conversations for testing.
 
-- [ ] **C01 — Remember one explicit preference across sessions.** Add an optional adapter to SecondContext's actual non-streaming Responses/ingest contract, with authenticated subject identity and deliberate recent context. Update backend dependencies only as required for deployment. Demonstrate explicit remember/recall after restart, no duplicate ingestion, subject isolation, and ordinary answers when the service is down.
-- [ ] **C02 — Let me correct and forget memories.** Do not silently retain all transcripts or sensitive facts. Implement authorized selective deletion or clearly expose its absence; confirm full purge and verify completion. Respect permanent subject fencing and document external-retention limits.
-- [ ] **C03 — Answer questions about a household manual.** Ingest one selected manual on the backend and answer with cited passages. Keep documentary evidence separate from remembered conversations; handle irrelevant or conflicting evidence.
+- [ ] **H01 — Keep conversations private.** Make transcript/reply logging opt-in across files and console/journal. Retain content-free diagnostics; bound log/audio retention and provide deletion and restrictive permissions. Verify default logs omit conversation contents.
+- [ ] **H02 — Protect Wi-Fi onboarding.** Redact submitted passwords from command errors, add per-device setup credentials and authenticated/CSRF-protected changes, and preserve provisioning-service shutdown. Test malformed input, wrong passwords, and NetworkManager failures without exposing credentials.
 
-## Follow Up When a Working Feature Justifies It
+## Maintenance Tied to Working Features
 
-- [ ] **R01 — Keep deployed models and dependencies supported.** Meet PLAN.md's provider shutdown deadlines, including legacy paths still in use. Test app-intent structured output and tool compatibility when changing models; never claim an app action succeeded after routing failure. Record tested ARM64 versions and verify openWakeWord API/patch compatibility before upgrading it.
-- [ ] **R02 — Fix measured performance problems.** Keep one wake model and bounded buffers/context; optimize allocations, imports, or inference threads when observed latency/memory warrants it. Record simple before/after results on 512 MB hardware. Do not build a monitoring platform first.
-- [ ] **R03 — Validate broader release readiness.** After the owner can use the features, expand to the PLAN.md scenarios, endurance checks, cost measurements, and both Zero 2 W and Pi 3 A+. Add lightweight CI if it prevents regressions encountered during development. Update setup and rollback guidance from actual deployments; record unsupported/untested configurations honestly.
+- [ ] **R01 — Replace models before provider shutdowns.** Recheck PLAN.md's announced dates: TTS and chat in January 2027, transcription in February 2027. Use live OpenAI tests to compare affected behavior, including contextual follow-ups and app/tool compatibility. Record models and tested SDK versions; preserve a recoverable configuration. This maintenance must not wait for optional features.
+- [ ] **R02 — Address measured performance and retained-state growth.** Keep one wake model and bounded audio buffers. Replace unbounded active/archive retention with a deliberate policy preserving the agreed conversation experience; the RAM archive is not persistent memory. Optimize allocations/imports/threads when measurements justify it, recording before/after observations on 512 MB hardware.
+- [ ] **R03 — Validate broader release readiness.** After features are usable, expand everyday scenarios, longer-use/reconnection checks, cost observations, and validation on both boards. Derive useful targets from actual results. Record untested configurations; add lightweight CI if it prevents encountered regressions. Do not build a monitoring or judging platform as a prerequisite.
 
-## Existing Work to Preserve
+## Optional Personal Memory with SecondContext
 
-D01–D06 describe source implementation, not a claim that every device has received or validated it. D07 records the owner’s actual device experience.
+Ordinary conversation and OpenAI integration tests must work without this service. Its non-streaming Responses endpoint already exists. Coordinate further compatibility when the integration needs it; backend changes belong in their own repository.
 
-- [x] **D01 — Signed remote app catalogs** (`b5ccf23`) and bundle checksum verification.
-- [x] **D02 — Safe bundle paths and manifest IDs** (`1b83125`, `61a5ddd`), with rejection tests.
-- [x] **D03 — Audio processing worker and bounded configurable queue** (`43af12f`, `ee99660`). This does not yet provide interruption or natural follow-up listening.
-- [x] **D04 — Idle/topic context reset** (`8876e8c`). Partial context management only; F01 must bound the context it uses; R02 addresses further measured resource problems.
-- [x] **D05 — Optional RPiFace lifecycle and generic MCP integration** (`59b97c9`, `d725c62`); optional and not yet deployed on the inspected device.
-- [x] **D06 — Existing Wi-Fi provisioning, LED driver, wake-word selection, app framework, and unit tests.** Retain these foundations; do not recreate them from stale TODO descriptions.
-- [x] **D07 — Useful spoken answers and a short follow-up work on the device.** Owner report, 2026-11-24: “Is a 38.5 degrees C considered a fever?” followed by “What about a 39.5 degrees?” both produced answers the owner judged correct. Preserve this behavior; do not describe ordinary conversation as unimplemented. Reliable recall of supplied details, restart persistence, and wake-word-free continuation were not established by this report.
+- [ ] **C01 — Remember one explicit preference across sessions.** Add an optional adapter to the actual Responses/ingest contract, with authenticated subject/session identity and deliberate recent context. Run the backend elsewhere. Demonstrate recall after restart, no duplicate ingestion, subject isolation, and ordinary answers during outages.
+- [ ] **C02 — Let me correct and forget memories.** Keep retention explicit. Implement authorized selective deletion or clearly expose its absence; confirm full purge and verify the matching completion response. Respect permanent subject fencing and explain external-retention limits.
+- [ ] **C03 — Answer questions about a household manual.** Ingest one selected manual on the backend and answer with cited passages. Keep documentary evidence separate from remembered conversations; handle irrelevant/conflicting evidence.
 
-## Deferred Until There Is User Demand
+## Evidence and Existing Work to Preserve
 
-Multiplayer speaker identification, leaderboards, achievements, marketplace expansion, local general-purpose LLMs, elaborate dashboards, broad refactors, and automatic extraction of every conversation. Revisit only when household use demonstrates a concrete benefit within the hardware and cost constraints.
+These are status notes, not newly completed implementation tasks:
+
+| Item | Verified status and limitation |
+| --- | --- |
+| Contextual conversation | Owner demonstrated fever/manifold exchanges; synthetic probes confirmed transmitted history in both revisions |
+| Signed catalogs, safe paths, manifest IDs | Implemented; preserve checks while fixing rejected staging in FIX02 |
+| Audio worker and bounded queue | Present in newer source, not inspected deployed revision 6cbd735 |
+| Idle/topic resets | Present in newer source; archives are unbounded and not retrieved; review before changing deployed behavior |
+| RPiFace and generic MCP | Present in newer source; RPiFace has FIX01's startup defect; the separate rpiface test dependency was unavailable |
+| Provisioning, LEDs, wake-word selection, apps | Already implemented; extend rather than recreate |
+| Assistant test run | 64 passes, one import error, one missing-dependency integration failure; no acoustic benchmark or agent-run live answer-quality test |
+| SecondContext test run | Go suite passed; PostgreSQL/Qdrant deployment readiness remains unvalidated |
 
 ## Completion Record
 
-The initial B/V milestone checklist was replaced before implementation to prioritize deliverable features. Its useful testing, deployment, privacy, and compatibility work is included with those features or in H01/H02/R01–R03.
+No new runtime feature has been implemented by revising these documents. F01 remains retired: the presumed memory defect was not demonstrated. F06 describes a separate convenience feature. The former baseline milestones remain removed.
 
-For each newly completed item, append a concise entry here: `ID — behavior delivered; checks and device/revision used; remaining limitations.` The implementation commit should mention the same ID. No new implementation milestones have been completed by creating these planning documents.
+For each newly completed item, append: `ID — behavior delivered; checks, model/device/revision where relevant; remaining limitations.` Mention the same item and validation in its focused commit.
+
+Deferred until there is a concrete need: speaker identification, leaderboards, achievements, marketplace expansion, local general-purpose LLMs, broad rewrites, elaborate dashboards, and automatic extraction of every conversation. Judges through OpenAI Decisions API or Jev remain optional tools for specific semantic checks, not a separate deliverable.

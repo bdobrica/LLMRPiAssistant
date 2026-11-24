@@ -1,141 +1,105 @@
 # Product and Implementation Plan
 
-Updated: 2026-11-24. Execution checklist: [TODO.md](TODO.md). Contributor workflow: [AGENTS.md](AGENTS.md).
+Updated: 2026-11-24. Implementation steps: [TODO.md](TODO.md). Contributor workflow: [AGENTS.md](AGENTS.md).
 
-## Product Goal
+## Product Vision
 
-Build a useful household voice assistant that answers ordinary questions intelligently and sustains a short conversation. The supported hardware target is Raspberry Pi Zero 2 W and Raspberry Pi 3 A+, both with 512 MB RAM. Improve the already working assistant on the available Zero 2 W; validate the Pi 3 A+ before claiming support for it. Newer boards must not hide problems on the baseline hardware.
+Build an affordable personal voice assistant that gives useful answers and makes a short conversation feel easy. Deliver features people can use; engineering work should serve that experience. Improve the working product in small, reviewable steps.
 
-Prioritize complete user experiences over architecture expansion. Useful spoken questions and short follow-ups already work according to the owner. The next improvement is reliable use of details the owner supplies, guided by a concrete memory failure rather than an assumed need to rebuild conversation. General questions must not require installing an app or memorizing commands.
+Target Raspberry Pi Zero 2 W and Raspberry Pi 3 A+, both with 512 MB RAM. Use the available Zero 2 W for development. Validate the Pi 3 A+ before claiming support; its availability must not block improvements on the Zero 2 W. Keep reasoning in hosted services and local audio/control work lightweight.
 
-The original motivating fever question has now worked on the device, including the open-ended follow-up “What about a 39.5 degrees?” Preserve it as a regression example. Extend answer evaluation with relevant age/symptom clarification and additional context-dependent follow-ups. Evaluate directness, appropriate uncertainty, authoritative grounding, and escalation when warranted. Do not hardcode one reassuring answer or treat every health question as a refusal. Clinical example answers must be checked against current authoritative guidance.
+The owner has already demonstrated useful spoken answers and contextual follow-ups:
 
-## Observed Baseline
+- A fever question followed by an intentionally incomplete question about a higher temperature.
+- “What's a manifold?” → “What about a compact manifold?” → “What about a cube?”, with answers linked to preceding turns.
 
-These combine the November 24 source/device review and subsequent owner feedback. Code limitations, observed behavior, and untested expectations are distinct:
+Preserve these capabilities. There is no demonstrated short-term-memory defect to repair. Remembering a preference after restart, listening without another wake word, and interrupting speech are separate additions.
 
-- **Owner-confirmed behavior:** useful spoken answers and the two-turn fever exchange work on the device. The owner reports that it does not always remember their answers, but a specific failure sequence is still needed to identify whether the gap is within a conversation or across sessions. The report does not establish wake-word-free listening or persistence after restart.
-- Local revision `d725c62` contains audio-worker, bounded queue, app trust-boundary, conversation-context, RPiFace, and generic MCP changes. The inspected device checkout was `6cbd735`, nine commits behind; deployment must preserve configuration and support rollback.
-- The device was a Zero 2 W running Debian 13.2 with an active assistant service. Its process showed approximately 102 MiB RSS and 105 MiB swap, with one `hey_jarvis` wake-word model. Swap occupancy is not proof of active swapping; measure activity during use.
-- The current pipeline waits for transcription, complete text generation, speech generation, and playback. Audio is discarded during processing. Default post-processing delay plus 30 ignored 80 ms chunks creates approximately 5.4 seconds before wake-word detection resumes.
-- Recording uses a fixed RMS silence threshold and a ten-second maximum. Natural pauses, noise, and longer questions need evaluation.
-- Conversation relevance adds a model request before follow-ups. “Compaction” archives full turns in RAM and clears active context; neither list has a hard size limit, and no persistent retrieval is connected.
-- Processing/playback failures largely reach logs rather than the listener. Full transcripts and replies are written to a file and console without a privacy lifecycle.
-- Local configuration tests could not run successfully because `PyNaCl` was absent. The agent did not perform an acoustic benchmark or live answer evaluation; the owner subsequently confirmed the successful two-turn exchange above. Pi 3 A+ validation remains outstanding.
+## What the Review Established
 
-## Hardware and Service Boundaries
+The November 24 review compared local runtime changes through `d725c62` with deployed revision `6cbd735`. The deployed checkout was clean and inspected source hashes matched that revision. These versions must not be treated as interchangeable.
+
+| Evidence | Meaning for development |
+| --- | --- |
+| Deployed code sends preceding user/assistant turns with each ordinary chat request; a synthetic three-turn probe confirmed this | Preserve existing context handling; the owner's spoken examples establish actual answer quality |
+| Newer code adds relevance checks and idle/topic resets; three turns made five model requests in the probe, versus three on deployed code | Review this behavior before deployment; extra calls are not automatically an improvement |
+| “Compaction” copies full messages into an unbounded RAM archive with no retrieval | It is neither persistent memory nor a complete memory-growth fix |
+| Current RPiFace module raises NameError on import under Python 3.13.5, even when disabled | Fix before deploying this checkout; the Pi uses Python 3.13.5 |
+| A checksum-rejected bundle remains in staging and is imported at the next AppManager startup | Reproduced in both revisions; clean failed staging and exclude it from discovery |
+| Device openWakeWord 0.4.0 works; the assistant's lowercase models import fails against 0.6.0 | Preserve a tested dependency set; upgrading requires compatibility work |
+| Newer code has an audio worker and bounded queue; deployed code queues audio while a synchronous request runs | Preserve the bounded-buffer improvement when deploying; it is not already deployed |
+| Processing errors mostly reach logs; SDK 2.15.0 defaults include a 600-second read timeout and two retries | Bound waits and add audible request-failure feedback; offline/online audio prompts already exist |
+
+The assistant suite produced 64 passes, one RPiFace import error, and one failure from the unavailable separate rpiface integration-test dependency. Audio tests mock wake-word loading and do not establish package compatibility. SecondContext's Go suite passed; PostgreSQL/Qdrant deployment readiness was not established.
+
+The Pi service was active. One snapshot showed about 102 MiB RSS and 105 MiB swap; swap occupancy alone does not prove active swapping or poor responsiveness. The review did not run an acoustic latency benchmark, live model-quality evaluation, or Pi 3 A+ hardware tests.
+
+## Proposed Next Delivery: Easier Follow-Up Conversation
+
+**F06: after answering, briefly listen for the next question without requiring another wake word.** Reuse the existing conversation history and voice pipeline. This adds convenience to a capability that already works.
+
+The intended flow is wake word → question → spoken answer → short follow-up window → another answer, or return to wake-word listening when the window expires. Make the window configurable and disableable. Start listening after playback finishes; silence should end the window quietly. Do not send idle room audio to a provider just to keep the feature alive.
+
+Try the owner's existing conversations on the Zero 2 W. Confirm earlier turns remain available, the assistant does not answer its own playback, and ordinary wake-word use still works afterward. Change drain/flush timing only as needed for this behavior, checking speaker echo. Interruption during playback is separate.
+
+Attach the startup and dependency corrections to delivery of a runnable checkout. Fix the reproduced installation bypass in its own focused commit. These are bounded corrections, not a baseline, infrastructure, or general-hardening milestone. Preserve device configuration and a recoverable working version when deployment is undertaken.
+
+## Subsequent Product Priorities
+
+1. **F03 — Understandable failure and recovery.** Bound provider waits; give a short locally playable failure message; return to listening. Reuse existing connectivity prompts where appropriate.
+2. **F02 — Interruption and correction.** Stop stale playback and accept a correction without duplicating an action already executed. Evaluate speech interruption on hardware before promising it.
+3. **F04 — Current-information answers.** Add a real lookup source, concise attribution, and honest handling of missing/conflicting evidence. General questions must not require installing an app.
+4. **F05 — Simple controls.** Volume, stop, mute with accurate capture indication, and an explicit new-conversation command. Provide local control paths during internet loss without promising offline free-form recognition.
+5. **Everyday usefulness.** Restart-safe timers, reminders/shopping lists, local weather, and one enjoyable trivia/story experience. Choose the next complete feature from household use.
+
+Privacy and onboarding improvements should accompany wider household use: opt-in transcript logging, limited retention, protected setup mutations, and credential-safe errors. The Wi-Fi service already has a provisioning lifecycle; extend it rather than rebuilding it.
+
+## Lightweight Testing That Supports Delivery
+
+Attach a small set of checks to each feature. There is no prerequisite evaluation platform, fixed 20-case suite, leaderboard, or benchmarking milestone.
+
+- **Deterministic tests:** exercise state transitions, deadlines, cancellation, truthful action acknowledgements, startup imports, and rejected-bundle cleanup/discovery. Mock hardware and network failures to reproduce concrete behavior.
+- **Live OpenAI integration tests:** use real API calls for answer quality, contextual follow-ups, and model compatibility. Provide an explicit command using locally configured credentials; keep paid calls out of the default offline suite. Record model/configuration and a brief result. Never commit keys or private household conversations.
+- **Conversation examples:** start with the owner's manifold and fever exchanges, adding corrections/failures relevant to the feature. Check meaning and use of prior context, not an exact response string. The synthetic probe verified transmitted history, not answer quality. Use current authoritative guidance when judging medical content; the primary regression here is contextual understanding.
+- **Optional judges:** use one only when semantic assessment materially helps. OpenAI Decisions API or Jev may be evaluated for that role; neither is selected or required. Use explicit criteria and inspect disputed results. Keep credentials, cost, and data handling deliberate. Do not build a judging framework as a prerequisite.
+- **Pi checks:** API tests cannot establish microphone quality, speaker echo, wake-word behavior, follow-up timing, or memory pressure. Try the changed interaction on the Zero 2 W and record observations. Add measurements when they resolve a concrete concern.
+
+Before broader distribution, expand scenarios, test longer use/reconnection, check operating cost, and repeat core flows on both boards. Set numeric performance targets from actual use and measurements; arbitrary budgets should not prevent the owner from trying a useful improvement.
+
+## Hardware and Architecture Boundaries
 
 | Location | Responsibilities |
 | --- | --- |
-| 512 MB Pi | One wake-word model, capture/playback, small audio buffers, LEDs, session control, local volume/stop/mute, timers and small persistent lists |
-| Hosted model provider | Speech understanding/generation, reasoning, and supported hosted tools |
-| Optional separate server | SecondContext gateway, Postgres, Qdrant, reference-document ingestion, and heavier integrations |
+| 512 MB Pi | One selected wake-word model, capture/playback, bounded buffers, LEDs, session control, local controls, timers and small persistent lists |
+| Hosted provider | Speech transcription/generation, reasoning, and supported hosted tools |
+| Optional external server | SecondContext and storage/retrieval services, document ingestion, heavier integrations |
 
-Use the existing Python service initially. Avoid a desktop browser, general-purpose local LLM, local document indexing, or the SecondContext database stack on the baseline Pi. Prefer remote HTTP tools over additional heavyweight local MCP processes. Keep optional integrations disabled unless used.
+Keep the existing Python service. Use measured problems to justify allocation, thread, import, or runtime changes. Preserve app commands, catalog signatures, checksums, safe bundle paths, and manifest validation. Avoid heavyweight local MCP processes unless their benefit and resource use justify them.
 
-Bound all queues, histories, archives, tool results, and caches. Select one wake-word model explicitly in the shipped low-memory profile. Replace long Python float lists with compact audio storage where profiling shows benefit. Measure inference thread counts and optional-library imports before tuning or changing runtimes; do not rewrite working code merely to change language.
+A streaming/realtime voice path is an option if it solves an observed interaction problem. A newer API alone is not a reason to replace the working pipeline. Keep cloud sessions intentional and avoid unnecessary idle traffic. Advertise physical mute only if the hardware actually disables capture.
 
-## Voice Architecture Direction
+## Optional SecondContext Integration
 
-Keep the working voice path for the next memory improvement. GPT-Live is an option for a demonstrated latency, interruption, or turn-taking need, not a prerequisite for useful answers or context retention. Do not replace a working subsystem because a newer API exists. Provider retirements still require timely migration of affected components; keep that maintenance distinct from a wholesale voice redesign.
+SecondContext is not required for ordinary conversation, OpenAI integration tests, or the next feature. Its existing `POST /v1/responses` supports non-streaming requests; its TODO marks that implementation complete. The assistant currently calls Chat Completions, so integration needs an explicit request/response adapter. Coordinate fuller Responses compatibility or streaming when a feature needs them.
 
-If later evaluating Live or another streaming path, try it on the Zero 2 W and compare the specific experience being improved. Preserve a recoverable working setup. Check speaker echo, bounded buffers, resource use, and session cost while using the feature; perform deeper profiling only when needed. Keep local wake-word detection and close intentional cloud sessions on explicit completion or inactivity.
+Start when explicit cross-session remember/recall or manual-based answers become a chosen feature. Run the backend elsewhere. Carry authenticated user/session identity and recent context deliberately, avoid duplicate ingestion, and keep ordinary answers available during outages. Follow its actual authorization/deletion contracts; do not assume every memory operation is available to a service token. Keep retention deliberate, with correction/deletion controls. Backend changes belong in that repository.
 
-Preserve existing app commands and MCP behavior. Interruption must stop stale audio without duplicating or silently undoing an executed action. Physical mute, if advertised, must actually disconnect or disable capture; a software indicator alone is not that guarantee.
+## Model and Dependency Maintenance
 
-## Feature Delivery Sequence
+Provider retirements are time-sensitive maintenance even when existing behavior works. The [OpenAI deprecation schedule](https://developers.openai.com/api/docs/deprecations), checked on 2026-11-24, lists:
 
-### First — Reliable Recall of User-Provided Details (F01)
-
-Start from the owner's reported memory difficulty. Obtain or reproduce a concrete exchange and identify the expected lifetime of the information: the next turn, after a topic change/inactivity, or after a restart. These are different requirements. Successful short follow-ups are already a capability to preserve.
-
-Use a harmless explicit fact that cannot be answered from general knowledge, then ask for it and correct it. For example, give the location of a screwdriver, ask where it is, change the location, and ask again. Inspect the deployed code and actual context path before choosing a fix; the newer local context-reset code is not necessarily running on the device. Address the smallest demonstrated issue in history, app routing, or reset behavior. If the desired behavior is cross-session memory, deliver C01 instead.
-
-Keep recent context bounded, retain existing safeguards, and add a focused regression check for the actual failure. There is no preliminary baseline milestone, mandatory voice-provider migration, or broad benchmark required to improve memory. Preserve configuration and run relevant checks as part of the feature. If the reported failure cannot yet be reproduced, leave it open and document the uncertainty instead of inventing a defect or doing a speculative rewrite.
-
-### Next — Better Conversation (F02–F05)
-
-Support interruption and corrections, fix pauses or echo problems found in use, and provide local spoken failure feedback with bounded waits/retries. Add current-information and authoritative-source lookup, then simple volume/mute/new-conversation controls and usage limits. Implement each as an improvement to the already usable assistant. Add wake-word-free continuation if repeated wake words are an actual friction point; do not infer its status from a successful answer follow-up.
-
-Treat retrieved content as evidence, not executable instructions. Speak concise source attribution where useful. Report tool failures honestly and announce action success only after confirmation from the executing code. Detailed citation UI can follow later.
-
-### Before Wider Household Use — Privacy and Provisioning (H01–H02)
-
-Make full transcript logging opt-in, bound retention, and protect setup credentials and Wi-Fi mutations. These are required before inviting other household users to rely on the device. Develop them alongside useful features rather than treating the existing assistant as unusable until a hardening phase is complete.
-
-### Then — Useful Daily Actions and Entertainment (H03–H06, E01)
-
-Choose the next feature based on actual use: restart-safe timers/reminders, shopping lists, location-aware weather, simpler phone-based setup, or one enjoyable trivia/story experience. Timers should continue during internet loss; do not promise offline free-form speech recognition merely because timers are local. Provide local cancellation and truthful action acknowledgements.
-
-Keep setup/status pages lightweight and reuse existing app interfaces. Multiplayer profiles, speaker identification, leaderboards, marketplace expansion, and local LLMs remain deferred until they have a demonstrated product benefit.
-
-### Optional — Personal Memory (C01–C03)
-
-Integrate SecondContext on another host when remembering a preference or household fact is the desired next feature. Demonstrate explicit remember/recall across sessions, then correction/deletion and manual-based answers. Keep ordinary conversation usable during backend outages. Do not silently promote sensitive conversations into permanent memory.
-
-## SecondContext Integration Contract
-
-The sibling repository already implements structured memory, hybrid retrieval, reference knowledge, identity isolation, and subject purge. It is optional: ordinary conversation must work without it.
-
-Its current external interface is non-streaming `POST /v1/responses`; streaming is rejected. The assistant currently uses Chat Completions. A base-URL change is insufficient, and the gateway does not expose the existing assistant tool-call contract. Use a small explicit adapter or delegated backend operation and keep local tools independently usable.
-
-The adapter must carry recent turns deliberately: stored messages do not automatically become replayed session context or extracted durable memories. Prevent duplicate transcript ingestion when replaying history. Supply concise voice instructions and preserve source provenance.
-
-Service authentication requires a bearer credential and `X-SecondContext-Subject: <namespace>:<uuid>`. The current service scope allows only `/v1/responses`, `/memory/ingest`, and `/v1/subjects/purge`; do not assume it grants `/memory/search` or individual-memory deletion. Design selective “forget” against an authorized API extension or explicitly document that limitation. Full purge requires user confirmation and a verified matching completion response; it permanently fences the subject and does not erase external backups or provider retention.
-
-Start with an explicitly selected household/user profile; do not infer identity from voices. Keep memory optional, support memory-service outages, and avoid retaining sensitive conversational material by default. Changes to SecondContext belong in its own repository and commit history.
-
-## Component Migration Priorities
-
-The upstream documentation checked on 2026-11-24 lists these dates. Recheck availability, prices, API parameters, and dates when implementing; this table is not a permanent model catalog.
-
-| Current component | Action |
+| Existing model | Announced shutdown |
 | --- | --- |
-| `tts-1` | Replace before its announced 2027-01-06 shutdown; `gpt-4o-mini-tts` has the same announced deadline |
-| `gpt-4o-mini`; SecondContext's `gpt-4.1-mini` | Replace before announced 2027-01-14 shutdown; evaluate supported models on the acceptance set |
-| `whisper-1` | Replace before announced 2027-02-26 shutdown if the selected voice architecture still uses separate transcription |
-| Device `openai==2.15.0` | Select a tested SDK with the required voice support; published version at review was 3.58.0 |
-| Device `openwakeword==0.4.0` | Evaluate 0.6.0 on ARM64, including loading API, model assets, resource use, and the repository patch |
-| Local `mcp>=2.1,<2.2` | Evaluate newer compatible releases when shipping tools; published version at review was 2.3.0 |
-| SecondContext Go 1.24 builder | Upgrade to a supported toolchain before backend deployment |
+| tts-1 | 2027-01-06 |
+| GPT-4o mini family | 2027-01-14 |
+| whisper-1 | 2027-02-26 |
 
-Model changes must cover chat, app-intent classification, structured output, token limits, temperature/reasoning options, and tool calls. Use a separately configured compatible intent model if needed; never let classification failure cause a conversational claim that an app operation succeeded. Preserve a tested dependency set for ARM64 rather than blindly upgrading the running device.
+Recheck dates and replacement compatibility when implementing R01. Test transcription, speech output, ordinary answers, structured app-intent output, token parameters, and tool calls affected by the change. Do not replace a model by name alone or let a routing failure become a false action-success claim.
 
-References: [OpenAI deprecations](https://developers.openai.com/api/docs/deprecations), [Live architecture](https://developers.openai.com/api/docs/guides/live), [voice WebSockets](https://developers.openai.com/api/docs/guides/voice-websockets?api=live), [OpenAI SDK](https://pypi.org/project/openai/), [openWakeWord](https://pypi.org/project/openwakeword/), [MCP](https://pypi.org/project/mcp/), [Go support](https://go.dev/doc/devel/release).
+Record a tested ARM64 dependency set. The openWakeWord export mismatch is documented in its [0.6.0 source](https://raw.githubusercontent.com/dscripka/openWakeWord/v0.6.0/openwakeword/__init__.py). Preserve the working environment while testing compatibility separately. Upgrade SDK/MCP components when required by features or support needs, not simply to match the newest version.
 
-## Feature Checks and Broader Release Validation
+## Review Findings and Delivery Workflow
 
-For the memory improvement, reproduce the reported failure, verify recall and correction of an explicit user-provided detail, and preserve the already successful question/follow-up flow. Run tests relevant to the changed behavior on the available Zero 2 W and report simple responsiveness/resource observations. Resolve missing test dependencies only as needed for those checks. Do not claim a board, interruption behavior, or failure mode was tested when it was not.
+The local `CODE_REVIEW_2026_06_27.md` must never be committed. Preserve its implemented signature/path/manifest protections and audio-worker improvements. Correct its overstatement that context growth is fixed: full archived messages remain in RAM. Carry forward classifier compatibility, privacy, and provisioning issues; the new review also reproduced a password appearing in provisioning exceptions. Existing LEDs, wake-word selection, apps, and tests are foundations to retain.
 
-For broader release validation, expand to at least 20 scenarios: ordinary questions, the fever example and relevant follow-ups, corrections, ambiguous audio, long pauses, current-information lookup, local app commands, cancellation, and network/API failures. Include English and, if required by the household, Romanian. Use synthetic or explicitly approved recordings rather than committing household conversations.
-
-The following are provisional broader-release targets, not prerequisites for developing or showing F01, and not observed results. Use them to find actual product problems without discounting successful owner use. Record hardware, revision, model, test conditions, and costs as relevant; explain adjustments without creating a separate approval process.
-
-| Measure | Initial target |
-| --- | --- |
-| Conversation | Five coherent turns after one wake word; at least 18/20 baseline scenarios pass; no critical unsafe advice or false action-success claims |
-| Simple answers | End-of-user-speech to meaningful first audio: median <=2 seconds, p95 <=5 seconds; report tool-assisted answers separately |
-| Stop | Playback stops within 500 ms of a recognized stop/interrupt event; separately measure speech-to-recognition delay |
-| Memory | Aim for <=200 MiB peak assistant-process-tree RSS and >=80 MiB system MemAvailable; report swap separately and check for sustained swap I/O during conversation |
-| Endurance | 100 turns plus an overnight idle/reconnect run without OOM, service failure, accumulating buffers, or persistent monotonic memory growth |
-| Operating cost | Measure a standard 20-question session, idle cloud-session time, and projected daily usage; expose configurable session/cost limits before the pilot |
-| Hardware | Repeat core acceptance on both Zero 2 W and Pi 3 A+; do not substitute a newer board or claim an untested board passes |
-
-Use mocks for focused unit tests and real audio/network checks for experience validation. A running systemd service alone does not prove a usable conversation. Deliver tested improvements on the available board while recording broader validation separately; an unavailable second board does not block improvements on the working Zero 2 W.
-
-## Findings Carried Forward from the June Review
-
-The original `CODE_REVIEW_2026_06_27.md` remains local and must not be committed. Its useful findings are incorporated here and in TODO:
-
-- Preserve signed remote catalogs (`b5ccf23`), validated bundle paths (`1b83125`), and safe manifest IDs (`61a5ddd`); retain regression coverage.
-- Preserve the audio worker (`43af12f`) and bounded/configurable queue (`ee99660`), while improving interruption and follow-up behavior.
-- Treat context compaction (`8876e8c`) as partial progress: active and archived histories still need hard limits and an explicit retention policy.
-- Fix model/classifier compatibility and add mocked malformed/unsupported-response tests.
-- Protect provisioning mutations with per-device setup credentials and CSRF controls. The manager already stops the Flask service when leaving provisioning; verify that lifecycle instead of treating shutdown as entirely missing. Handle malformed input and NetworkManager failures without exposing passwords in errors.
-- Make transcript logging opt-in across both files and systemd output, with restrictive permissions, rotation, retention, and deletion. Preserve useful content-free diagnostics.
-
-The old TODO's missing LED driver, absent tests, absent wake-word configuration, and absent plugin framework are stale descriptions. Those components exist; validate and extend them when they serve a product feature.
-
-## Execution and Commit Workflow
-
-Implement the next useful TODO feature, handling only its concrete prerequisites. Attach setup, relevant testing, and measurement to delivery; avoid separate preparation milestones. Update its checkbox and validation evidence only after it meets its acceptance criteria. Commit the implementation, relevant tests/config/docs, and checklist update together with an imperative subject and a short description of behavior and validation. Keep unfinished work unchecked. See AGENTS.md for staging and privacy rules.
+Implement one bounded TODO item, run appropriate checks, and record behavior, evidence, and limitations. Mark it complete only when its acceptance criteria are met. Commit implementation, tests, relevant configuration/docs, and TODO update together with a short imperative subject and brief description of behavior and validation. Keep unrelated changes out of the commit. Local commits do not authorize pushing or deployment.
