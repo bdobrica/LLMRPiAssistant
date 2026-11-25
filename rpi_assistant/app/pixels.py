@@ -48,6 +48,9 @@ class Pixels:
     def follow_up(self):
         self.put(self.pattern.follow_up)
 
+    def timer_alert(self):
+        self.put(self.pattern.timer_alert)
+
     def think(self):
         self.put(self.pattern.think)
 

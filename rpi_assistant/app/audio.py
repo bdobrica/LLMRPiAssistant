@@ -169,6 +169,7 @@ class WakeWordRecorder:
         self.capture_generation = 0
         self.recording_generation = 0
         self.processing_active = False
+        self.alert_active = False
         
         # Register cleanup on exit as a safety net
         atexit.register(self.stop)
@@ -284,12 +285,34 @@ class WakeWordRecorder:
                     self._clear_audio_queue()
                     self.muted = False
                     self.capture_paused = False
-                    self.state = "LISTEN_WAKE"
+                    self.state = "ALERT" if self.alert_active else "LISTEN_WAKE"
                     self.last_wake = time.time()
                     self.skip_chunks = 30
                     if self.pixels:
                         self.pixels.set_muted(False)
-                        self.pixels.listen()
+                        (self.pixels.timer_alert if self.alert_active else self.pixels.listen)()
+
+    def begin_alert(self):
+        """Discard microphone input while the local chime plays; preserve real mute."""
+        with self.lock:
+            self.alert_active = True
+            self.cancel_capture()
+            if not self.capture_paused:
+                self.state = "ALERT"
+                if self.pixels:
+                    self.pixels.timer_alert()
+
+    def end_alert(self):
+        with self.lock:
+            self.alert_active = False
+            self._clear_audio_queue()
+            self.pre_roll.clear()
+            if not self.capture_paused:
+                self.state = "PROCESSING" if self.processing_active else "LISTEN_WAKE"
+                self.last_wake = time.time()
+                self.skip_chunks = 30  # discard chime tail, then wait for a fresh wake word
+                if self.pixels:
+                    self.pixels.listen()
 
     def cancel_capture(self):
         """Discard a partial command/follow-up; never submit it after a local stop."""
@@ -358,7 +381,7 @@ class WakeWordRecorder:
                 print("Audio status:", status)
 
             with self.lock:
-                if not self.running or getattr(self, "capture_paused", False) or self.state == "PROCESSING":
+                if not self.running or getattr(self, "capture_paused", False) or self.state in ("PROCESSING", "ALERT"):
                     return
             
             # Just enqueue the audio chunk - processing happens in main thread
@@ -378,7 +401,7 @@ class WakeWordRecorder:
     
     def _process_chunk(self, mono: np.ndarray) -> None:
         with self.lock:
-            if getattr(self, "capture_paused", False):
+            if getattr(self, "capture_paused", False) or getattr(self, "alert_active", False):
                 return
             self._process_active_chunk(mono)
 
@@ -566,7 +589,7 @@ class WakeWordRecorder:
         """Discard playback audio, then open a follow-up window or resume wake detection."""
         # Serialize resets with local mute/unmute and audio inference.
         with self.lock:
-            if getattr(self, "capture_paused", False):
+            if getattr(self, "capture_paused", False) or getattr(self, "alert_active", False):
                 return
             self._reset_model_state()
         
@@ -584,14 +607,14 @@ class WakeWordRecorder:
         drain_until = time.monotonic() + delay
         while time.monotonic() < drain_until:
             with self.lock:
-                if not self.running or getattr(self, "capture_paused", False):
+                if not self.running or getattr(self, "capture_paused", False) or getattr(self, "alert_active", False):
                     return
             time.sleep(0.1)
 
         cleared = self._clear_audio_queue()
 
         with self.lock:
-            if not self.running or getattr(self, "capture_paused", False):
+            if not self.running or getattr(self, "capture_paused", False) or getattr(self, "alert_active", False):
                 return
             self.pre_roll.clear()
             if follow_up and not self.follow_up_cancelled:

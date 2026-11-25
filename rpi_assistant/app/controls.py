@@ -64,6 +64,8 @@ class LocalControls:
         self.reset_pending = False
         self.state_path = Path(config.state_path).expanduser()
         self.error = None
+        self.timers = None
+        self.timer_alerts = None
         self.client.cancel_check = self.check
         # Fail closed for corrupt/unreadable persisted mute settings.
         try:
@@ -105,7 +107,22 @@ class LocalControls:
     def command(self, action, value=None):
         with self.lock:
             if action == "stop":
-                self._stop()
+                try:
+                    if self.timer_alerts and self.timer_alerts.active:
+                        self.timer_alerts.dismiss()
+                finally:
+                    self._stop()
+            elif action == "timer_create":
+                if not self.timers or not isinstance(value, dict):
+                    raise ValueError("Timer settings are required")
+                timer = self.timers.create(value.get("seconds"), value.get("label", ""))
+                return f"{timer['label']} set for {timer['seconds']} seconds."
+            elif action == "timer_cancel":
+                if not self.timers:
+                    raise ValueError("Timers are unavailable")
+                self.timers.cancel(value)
+                if self.timer_alerts and self.timer_alerts.active:
+                    self.playback.stop()
             elif action == "new_conversation":
                 self._stop()
                 self.reset_pending = self.busy
@@ -147,7 +164,9 @@ class LocalControls:
 
     def button_press(self):
         # Preserve F02's immediate stop + contextual correction during a spoken answer.
-        if not self.playback.interrupt():
+        if self.timer_alerts and self.timer_alerts.active:
+            self.command("stop")
+        elif not self.playback.interrupt():
             self.command("stop")
 
     def button_hold(self):
@@ -171,4 +190,11 @@ class LocalControls:
             state["volume"] = self.volume.get()
         except Exception:
             state["volume"] = None
+        if self.timers:
+            try:
+                state["timers"] = self.timers.list()
+                state["timer_error"] = self.timer_alerts.error if self.timer_alerts else None
+            except Exception:
+                state["timers"] = []
+                state["timer_error"] = "Timer storage is unavailable; no timer change can be confirmed."
         return state

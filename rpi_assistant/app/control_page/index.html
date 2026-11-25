@@ -7,6 +7,12 @@
 <h2>Speaker volume</h2><div class="buttons"><button id="down">Quieter</button><output id="volume">—</output><button id="up">Louder</button></div>
 <label for="level">Set volume (0–100)</label><div class="buttons"><input id="level" type="number" min="0" max="100" value="70"><button id="set">Set volume</button></div>
 <button id="new">New conversation</button>
+<h2>Timers</h2><p id="timer-error" role="status"></p>
+<label for="timer-name">Name (optional)</label><input id="timer-name" maxlength="64" placeholder="Tea">
+<div class="buttons"><label for="timer-minutes">Minutes</label><input id="timer-minutes" type="number" min="0" max="10080" value="5">
+<label for="timer-seconds">Seconds</label><input id="timer-seconds" type="number" min="0" max="59" value="0"></div>
+<button id="timer-add">Start timer</button><ul id="timers"></ul>
+<p class="hint">Timers ring without Internet, including when the microphone is muted. Speaker volume still applies. Press the device button or Stop to dismiss a ringing timer. Alerts repeat for a limited time (two minutes by default); missed timers remain here.</p>
 <p class="hint">Hold the device button for 1.5 seconds to mute or unmute. Steady red means microphone capture is closed. A short press stops an answer and opens a correction window.</p>
 <p class="hint">These controls work without Internet on the same Wi-Fi. Voice requests need Internet. New conversation clears chat context; it does not delete logs, cancel apps or undo actions.</p>
 </main></body></html>

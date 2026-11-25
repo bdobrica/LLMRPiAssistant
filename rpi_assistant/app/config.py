@@ -114,6 +114,16 @@ class ControlsConfig:
 
 
 @dataclass
+class TimerConfig:
+    state_path: str = "~/.local/state/rpi-assistant/timers.sqlite3"
+    alert_seconds: int = 120
+
+    def __post_init__(self):
+        if not 1 <= self.alert_seconds <= 600:
+            raise ValueError("timer alert_seconds must be between 1 and 600")
+
+
+@dataclass
 class LEDConfig:
     """LED configuration."""
 
@@ -187,6 +197,7 @@ class Config:
     rpiface: RPiFaceConfig
     mcp: MCPConfig
     controls: ControlsConfig = field(default_factory=ControlsConfig)
+    timers: TimerConfig = field(default_factory=TimerConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
@@ -464,6 +475,10 @@ def load_config(config_path: Optional[str] = None) -> Config:
         app_store=app_store_config,
         rpiface=rpiface_config,
         mcp=mcp_config,
+        timers=TimerConfig(
+            state_path=get_value("timers", "state_path", "TIMERS_STATE_PATH", "~/.local/state/rpi-assistant/timers.sqlite3", str),
+            alert_seconds=get_value("timers", "alert_seconds", "TIMERS_ALERT_SECONDS", 120, int),
+        ),
         controls=ControlsConfig(**{
             name: get_value("controls", name, "CONTROLS_" + name.upper(), default, kind)
             for name, default, kind in (

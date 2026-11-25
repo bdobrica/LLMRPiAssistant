@@ -8,6 +8,7 @@ This directory contains pre-generated audio prompts for system messages.
 - `online.mp3` - Played when internet connection is restored
 - `unheard.wav` - Played when transcription returns no words
 - `request_failed.wav` - Played when a request cannot finish
+- `timer.wav` - Original synthesized three-note local timer chime (24 kHz mono PCM); no API needed
 - `new_conversation.wav` - Local acknowledgment for the explicit spoken reset control
 
 ## Generating Audio Files

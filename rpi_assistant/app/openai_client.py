@@ -1,5 +1,7 @@
 """OpenAI API client for transcription, app intent classification, and chat."""
 import json
+import hashlib
+import uuid
 from pathlib import Path
 import time
 from typing import TYPE_CHECKING, Any, Optional
@@ -8,6 +10,7 @@ from openai import OpenAI
 
 from .playback import PlaybackStopped
 from .config import OpenAIConfig
+from .timers import TIMER_TOOLS, TIMER_NAMES, TIMER_INSTRUCTIONS, timer_action
 from .web_lookup import LOOKUP_NAME, LOOKUP_TOOL, lookup, lookup_instructions, spoken_without_links, unavailable
 
 if TYPE_CHECKING:
@@ -28,6 +31,7 @@ class OpenAIClient:
             api_key=config.api_key, timeout=config.request_timeout_seconds, max_retries=0,
         )
         self.mcp_manager = mcp_manager
+        self.timers = None
         self.conversation_history = []
         self.compacted_contexts = []
         self.last_response_output_finished_at: Optional[float] = None
@@ -105,6 +109,11 @@ class OpenAIClient:
         if self.config.web_search_enabled:
             tools.append(LOOKUP_TOOL)
             max_rounds = max(max_rounds, 1)
+        timers = getattr(self, "timers", None)
+        if timers is not None:
+            tools.extend(TIMER_TOOLS)
+            max_rounds = max(max_rounds, 3)
+        timer_request = uuid.uuid4().hex
         usage = _empty_usage(self.config.chat_model)
         tool_rounds = 0
 
@@ -113,7 +122,7 @@ class OpenAIClient:
             request = {
                 "model": self.config.chat_model,
                 "messages": [self.conversation_history[0],
-                             {"role": "system", "content": lookup_instructions(self.config.web_search_enabled)},
+                             {"role": "system", "content": lookup_instructions(self.config.web_search_enabled) + ("\n" + TIMER_INSTRUCTIONS if timers is not None else "")},
                              *self.conversation_history[1:]],
                 **self._completion_options(self.config.max_tokens, self.config.temperature),
             }
@@ -137,6 +146,9 @@ class OpenAIClient:
             self.conversation_history.append(_assistant_tool_message(message, tool_calls))
             if any(call.function.name == LOOKUP_NAME for call in tool_calls):
                 return self._answer_lookup(tool_calls, usage)
+            timer_receipts = []
+            blocked_timer_actions = False
+            timer_mutation = timers is not None and any(t.function.name in ("create_timer", "cancel_timer") for t in tool_calls)
             for tool_call in tool_calls:
                 try:
                     arguments = json.loads(tool_call.function.arguments or "{}")
@@ -152,10 +164,27 @@ class OpenAIClient:
                     except PlaybackStopped:
                         result = json.dumps({"is_error": True, "error": "Cancelled before execution"})
                     else:
-                        result = manager.call_tool(tool_call.function.name, arguments)
+                        name = tool_call.function.name
+                        if timers is not None and name in TIMER_NAMES:
+                            key = timer_request + hashlib.sha256(json.dumps(arguments, sort_keys=True).encode()).hexdigest()
+                            receipt = timer_action(timers, name, arguments, key)
+                            result = json.dumps(receipt)
+                            if name != "list_timers":
+                                timer_receipts.append(receipt['message'])
+                        elif timer_mutation:
+                            blocked_timer_actions = True
+                            result = json.dumps({"is_error":True, "error":"Timer changes do not execute co-requested app actions."})
+                        else:
+                            result = manager.call_tool(name, arguments)
                 self.conversation_history.append(
                     {"role": "tool", "tool_call_id": tool_call.id, "content": result}
                 )
+            if timer_mutation:
+                answer = " ".join(timer_receipts) or "I couldn't confirm a timer change. Please try again."
+                if blocked_timer_actions:
+                    answer += " I haven't performed any other action."
+                self.conversation_history.append({"role":"assistant", "content":answer})
+                return answer, usage
             tool_rounds += 1
 
     def _answer_lookup(self, tool_calls, usage: dict) -> tuple[str, dict]:

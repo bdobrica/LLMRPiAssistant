@@ -118,6 +118,7 @@ class WakeWordRecorderTests(unittest.TestCase):
         recorder.device = 0
         recorder.stream = None
         recorder.running = True
+        recorder.alert_active = False
         recorder.processing_drain_seconds = 0.01
         recorder.lock = threading.RLock()
         return recorder
@@ -247,6 +248,7 @@ class WakeWordRecorderTests(unittest.TestCase):
                 RecordingConfig(pre_roll_seconds=0, follow_up_echo_guard_seconds=0),
             )
         recorder.running = True
+        recorder.alert_active = False
         recorder.state = "PROCESSING"
         try:
             recorder._finish_processing(allow_follow_up=True)

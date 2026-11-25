@@ -1,5 +1,6 @@
 """One voice turn, including local failure feedback and recovery."""
 
+import re
 from pathlib import Path
 import wave
 
@@ -50,9 +51,10 @@ class VoiceCommandHandler:
                 usage = {"model": "local_control", "total_tokens": 0}
             else:
                 stage = "app routing"
-                app_response = self.apps.handle(transcription)
+                timer_request = self.controls and self.controls.timers and re.search(r"\btimers?\b", transcription, re.I)
+                app_response = None if timer_request else self.apps.handle(transcription)
                 classifier_usage = None
-                if app_response is None and self.apps.should_classify_app_intent(transcription):
+                if not timer_request and app_response is None and self.apps.should_classify_app_intent(transcription):
                     intent, classifier_usage = self.client.classify_app_intent(
                         transcription, self.apps.app_intent_context(),
                     )

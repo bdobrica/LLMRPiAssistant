@@ -72,6 +72,10 @@ class LedPattern(object):
         """Steady green: ready for a question without the wake word."""
         self.show([0, 0, 32, 0] * self.pixels_number)
 
+    def timer_alert(self):
+        """Steady amber: a local timer needs attention."""
+        self.show([0, 48, 24, 0] * self.pixels_number)
+
     def think(self):
         """Smooth rotating gradient with pulsing effect."""
         angle = 0
