@@ -109,6 +109,8 @@ Attach a small set of checks to each feature. There is no prerequisite evaluatio
 
 Before broader distribution, expand scenarios, test longer use/reconnection, check operating cost, and repeat core flows on both boards. Set numeric performance targets from actual use and measurements; arbitrary budgets should not prevent the owner from trying a useful improvement.
 
+R03 completed a bounded assessment on the available Zero 2 W: a 20-minute mixed-use observation, synthetic live/API and offline process-recovery checks, owner-confirmed Internet-outage recovery, and measured usage/cost. It exposed a real deployment gap: Dice was available in the catalog but not installed; FIX04 adds clear installation guidance and the verified bundle was installed for the successful owner retry. See [the dated release report](docs/release-check-2026-11-25.md) and TODO.md. Continue owner evaluation on this board; do not equate completion of the assessment with broad production readiness. Pi 3 A+, multi-day use and difficult acoustics remain untested, and the reproduced 90-second shutdown hang remains an unattended-upgrade reliability gap. Local status p95 around 47 ms and stage timings now provide observed references for future regressions, not invented release thresholds.
+
 ## Hardware and Architecture Boundaries
 
 | Location | Responsibilities |
