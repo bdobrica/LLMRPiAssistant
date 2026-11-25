@@ -286,6 +286,42 @@ class AppManagerTests(unittest.TestCase):
         self.assertTrue(manager.should_classify_app_intent("Install app footordare"))
         self.assertTrue(manager.should_classify_app_intent("Start truth or dare"))
 
+    def test_uninstalled_catalog_trigger_explains_installation_without_running_it(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            manager = AppManager(app_dirs=[root/'apps'], repository_roots=[VOICE_APPS_REPOSITORY],
+                                 repository_public_key=VOICE_APPS_PUBLIC_KEY, require_repository_signature=True,
+                                 active_state_path=root/'active.json')
+            for request in ("Roll a die", "Please roll a die."):
+                response = manager.handle(request)
+                self.assertIsNotNone(response)
+                self.assertIn("isn't installed", response.text)
+                self.assertIn("install app dice", response.text)
+            self.assertFalse((root/'apps').exists())
+            self.assertIsNone(manager.active_app)
+            self.assertIsNone(manager.handle("What is a manifold?"))
+
+    def test_classified_uninstalled_launch_is_actionable_but_unknown_id_is_not(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            manager = AppManager(app_dirs=[root/'apps'], repository_roots=[VOICE_APPS_REPOSITORY],
+                                 active_state_path=root/'active.json')
+            intent = {"intent":"launch_app", "app_id":"dice", "confidence":1}
+            response = manager.handle_classified_intent(intent, "Please roll one die")
+            self.assertIn("install app dice", response.text)
+            self.assertIsNone(manager.handle_classified_intent({**intent, "app_id":"unknown"}, "Start unknown"))
+
+    def test_installed_dice_still_rolls_for_plain_request(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            manager = AppManager(app_dirs=[root/'apps'], repository_roots=[VOICE_APPS_REPOSITORY],
+                                 repository_public_key=VOICE_APPS_PUBLIC_KEY, require_repository_signature=True,
+                                 active_state_path=root/'active.json')
+            installed = manager.handle("install app dice")
+            self.assertIn("Installed Dice", installed.text)
+            response = manager.handle("Roll a die")
+            self.assertRegex(response.text, r"^You rolled [1-6]\.$")
+
     def test_dare_choice_completes_app(self):
         with TemporaryDirectory() as install_tmp, TemporaryDirectory() as state_tmp:
             manager = AppManager(

@@ -126,6 +126,27 @@ class AppManager:
                     self._persist_active_app_state()
                 return response
 
+        # Catalog availability is not installation. Explain a known app trigger
+        # locally rather than asking the general model to pretend it has a tool.
+        normalized = normalize_text(text)
+        for repository in self.repositories:
+            for release in repository.list():
+                manifest = release.manifest
+                if any(normalize_text(trigger) in normalized for trigger in manifest.triggers if normalize_text(trigger)):
+                    response = self._missing_app_response(manifest.id)
+                    if response is not None:
+                        return response
+        return None
+
+    def _missing_app_response(self, app_id: str) -> Optional[AppResponse]:
+        if self._find_app(app_id) is not None:
+            return None
+        release = self._find_repository_release(app_id)
+        if release is not None:
+            return AppResponse(
+                text=f"{release.manifest.name} isn't installed. Say 'install app {app_id}' to add it, then ask again.",
+                done=True,
+            )
         return None
 
     def app_intent_context(self) -> Dict[str, Any]:
@@ -215,7 +236,7 @@ class AppManager:
             app_id = str(classified_intent.get("app_id", "")).strip()
             app = self._find_app(app_id)
             if app is None:
-                return None
+                return self._missing_app_response(app_id)
 
             self.active_app = app
             response = app.start(original_text)

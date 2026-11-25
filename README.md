@@ -11,7 +11,7 @@ LLMRPiAssistant is a fully-featured voice assistant that brings Alexa-like funct
 - 🎙️ **Wake Word Detection** - Always listening for activation using OpenWakeWord
 - 🗣️ **Speech Recognition** - Powered by OpenAI GPT-Transcribe
 - 🧠 **Conversational AI** - Natural responses using GPT-4o-mini (or any OpenAI chat model)
-- 🎲 **Local Voice Apps** - Built-in stateful experiences such as Truth or Dare and Ask! that run before chat fallback
+- 🎲 **Local Voice Apps** - Installable experiences such as Dice, Truth or Dare and Ask! that run before chat fallback
 - 🔊 **Text-to-Speech** - Realistic voice output with OpenAI TTS
 - 💡 **LED Feedback** - Visual indicators with reSpeaker HAT LED ring
 - � **WiFi Provisioning** - Easy network configuration via captive portal when offline
@@ -286,6 +286,10 @@ cd rpi-assistant
 7. **Repeat**: Returns to listen mode
 
 ### Installable Voice Apps
+
+Catalog entries are available to install, not preinstalled. For Dice, first say
+`install app dice`, then `roll a die`. A recognized request for a missing app now
+explains how to install it; it does not silently install the app or pretend to run it.
 
 - **Truth or Dare**: Install `truth_or_dare`, then say phrases like `play truth or dare` or `do truth or dare for Alex` to start a short stateful flow that keeps the next utterance inside the game.
 - **Ask!**: Install `ask`, then say `play ask` or `ask game` to get a deterministic conversation starter without calling the chat model.
