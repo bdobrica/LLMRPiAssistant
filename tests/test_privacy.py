@@ -130,7 +130,6 @@ class PrivacyTests(unittest.TestCase):
         c.household.create_reminder('Synthetic reminder',delay_seconds=60)
         before = fixture.path.read_bytes()
         c.client.conversation_history.append({'role':'user','content':MARKER})
-        c.client.compacted_contexts.append({'messages':[MARKER]})
         logger.log_chat_completion(MARKER,MARKER,{})
         Path(config.recording.output_path).write_text(MARKER)
         Path(config.audio_output.tts_output_path).write_text(MARKER)
@@ -140,7 +139,6 @@ class PrivacyTests(unittest.TestCase):
         c.busy=False
         c.command('privacy_delete', {'confirm':True})
         self.assertEqual(len(c.client.conversation_history),1)
-        self.assertEqual(c.client.compacted_contexts,[])
         self.assertFalse(logger.log_file.exists())
         self.assertFalse(Path(config.recording.output_path).exists())
         self.assertFalse(Path(config.audio_output.tts_output_path).exists())

@@ -86,7 +86,6 @@ class ControlsTests(unittest.TestCase):
 
     def test_reset_during_request_waits_then_clears_all_chat_context(self):
         self.client.remember_app_response('Roll', 'six')
-        self.client.compacted_contexts.append({'messages': ['old']})
         self.controls.begin_turn()
         self.controls.command('new_conversation')
         self.assertTrue(self.controls.reset_pending)
@@ -95,7 +94,6 @@ class ControlsTests(unittest.TestCase):
             self.controls.check()
         self.controls.end_turn()
         self.assertEqual(len(self.client.conversation_history), 1)
-        self.assertEqual(self.client.compacted_contexts, [])
         self.assertFalse(self.controls.reset_pending)
 
     def test_cancelled_saved_recording_is_not_submitted(self):

@@ -119,6 +119,8 @@ Before broader distribution, expand scenarios, test longer use/reconnection, che
 
 Keep the existing Python service. Use measured problems to justify allocation, thread, import, or runtime changes. Preserve app commands, catalog signatures, checksums, safe bundle paths, and manifest validation. Avoid heavyweight local MCP processes unless their benefit and resource use justify them.
 
+R02 bounds retained conversation using the owner's selected defaults: 32 recent complete exchanges and 256 KiB of UTF-8 JSON messages, configurable in `[openai]`. Evict whole exchanges, preserving tool-call/result pairs; disclose missing older context to the model rather than inventing details or replaying actions. Discard the inactive archive, which has no retrieval path. An exceptionally oversized exchange leaves a small omission notice; a pending oversized tool round stops before another provider call. Existing short contextual conversations, follow-up behavior, privacy controls and persisted household data remain intact. No summarization requests or audio/thread changes are needed. See [retention policy and measurements](docs/conversation-retention.md) and TODO.md for hardware acceptance and limits.
+
 Adopt API workflow changes required by supported models during R01, including the speech-output migration. Broader streaming input or turn-taking changes should serve a specific interaction improvement. Keep cloud sessions intentional and avoid unnecessary idle traffic. Advertise physical mute only if the hardware actually disables capture.
 
 ## Optional SecondContext Integration
@@ -143,6 +145,6 @@ U02 establishes a current tested ARM64 dependency set; afterward, maintain it wi
 
 ## Review Findings and Delivery Workflow
 
-The local `CODE_REVIEW_2026_06_27.md` must never be committed. Preserve its implemented signature/path/manifest protections and audio-worker improvements. Correct its overstatement that context growth is fixed: full archived messages remain in RAM. Carry forward classifier compatibility, privacy, and provisioning issues; the new review also reproduced a password appearing in provisioning exceptions. Existing LEDs, wake-word selection, apps, and tests are foundations to retain.
+The local `CODE_REVIEW_2026_06_27.md` must never be committed. Preserve its implemented signature/path/manifest protections and audio-worker improvements. Its assertion that context growth was fixed was incorrect: full archived messages remained in RAM. R02 replaces that retention with the explicit policy above. Classifier compatibility, privacy, and provisioning findings were carried into their respective deliveries; the review also reproduced a password appearing in provisioning exceptions, addressed in H02. Existing LEDs, wake-word selection, apps, and tests are foundations to retain.
 
 The owner's requested order is modernization first (U01, U02, R01), then F06 and the other useful additions. Implement one bounded TODO item, run appropriate checks, and record behavior, evidence, and limitations. Mark it complete only when its acceptance criteria are met. Commit implementation, tests, relevant configuration/docs, and TODO update together with a short imperative subject and brief description of behavior and validation. Keep unrelated changes out of the commit. Local commits do not authorize pushing or deployment.

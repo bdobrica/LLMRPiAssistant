@@ -79,9 +79,15 @@ class OpenAIConfig:
     temperature: float = 0.7
     conversation_idle_timeout_seconds: float = 300.0
     conversation_relevance_threshold: float = 0.35
+    conversation_max_turns: int = 32
+    conversation_max_bytes: int = 262144
 
     def __post_init__(self):
         import math
+        for name, minimum in (("conversation_max_turns", 1), ("conversation_max_bytes", 1024)):
+            value = getattr(self, name)
+            if type(value) is not int or value < minimum:
+                raise ValueError(f"{name} must be an integer of at least {minimum}")
         for name in ("request_timeout_seconds", "tts_timeout_seconds"):
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
@@ -438,6 +444,8 @@ def load_config(config_path: Optional[str] = None, *, allow_missing_api_key: boo
             0.35,
             float,
         ),
+        conversation_max_turns=get_value("openai", "conversation_max_turns", "OPENAI_CONVERSATION_MAX_TURNS", 32, int),
+        conversation_max_bytes=get_value("openai", "conversation_max_bytes", "OPENAI_CONVERSATION_MAX_BYTES", 262144, int),
     )
 
     audio_output = AudioOutputConfig(

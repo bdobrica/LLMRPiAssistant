@@ -79,6 +79,8 @@ class ConfigTests(unittest.TestCase):
                         "api_key = test-key",
                         "conversation_idle_timeout_seconds = 42",
                         "conversation_relevance_threshold = 0.6",
+                        "conversation_max_turns = 48",
+                        "conversation_max_bytes = 524288",
                         "",
                         "[audio]",
                         "queue_seconds = 1.5",
@@ -96,6 +98,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.recording.processing_drain_seconds, 0.75)
         self.assertEqual(config.openai.conversation_idle_timeout_seconds, 42)
         self.assertEqual(config.openai.conversation_relevance_threshold, 0.6)
+        self.assertEqual(config.openai.conversation_max_turns, 48)
+        self.assertEqual(config.openai.conversation_max_bytes, 524288)
         self.assertFalse(config.rpiface.enabled)
         self.assertEqual(config.rpiface.base_url, "http://127.0.0.1:8765")
         self.assertEqual(config.rpiface.timeout_seconds, 0.3)

@@ -38,12 +38,12 @@ class OpenAIClient:
         self.household = None
         self.weather = None
         self.conversation_history = []
-        self.compacted_contexts = []
         self.last_response_output_finished_at: Optional[float] = None
         self._initialize_conversation()
     
     def _initialize_conversation(self) -> None:
         """Initialize conversation with system prompt."""
+        self.history_limited = False
         self.conversation_history = [
             {"role": "system", "content": self.config.system_prompt}
         ]
@@ -97,6 +97,53 @@ class OpenAIClient:
             raise
         except Exception as e:
             raise Exception(f"Chat completion failed: {e}")
+        finally:
+            self._close_unanswered_tool_calls()
+            self._bound_history()
+
+    def _close_unanswered_tool_calls(self) -> None:
+        """Keep failed/interrupted tool rounds valid without repeating an action."""
+        pending = {}
+        for message in self.conversation_history:
+            for call in message.get("tool_calls", []):
+                pending[call["id"]] = True
+            if message["role"] == "tool":
+                pending.pop(message.get("tool_call_id"), None)
+        for call_id in pending:
+            self.conversation_history.append({
+                "role": "tool", "tool_call_id": call_id,
+                "content": '{"error":"Result unavailable; the action may already have run. Do not repeat it automatically."}',
+            })
+
+    def _bound_history(self, *, preparing_request: bool = False) -> None:
+        """Evict whole oldest user turns, including their tool calls and results."""
+        messages = self.conversation_history
+        starts = [i for i, message in enumerate(messages) if message["role"] == "user"]
+        if not starts:
+            return
+        ends = starts[1:] + [len(messages)]
+        sizes = [len(json.dumps(messages[start:end], ensure_ascii=False).encode("utf-8"))
+                 for start, end in zip(starts, ends)]
+        total = sum(sizes)
+        remove = 0
+        while len(starts) - remove > 1 and (
+            len(starts) - remove > self.config.conversation_max_turns
+            or total > self.config.conversation_max_bytes
+        ):
+            total -= sizes[remove]
+            remove += 1
+        if remove:
+            del messages[1:starts[remove]]
+            self.history_limited = True
+        if total > self.config.conversation_max_bytes:
+            if preparing_request:
+                # Never send an oversized tool round or resume it with missing evidence.
+                raise RuntimeError("Current exchange exceeds the configured conversation size limit")
+            self.conversation_history[1:] = [
+                {"role": "user", "content": "[An earlier exchange exceeded the local history limit.]"},
+                {"role": "assistant", "content": "Its details are unavailable. Actions may already have run; do not repeat them without an explicit new request."},
+            ]
+            self.history_limited = True
 
     def _check_cancelled(self):
         check = getattr(self, "cancel_check", None)
@@ -138,6 +185,7 @@ class OpenAIClient:
 
         while True:
             self._check_cancelled()
+            self._bound_history(preparing_request=True)
             request = {
                 "model": self.config.chat_model,
                 "messages": [self.conversation_history[0],
@@ -145,6 +193,12 @@ class OpenAIClient:
                              *self.conversation_history[1:]],
                 **self._completion_options(self.config.max_tokens, self.config.temperature),
             }
+            if self.history_limited:
+                request["messages"][1]["content"] += (
+                    "\nOlder exchanges have left the local context. Do not invent missing details "
+                    "or assume an action was never executed because its receipt is absent. "
+                    "Ask for clarification when needed; do not repeat actions without an explicit new request."
+                )
             if tools and tool_rounds < max_rounds:
                 request["tools"] = tools
                 request["tool_choice"] = "auto"
@@ -271,23 +325,15 @@ class OpenAIClient:
             {"role": "user", "content": user_message},
             {"role": "assistant", "content": response},
         ])
+        self._bound_history()
 
     def compact_conversation(self, reason: str) -> bool:
-        """Archive active chat turns for future retrieval and reset chat context."""
-        messages = self.conversation_history[1:]
-        if not messages:
+        """Discard inactive context; there is no archive retrieval service."""
+        count = len(self.conversation_history) - 1
+        if not count:
             return False
-
-        self.compacted_contexts.append(
-            {
-                "reason": reason,
-                "created_at": time.time(),
-                "messages": [dict(message) for message in messages],
-                "vector_store_status": "pending",
-            }
-        )
         self._initialize_conversation()
-        print(f"Compacted chat context ({reason}); archived {len(messages)} messages.")
+        print(f"Reset inactive chat context; discarded {count} messages.")
         return True
 
     def _prepare_conversation_for(self, user_message: str) -> None:
@@ -432,7 +478,6 @@ class OpenAIClient:
     def reset_conversation(self) -> None:
         """Reset conversation history, keeping only system prompt."""
         self._initialize_conversation()
-        self.compacted_contexts.clear()
         self.last_response_output_finished_at = None
         weather = getattr(self, "weather", None)
         if weather is not None:

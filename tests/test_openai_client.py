@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from rpi_assistant.app.config import AudioOutputConfig, OpenAIConfig
 from rpi_assistant.app.openai_client import OpenAIClient
@@ -37,6 +37,102 @@ class FakeClient:
 
 
 class OpenAIClientConversationTests(unittest.TestCase):
+    def test_retention_limits_reject_unbounded_or_invalid_configuration(self):
+        for settings in ({"conversation_max_turns": 0}, {"conversation_max_turns": True},
+                         {"conversation_max_bytes": 1023}, {"conversation_max_bytes": -1}):
+            with self.subTest(settings=settings), self.assertRaises(ValueError):
+                OpenAIConfig(api_key="synthetic", **settings)
+
+    def test_oversized_input_never_reaches_provider(self):
+        client = self.create_client([], conversation_max_bytes=1024)
+        with self.assertRaisesRegex(Exception, "size limit"):
+            client.get_chat_response("x" * 2000, continue_conversation=True)
+        self.assertEqual(client.client.chat.completions.calls, [])
+        self.assertLess(len(json.dumps(client.conversation_history[1:]).encode()), 1024)
+
+    def test_retention_evicts_whole_tool_exchange_and_keeps_recent_context(self):
+        tool = SimpleNamespace(id="roll-1", function=SimpleNamespace(name="roll", arguments="{}"))
+        client = self.create_client([SimpleNamespace(content=None, tool_calls=[tool]),
+                                     "Six.", "A manifold.", "Compact.", "Cube."],
+                                    conversation_max_turns=3)
+        manager = Mock()
+        manager.config.max_tool_rounds = 1
+        manager.openai_tools.return_value = []
+        manager.call_tool.return_value = '{"result":6}'
+        client.mcp_manager = manager
+        for question in ("Roll", "Manifold?", "Compact?", "Cube?"):
+            client.get_chat_response(question, continue_conversation=True)
+        manager.call_tool.assert_called_once_with("roll", {})
+        self.assertEqual([m["role"] for m in client.conversation_history],
+                         ["system", "user", "assistant", "user", "assistant", "user", "assistant"])
+        self.assertEqual([m["content"] for m in client.conversation_history[1::2]],
+                         ["Manifold?", "Compact?", "Cube?"])
+        request = client.client.chat.completions.calls[-1]
+        self.assertNotIn("roll-1", json.dumps(request["messages"]))
+        self.assertIn("Older exchanges", request["messages"][1]["content"])
+
+    def test_byte_cap_counts_utf8_and_preserves_recent_app_receipt(self):
+        client = self.create_client([], conversation_max_bytes=1024)
+        for index in range(100):
+            client.remember_app_response(f"Question {index}", "é" * 200)
+            self.assertLessEqual(len(json.dumps(client.conversation_history[1:], ensure_ascii=False).encode()), 1024)
+        self.assertEqual(client.conversation_history[-2]["content"], "Question 99")
+        self.assertFalse(hasattr(client, "compacted_contexts"))
+
+    def test_oversized_response_is_delivered_but_not_retained(self):
+        client = self.create_client(["x" * 2000, "Please clarify."], conversation_max_bytes=1024)
+        answer, _ = client.get_chat_response("Synthetic question", continue_conversation=True)
+        self.assertEqual(answer, "x" * 2000)
+        self.assertLess(len(json.dumps(client.conversation_history[1:]).encode()), 1024)
+        self.assertIn("may already have run", client.conversation_history[-1]["content"])
+        client.get_chat_response("What was it?", continue_conversation=True)
+        self.assertNotIn("x" * 2000, json.dumps(client.client.chat.completions.calls[-1]))
+
+    def test_oversized_tool_result_does_not_trigger_another_call_or_replay(self):
+        tool = SimpleNamespace(id="large-result", function=SimpleNamespace(name="act", arguments="{}"))
+        client = self.create_client([SimpleNamespace(content=None, tool_calls=[tool]), "Please clarify."],
+                                    conversation_max_bytes=1024)
+        manager = Mock()
+        manager.config.max_tool_rounds = 2
+        manager.openai_tools.return_value = []
+        manager.call_tool.return_value = "x" * 2000
+        client.mcp_manager = manager
+        with self.assertRaisesRegex(Exception, "size limit"):
+            client.get_chat_response("Act", continue_conversation=True)
+        self.assertEqual(len(client.client.chat.completions.calls), 1)
+        client.get_chat_response("What happened?", continue_conversation=True)
+        manager.call_tool.assert_called_once_with("act", {})
+        self.assertLess(len(json.dumps(client.conversation_history[1:]).encode()), 1024)
+
+    def test_failed_tool_round_retains_unknown_execution_receipt(self):
+        tool = SimpleNamespace(id="failed-result", function=SimpleNamespace(name="act", arguments="{}"))
+        client = self.create_client([SimpleNamespace(content=None, tool_calls=[tool]), "I cannot confirm."],
+                                    conversation_max_turns=2)
+        manager = Mock()
+        manager.config.max_tool_rounds = 1
+        manager.openai_tools.return_value = []
+        manager.call_tool.side_effect = RuntimeError("Synthetic lost result")
+        client.mcp_manager = manager
+        with self.assertRaisesRegex(Exception, "Synthetic lost result"):
+            client.get_chat_response("Act", continue_conversation=True)
+        receipt = client.conversation_history[-1]
+        self.assertEqual(receipt["tool_call_id"], "failed-result")
+        self.assertIn("may already have run", receipt["content"])
+        client.get_chat_response("Did it run?", continue_conversation=True)
+        manager.call_tool.assert_called_once()
+
+    def test_repeated_resets_discard_text_and_clear_retention_notice(self):
+        client = self.create_client([], conversation_max_turns=1)
+        for _ in range(100):
+            client.remember_app_response("old synthetic", "old synthetic answer")
+            client.remember_app_response("new synthetic", "new synthetic answer")
+            self.assertTrue(client.history_limited)
+            with patch('builtins.print'):
+                client.compact_conversation("test")
+            self.assertEqual(len(client.conversation_history), 1)
+            self.assertFalse(client.history_limited)
+            self.assertFalse(hasattr(client, "compacted_contexts"))
+
     def test_interrupted_tool_answer_retains_result_and_correction_does_not_replay_action(self):
         tool = SimpleNamespace(id="completed-action", function=SimpleNamespace(name="utility__roll", arguments="{}"))
         client = self.create_client([
@@ -87,7 +183,7 @@ class OpenAIClientConversationTests(unittest.TestCase):
         client.get_chat_response("What about a cube?", continue_conversation=True)
         self.assertEqual(len(client.conversation_history), 7)
         self.assertEqual(len(client.client.chat.completions.calls), 3)
-        self.assertEqual(client.compacted_contexts, [])
+        self.assertFalse(hasattr(client, "compacted_contexts"))
 
     def test_disabled_relevance_preserves_followup_without_extra_request(self):
         client = self.create_client(["manifold", "compact manifold", "cube"],
@@ -119,7 +215,6 @@ class OpenAIClientConversationTests(unittest.TestCase):
         client.client = FakeClient(responses)
         client.mcp_manager = None
         client.conversation_history = []
-        client.compacted_contexts = []
         client.last_response_output_finished_at = None
         client._initialize_conversation()
         return client
@@ -140,8 +235,7 @@ class OpenAIClientConversationTests(unittest.TestCase):
         response, _ = client.get_chat_response("new question")
 
         self.assertEqual(response, "new answer")
-        self.assertEqual(len(client.compacted_contexts), 1)
-        self.assertEqual(client.compacted_contexts[0]["reason"], "idle_timeout")
+        self.assertFalse(hasattr(client, "compacted_contexts"))
         self.assertEqual(
             [message["content"] for message in client.conversation_history],
             ["You are a helpful voice assistant.", "new question", "new answer"],
@@ -163,10 +257,7 @@ class OpenAIClientConversationTests(unittest.TestCase):
         response, _ = client.get_chat_response("what is the weather")
 
         self.assertEqual(response, "new answer")
-        self.assertEqual(len(client.compacted_contexts), 1)
-        self.assertTrue(
-            client.compacted_contexts[0]["reason"].startswith("low_relevance")
-        )
+        self.assertFalse(hasattr(client, "compacted_contexts"))
         self.assertEqual(len(client.client.chat.completions.calls), 2)
 
     def test_high_relevance_keeps_history(self):
@@ -185,7 +276,7 @@ class OpenAIClientConversationTests(unittest.TestCase):
         response, _ = client.get_chat_response("how often should I feed it")
 
         self.assertEqual(response, "next answer")
-        self.assertEqual(client.compacted_contexts, [])
+        self.assertFalse(hasattr(client, "compacted_contexts"))
         self.assertEqual(
             [message["content"] for message in client.conversation_history],
             [

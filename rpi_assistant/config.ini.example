@@ -94,6 +94,10 @@ temperature = 0.7
 conversation_idle_timeout_seconds = 300.0
 # If prior context relevance is below this score (0.0-1.0), reset active chat context.
 conversation_relevance_threshold = 0.35
+# Retain whole recent exchanges; no inactive archive or summarization calls.
+conversation_max_turns = 32
+# UTF-8 JSON bytes, excluding the fixed system prompt; minimum 1024.
+conversation_max_bytes = 262144
 
 # System prompt for the assistant
 system_prompt = You are a helpful voice assistant running on a Raspberry Pi. Provide concise, friendly responses suitable for voice interaction.
