@@ -17,8 +17,8 @@ Normal administration now opens at the device IP. Keep its trusted-LAN access ru
 Home, Timers, Reminders, Shopping, Settings and Privacy each have their own URL.
 Keep navigation, local assets and draft protection consistent across those pages.
 Home now has a speaker slider and separate controls for speaker output and
-microphone capture. Complete **UI04**, then **S01 streaming playback**, before
-optional entertainment or SecondContext work.
+microphone capture. The owner accepted UI04 on the Zero 2 W. **S01 streaming
+playback** is the next priority before optional entertainment or SecondContext work.
 
 ### UI04 — All configuration available from the phone
 

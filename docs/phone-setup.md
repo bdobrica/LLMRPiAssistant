@@ -150,6 +150,8 @@ trial covered browser behavior. The hardware results above apply to port-80 acce
 On the deployed Zero 2 W build `58e2d82`, all six pages responded over home Wi-Fi.
 Advanced settings challenged unsigned-in requests and accepted the existing device
 setup code. The editor returned all 74 static options and showed the OpenAI key
-as configured without returning its value.
+as configured without returning its value. The owner asked a wake-word question
+and a follow-up during the green listening window. Both replies were clear and
+the second used the first question’s context.
 
 [Back to the guides](README.md)

@@ -32,13 +32,13 @@ the spoken-command handler using text. The original volume was restored. No
 acoustic measurement, live transcription or physical phone trial was performed.
 See [speaker controls](docs/local-controls.md#change-volume-or-mute).
 
-- [ ] **UI04 — Mirror all supported INI configuration in the UI.**
+- [x] **UI04 — Mirror all supported INI configuration in the UI.**
   - Map every parsed option, including commented alternatives and named `mcp.server.*` sections. Cover audio/output, wake word, recording/buttons, models/provider keys, logging, LEDs, RPiFace, MCP, app sources/trust, controls, timers, household and weather.
   - Group basic/advanced fields with types, units and explanations. Preserve defaults, environment/file precedence and unknown entries; allow optional overrides to be removed deliberately. Keep keys write-only with configured status and explicit replacement/removal.
   - Extend Save & apply and persistent one-step Undo with field/cross-field validation, private atomic persistence, stale-edit detection and runtime recovery. Explain restart requirements before applying; safely handle binding, hardware and storage-path changes. Do not silently abandon existing household state or weaken app trust.
   - **Accept:** an option-to-UI coverage check against the parser/example finds no omissions; save/reload/restart round trips cover all setting groups and dynamic servers. Invalid input, failed apply, stale saves, secret redaction and Undo have focused checks. On the Pi, try representative live/restart settings, key replacement, recovery and a normal conversation. The separate Wi-Fi setup configuration is outside this item.
   - **Implemented.** Settings → Advanced covers 74 static options in 14 groups and seven fields per named MCP server. Settings writes authenticate as `admin` with the existing device setup code. A 360px Chromium trial exercised browser sign-in, live Save, Undo and adding a server definition. The 72 focused local checks passed.
-  - **Zero 2 W.** Forty isolated checks passed. A separate systemd service with a synthetic recorder applied a key live, restarted with a different timer setting, recovered after an occupied-port trial, then undid the timer change. On deployed build `58e2d82`, all six pages responded on the LAN. Advanced settings required and accepted the existing device code. The service reported active capture and wake listening. A spoken question and follow-up on this build await owner confirmation. See [Advanced settings](docs/phone-setup.md#advanced-settings).
+  - **Accepted on the Zero 2 W.** Forty isolated checks passed. A separate systemd service with a synthetic recorder applied a key live, restarted with a different timer setting, recovered after an occupied-port trial, then undid the timer change. On deployed build `58e2d82`, all six pages responded on the LAN and Advanced settings accepted the existing device code. The owner confirmed clear spoken replies to a wake-word question and a contextual follow-up. See [Advanced settings](docs/phone-setup.md#advanced-settings).
 
 ## Next: Faster Spoken Replies
 
