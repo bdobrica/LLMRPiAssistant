@@ -8,6 +8,7 @@ PartOf=piwifi-manager.service
 Type=simple
 Restart=on-failure
 RestartSec=2
+UMask=0077
 StandardOutput=journal
 StandardError=journal
 

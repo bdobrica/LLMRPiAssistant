@@ -53,11 +53,13 @@ rpi-assistant
 ## WiFi Setup
 
 ### First time or new location:
-1. Look for WiFi: `PiAssistant-Setup`
-2. Connect (password: `ChangeMe12345`)
-3. Open: http://192.168.4.1:8080
-4. Select network and enter password
-5. Wait 10-20 seconds
+1. During installation, run `sudo piwifi-setup-code` privately and save the displayed network name/code for a device label.
+2. When no saved Wi-Fi is available, join that setup network using the device code as its password.
+3. Open http://192.168.4.1 — there is no second login.
+4. Select or enter your network, enter its password (use **Show Wi-Fi password** to check it), and choose **Save & connect**.
+5. Setup disconnects while joining. Rejoin home Wi-Fi on success; otherwise reconnect to setup and retry.
+
+There is no shared default password. See [setup access, recovery and limits](docs/wifi-setup.md).
 
 ### Commands:
 ```bash

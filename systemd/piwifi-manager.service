@@ -1,13 +1,16 @@
 [Unit]
 Description=Pi WiFi Manager (Client/AP fallback)
 After=NetworkManager.service
-Wants=NetworkManager.service piwifi-flask.service
+Wants=NetworkManager.service
 
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/piwifi-manager.sh
 Restart=always
 RestartSec=5
+UMask=0077
+RuntimeDirectory=piwifi
+RuntimeDirectoryMode=0700
 
 # Configuration via environment file
 EnvironmentFile=-/etc/default/piwifi

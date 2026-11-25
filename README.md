@@ -75,8 +75,8 @@ make install-wifi
 
 This enables automatic WiFi management:
 - **On boot**: Tries to connect to known WiFi networks
-- **If offline**: Starts an access point named `PiAssistant-Setup`
-- **Web UI**: Connect to the AP and visit `http://192.168.4.1:8080` to configure WiFi
+- **Without saved Wi-Fi**: Starts a private setup access point; retrieve its name/code with `sudo piwifi-setup-code`
+- **Web UI**: Join setup and visit `http://192.168.4.1` to configure WiFi, with no second login
 - **Auto-reconnect**: Remembers multiple networks and reconnects automatically
 
 The system uses NetworkManager and will remember all configured networks, automatically connecting to any available one.
@@ -465,12 +465,12 @@ The WiFi provisioning system makes your assistant portable and easy to move betw
 1. **On Boot**: The `piwifi-manager` service checks for network connectivity
 2. **Connected**: If connected to a known network, nothing happens - normal operation
 3. **Offline**: If no known networks are available:
-   - Starts an access point (AP) named `PiAssistant-Setup`
-   - Launches a Flask web UI on `http://192.168.4.1:8080`
+   - Starts a device-specific setup access point (existing custom names are retained)
+   - Launches a local web UI on `http://192.168.4.1`
    - Waits for you to configure WiFi
 4. **After Configuration**: 
    - Tries to connect to the new network
-   - If successful, stops the AP and continues in client mode
+   - If successful, stops the AP and setup page and continues in client mode, even without Internet
    - If failed, returns to AP mode for reconfiguration
 
 ### Using WiFi Provisioning
@@ -479,13 +479,16 @@ The WiFi provisioning system makes your assistant portable and easy to move betw
 
 1. Power on your Raspberry Pi
 2. Wait 30-60 seconds for boot
-3. Look for WiFi network `PiAssistant-Setup` on your phone/laptop
-4. Connect to it (password: `ChangeMe12345` by default)
-5. Open browser and go to: `http://192.168.4.1:8080`
-6. Select your WiFi network from the dropdown
-7. Enter the password and click Connect
-8. Wait 10-20 seconds - the Pi will connect and the AP will disappear
-9. Your Pi is now connected to your network!
+3. Use the setup network name/code saved during installation with `sudo piwifi-setup-code`
+4. Join that network using the device-specific code as its Wi-Fi password
+5. Open `http://192.168.4.1` — no second code entry is needed
+6. Select or enter your home network name
+7. Enter its Wi-Fi password, use **Show Wi-Fi password** if needed, and click **Save & connect**
+8. The setup network disconnects while joining; reconnect your phone to home Wi-Fi after success
+9. If it fails, rejoin setup and retry; existing saved networks are preserved
+
+Save the code on a device label before moving it. There is no common default password.
+See [private credentials, recovery and limitations](docs/wifi-setup.md).
 
 **Moving to a different location:**
 
@@ -497,7 +500,7 @@ No need to reconfigure networks you've already set up - it remembers them all!
 
 ### Customizing WiFi Settings
 
-You can customize the AP name, password, and other settings:
+You can customize the AP name and network settings. The device code is stored separately in a private file:
 
 ```bash
 # Edit the environment configuration
@@ -505,8 +508,8 @@ sudo nano /etc/default/piwifi
 
 # Settings you can change:
 # AP_SSID=MyCustomName
-# AP_PASSWORD=MySecurePassword123
-# FLASK_PORT=8080
+# Device code: sudo piwifi-setup-code (not an AP_PASSWORD environment variable)
+# FLASK_PORT=80
 # IFACE=wlan0
 
 # Apply changes
@@ -525,9 +528,8 @@ sudo journalctl -u piwifi-manager.service -f
 # Restart WiFi manager
 sudo systemctl restart piwifi-manager.service
 
-# Force AP mode (useful for testing)
-sudo systemctl stop piwifi-manager.service
-sudo nmcli dev wifi hotspot ifname wlan0 ssid PiAssistant-Setup password ChangeMe12345
+# Retrieve the saved setup name/code privately
+sudo piwifi-setup-code
 
 # List saved WiFi networks
 nmcli connection show
@@ -568,8 +570,8 @@ sudo systemctl status piwifi-manager.service
 # View piwifi logs
 sudo journalctl -u piwifi-manager.service -f
 
-# Manually start AP mode
-sudo nmcli dev wifi hotspot ifname wlan0 ssid PiAssistant-Setup password ChangeMe12345
+# Verify the device setup code is available (do not paste it into logs)
+sudo piwifi-setup-code
 ```
 
 #### Cannot Connect to WiFi After Configuration

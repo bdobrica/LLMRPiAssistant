@@ -1,66 +1,46 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pi Wi-Fi Setup</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Assistant Wi-Fi setup</title>
+  <script src="{{ url_for('setup_script') }}" defer></script>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:24px;max-width:760px}
-    .card{border:1px solid #ddd;border-radius:12px;padding:16px;margin-bottom:16px}
-    input,select,button{font-size:16px;padding:10px;border-radius:10px;border:1px solid #ccc}
-    button{cursor:pointer}
-    .row{display:flex;gap:12px;flex-wrap:wrap}
-    .row > *{flex:1}
-    small{color:#666}
-    code{background:#f6f6f6;padding:2px 6px;border-radius:6px}
+    body{font-family:system-ui,sans-serif;margin:24px auto;padding:0 16px;max-width:520px;color:#182334;background:#f5f7fa}
+    section{background:white;border:1px solid #ccd4df;border-radius:16px;padding:24px;margin:20px 0}
+    label{display:block;margin:18px 0 6px}input,select,button{box-sizing:border-box;width:100%;font:inherit;padding:12px;border:1px solid #8e9bad;border-radius:8px}
+    button{background:#214c83;color:white;margin-top:20px;cursor:pointer}button:disabled{opacity:.6}
+    .error{color:#962929}small{display:block;margin-top:12px;color:#475569}a{color:#214c83}
+    .reveal{display:flex;align-items:center;gap:8px}.reveal input{width:auto}
   </style>
 </head>
 <body>
-  <h1>Pi Wi-Fi Setup</h1>
-
-  <div class="card">
-    <h3>Status</h3>
-    <p><b>Interface:</b> <code>{{ iface }}</code></p>
-    <p><b>Wi-Fi state:</b> {{ wifi_state }}</p>
-    <p><b>Active:</b></p>
-    <ul>
-      {% for line in active %}
-        <li><code>{{ line }}</code></li>
-      {% endfor %}
-    </ul>
-    <small>If you just saved credentials, give it ~10–20 seconds to connect.</small>
-  </div>
-
-  <div class="card">
-    <h3>Connect to Wi-Fi</h3>
-    <form method="post" action="{{ url_for('connect') }}">
-      <div class="row">
-        <div>
-          <label>SSID</label><br>
-          <select name="ssid" required>
-            {% for s in ssids %}
-              <option value="{{ s }}">{{ s }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label>Password</label><br>
-          <input type="password" name="password" placeholder="Wi-Fi password">
-        </div>
-      </div>
-      <p><button type="submit">Save &amp; Connect</button></p>
-      <small>For open networks, leave password blank.</small>
-    </form>
-  </div>
-
-  <div class="card">
-    <h3>Saved networks (NetworkManager)</h3>
-    <ul>
-      {% for c in saved %}
-        <li>{{ c }}</li>
-      {% endfor %}
-    </ul>
-    <small>NetworkManager will auto-connect to known networks when available.</small>
-  </div>
+<h1>Assistant Wi-Fi setup</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<p>You’re connected to this device’s protected setup Wi-Fi. Choose the network the assistant should use.</p>
+{% if message %}<p role="status">{{ message }}</p>{% endif %}
+<section>
+  <h2>Join your Wi-Fi</h2>
+  <form method="post" action="{{ url_for('connect') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="network">Network name</label>
+    <select id="network" {% if ssids %}name="ssid" required{% endif %} {% if busy %}disabled{% endif %}>
+      {% if ssids %}<option value="" disabled selected>Choose your network</option>{% endif %}
+      {% for ssid in ssids %}<option value="{{ ssid }}">{{ ssid }}</option>{% endfor %}
+      <option value="" data-manual="true" {% if not ssids %}selected{% endif %}>Enter another network…</option>
+    </select>
+    <div id="manual-network" {% if ssids %}hidden{% endif %}>
+      <label for="ssid">Enter network name</label>
+      <input id="ssid" name="ssid" autocomplete="off" {% if ssids or busy %}disabled{% else %}required{% endif %}>
+    </div>
+    <label for="password">Wi-Fi password</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" maxlength="64" {% if busy %}disabled{% endif %}>
+    <label class="reveal"><input id="show-password" type="checkbox">Show Wi-Fi password</label>
+    <small>Leave blank only if your home network has no password.</small>
+    <button {% if busy %}disabled{% endif %}>Save &amp; connect</button>
+  </form>
+  <small>Setup Wi-Fi will disconnect while joining. If it fails, reconnect to setup and open this page again. Existing saved networks are kept.</small>
+  <p><a href="{{ url_for('index') }}">Refresh status</a></p>
+</section>
+<small>This local page is available only during setup. Keep your device setup code private.</small>
 </body>
 </html>
