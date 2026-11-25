@@ -1,101 +1,62 @@
-# Private Wi-Fi onboarding (H02)
+# Take your assistant to another Wi-Fi network
 
-## Install and save the device code
+The optional Wi-Fi setup lets you connect the Pi using your phone when none of its
+saved networks are available. You enter the device code once, as the setup Wi-Fi
+password. There is no second browser login.
 
-Run `make install-wifi` on the Pi after installing the repository's Python
-requirements. A different environment can be selected with
-`VENV=/path/to/venv bash scripts/install-wifi.sh`. Installation creates one random
-code per device and preserves it on updates. It never prints the code automatically.
-Retrieve it deliberately in a private terminal:
+## Install it before you travel
+
+After the assistant is installed, run these in the Pi terminal from the repository:
 
 ```sh
+make install-wifi
 sudo piwifi-setup-code
+```
+
+Privately save the displayed setup network name and code, for example on a device
+label. Each device gets its own code; updates preserve it. Then start the manager:
+
+```sh
 sudo systemctl restart piwifi-manager.service
 ```
 
-Save the displayed network name/code on a device label or in your private setup
-notes before moving the assistant. The code is used once, as the setup Wi-Fi password;
-the page has no second login. New installations use `PiAssistant-Setup-<device-id>`;
-existing custom names are preserved. There is no shared default password. If your
-phone saved the old setup password, forget that Wi-Fi entry and join with the new code.
+If you lose the code, the same `sudo piwifi-setup-code` command shows it again over
+SSH or a connected keyboard/screen. Don't share codes or home Wi-Fi passwords in
+issues. Restarting the manager doesn't force setup mode if saved Wi-Fi works.
 
-The code lives in `/etc/piwifi/setup.json`, owned by root with mode 0600. Generate
-it separately on each device; do not distribute that file in a cloned product image.
-Lost labels can be recovered with the command above over SSH or a local console.
-Do not put setup codes, home Wi-Fi passwords or this file in tickets or commits.
+## Connect from your phone
 
-## Join from a phone
+1. When the Pi cannot join saved Wi-Fi, find its `PiAssistant-Setup-…` network.
+2. Join with the device code. Stay connected if your phone says “no Internet.”
+3. Open **http://192.168.4.1** in your browser.
+4. Select your network, or choose **Enter another network…** and type its name.
+5. Enter its password. **Show Wi-Fi password** lets you check your typing.
+6. Choose **Save & connect**. Setup disconnects while the Pi joins Wi-Fi.
+7. Reconnect your phone to that Wi-Fi. Use the Pi's new IP address for its
+   [normal controls page](phone-setup.md).
 
-When no saved Wi-Fi connects, join the setup network using its device code. Keep
-the phone connected even if it reports no Internet. Open `http://192.168.4.1`
-(or your configured address/port). Choose the home network from the dropdown, or
-choose **Enter another network…** to type its name. Enter its
-password, then choose **Save & connect**. **Show Wi-Fi password** reveals/hides that
-field so typing can be checked. The phone's own Wi-Fi screen controls revealing the
-device code when joining setup.
+![Wi-Fi setup page with example networks](images/wifi-setup.png)
 
-The page acknowledges the attempt before Wi-Fi switches. The setup network then
-disconnects. On success, reconnect the phone to home Wi-Fi; the setup page closes.
-On failure, rejoin setup, refresh the page and retry. Previously working profiles
-are preserved; a candidate profile becomes automatic only after activation succeeds.
-The page supports open and WPA/WPA2 personal networks. Hidden-network discovery,
-enterprise authentication and WPA3-only networks are outside this flow.
-The baseline boards require a compatible 2.4 GHz network.
+## If joining fails
 
-Joining WPA-protected setup Wi-Fi is the authentication step. The page binds to that
-interface and address, rejects clients outside the setup subnet, and checks a signed
-15-minute form session, token and request origin on changes. Expired forms or a
-restarted service require refreshing the page. Submitted passwords are never returned
-in responses. There is no separate browser login or user account.
-HTTP is protected by the private hotspot's Wi-Fi encryption, not browser HTTPS;
-anyone with the device code should be treated as authorized to change setup.
+Reconnect to the setup network, refresh the page and retry. A stale form may need
+refreshing. If the phone saved an old setup password, forget that network and join
+again with the current code. Previously working Wi-Fi profiles are preserved.
 
-## Lifecycle and configuration
+Use a compatible 2.4 GHz network on the Zero 2 W. The setup supports open and
+WPA/WPA2 personal networks. Enterprise sign-in, hidden-network discovery and
+WPA3-only networks aren't supported by this flow. For an event, a private router
+is easier to control than venue Wi-Fi; normal phone controls have no login.
 
-`/etc/default/piwifi` holds interface, setup name/address, port and timing settings;
-it no longer contains `AP_PASSWORD`. Updates preserve the device code and configured
-network settings. The old 30/15-second cycling defaults become 300/120 seconds;
-the old default HTTP port 8080 becomes 80.
-`AP_NO_CLIENT_TIMEOUT` and `AP_WIFI_RETRY_INTERVAL` accept zero to disable their
-respective no-client expiry/retry. Actual associated phones prevent periodic AP
-teardown. Saved Wi-Fi is retried when no phones are using setup. A bounded join marker
-prevents the manager from interrupting an in-flight connection attempt.
+## What the setup code protects
 
-Joining Wi-Fi closes both the AP and provisioning service even without Internet.
-An Internet outage alone does not reopen setup or disrupt local assistant controls.
-Stopping the manager also stops its setup service. The assistant's existing phone
-controls on port 8767 are separate and keep their documented trusted-LAN access model.
+Anyone with the device code can change Wi-Fi setup. The page is restricted to the
+protected setup hotspot and closes after a successful Wi-Fi join, even when that
+network has no Internet. An Internet outage alone does not reopen setup.
 
-## Secrets, failures and recovery
+The private code is stored in `/etc/piwifi/setup.json`; don't copy it between devices.
+Network/timing settings live in `/etc/default/piwifi`. Passwords are saved privately
+by NetworkManager, not returned on the page or included in command-error messages.
+Installation snapshots live under `/var/backups/piwifi/`; keep those private too.
 
-Wi-Fi passwords are passed in private NetworkManager keyfiles, never command-line
-arguments. Successful profiles remain in NetworkManager for later connections.
-Failed candidates are removed without replacing saved profiles. Interrupted attempts
-can leave an inactive private candidate; they are not enabled for automatic connection.
-Errors report failure without commands, submitted values, subprocess output or
-tracebacks. Setup HTTP request logging is disabled because even a malformed URL can
-contain a password. Existing system journals and backups are not retroactively erased.
-
-Configuration installation saves previous provisioning files under a root-only
-`/var/backups/piwifi/<timestamp>/` directory and restores them if writing fails.
-This may include old shared setup credentials: keep backups private. For a software
-rollback, stop `piwifi-manager`, restore that snapshot's files to their original
-paths, run `systemctl daemon-reload`, then restart the manager. The H01 assistant
-checkout and household state are unchanged. Older provisioning code restores its
-old access protections and password-handling behavior.
-
-## Browser check
-
-![Phone setup with synthetic example data](images/wifi-setup.png)
-
-Run `python tests/probe_piwifi_browser.py --chromium /path/to/chrome` on a development
-computer, not the Pi. It reproduces the old `no-referrer`/`Origin: null` rejection,
-then checks the actual page's native network dropdown, switching to/from manual entry,
-Show password control and both form submission paths with `Referrer-Policy: same-origin`.
-See the browser behavior documented
-by [MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy#effect_on_the_origin_header).
-This uses synthetic data and a fake join; actual network/phone checks are separate.
-
-Validation and remaining hardware limits are recorded in TODO.md. The implementation
-uses NetworkManager's documented [private keyfile format](https://networkmanager.dev/docs/api/latest/nm-settings-keyfile.html)
-and Flask's [session and CSRF security guidance](https://flask.palletsprojects.com/en/stable/web-security/).
+[Back to the guides](README.md)

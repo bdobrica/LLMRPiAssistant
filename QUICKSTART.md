@@ -1,205 +1,149 @@
-# Quick Start Guide - LLMRPiAssistant
+# Build your first talking assistant
 
-This is a quick reference for common tasks. See [README.md](README.md) for full documentation.
+This guide takes you from a Raspberry Pi to a spoken question and follow-up.
+Commands go in a **terminal on the Pi**, either through SSH (a remote terminal)
+or a connected keyboard and screen. Run them one block at a time.
 
-## Initial Setup
+Already have a working installation? Start with [the phone page](docs/phone-setup.md)
+or [things to try](docs/README.md). For software updates, use the
+[maintenance guide](docs/maintenance.md).
 
-These audio steps target ReSpeaker 2-Mic v1 (WM8960). For OS/kernel updates,
-run `make upgrade-os`, then reboot and perform the capture/playback checks in
-[the audio upgrade guide](docs/audio-upgrade.md). This does not upgrade the
-assistant's Python dependencies or models. For a separate candidate Python
-installation and rollback, see [the Python upgrade guide](docs/python-upgrade.md).
+## 1. Gather the parts
 
-```bash
-# Complete installation (run once)
+- Raspberry Pi Zero 2 W with its 40-pin header fitted.
+- ReSpeaker **2-Mic Pi HAT v1 / WM8960**. The installer does not configure the v2
+  or 4-mic boards.
+- A compatible speaker for the HAT's speaker connector, or wired headphones.
+- A microSD card, a suitable Pi power supply, and a computer with a card reader.
+- A 2.4 GHz Wi-Fi network and an OpenAI API account with billing/model access.
+  Create a private key in the [API dashboard](https://platform.openai.com/api-keys);
+  it lets the assistant make paid requests using your account.
+
+Power off before fitting the HAT or connecting its speaker. Match the GPIO header
+orientation to the board markings. An enclosure is optional; designs are in [enclosure/](enclosure/).
+
+## 2. Prepare Raspberry Pi OS
+
+Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) to write
+**Raspberry Pi OS Lite (64-bit)** to the card. The pinned Python setup targets
+Trixie with Python 3.13. A desktop environment is unnecessary.
+
+In Imager's customisation settings, set:
+
+- Hostname: `assistant`.
+- Username: `pi`, with your own password. The supplied assistant service uses this name.
+- Your Wi-Fi name/password and country.
+- SSH enabled, so you can use a terminal from your computer.
+
+Insert the card, power on and allow it to join Wi-Fi. From your computer's terminal:
+
+```sh
+ssh pi@assistant.local
+```
+
+If that name does not resolve, find the Pi's IP address in your router's connected
+devices and use `ssh pi@<device-IP>`. Enter the password you chose in Imager.
+
+## 3. Download and configure
+
+In the Pi terminal:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y git make
+git clone https://github.com/bdobrica/LLMRPiAssistant.git
+cd LLMRPiAssistant
+cp rpi_assistant/config.ini.example rpi_assistant/config.ini
+chmod 600 rpi_assistant/config.ini
+nano rpi_assistant/config.ini
+```
+
+For this 2-mic HAT, **change the existing entries** below in their matching
+sections. Do not paste duplicate sections at the end of the file.
+
+```ini
+[audio]
+channels = 2
+mic_channel_index = 0
+device_match = seeed
+
+[led]
+count = 3
+
+[recording]
+interrupt_button_gpio = 17
+
+[controls]
+host = 0.0.0.0
+mixer_control = Speaker
+```
+
+Use `mixer_control = Headphone` if using the HAT's 3.5 mm output. Keep
+`[audio_output] device = assistant_wm8960`; it avoids quiet playback while recording.
+Set `[household] timezone` to your timezone, for example `Europe/London`.
+Leave other entries as supplied. You can enter `[openai] api_key` now or from your
+phone later. Keep the file private.
+
+In nano, press **Ctrl+O**, **Enter** to save, then **Ctrl+X** to exit.
+Phone access is for a **trusted home network**: anyone on that network can control
+the assistant. Do not forward port 8767 to the Internet or expose it on public event Wi-Fi.
+
+## 4. Install and start
+
+From the repository folder:
+
+```sh
 make setup
-
-# Install WiFi provisioning (optional but recommended)
-make install-wifi
-
-# Reboot to load drivers
-sudo reboot
 ```
 
-## Configuration
+This installs dependencies, downloads wake models, configures the HAT and creates
+the background service. Installation can take a while on a Zero 2 W. Wait for it
+to finish; at the final prompt, press Enter to reboot. If a step fails, stop and
+read the error rather than continuing. The [installation help](docs/troubleshooting.md)
+explains the common checks.
 
-```bash
-cd rpi_assistant
-cp config.ini.example config.ini
-nano config.ini  # Set hardware options and optionally your OpenAI key
+Reconnect over SSH after reboot, then start the assistant automatically at boot:
+
+```sh
+sudo systemctl enable --now rpi-assistant.service
+hostname -I
 ```
 
-To enter the OpenAI key from a phone instead, set `[controls] host = 0.0.0.0`
-on your trusted home LAN, start the assistant, then open `http://<device-IP>:8767`.
-Expand **Settings**, paste the key and press **Save & apply**. The page and local
-microphone/speaker checks work before a key is set; voice requests need the key.
-Keys are never displayed back. This LAN page has no sign-in or HTTPS; never expose
-it to the Internet. See [phone setup and undo](docs/phone-setup.md).
+Note the Pi's Wi-Fi IP address from the last command. If you already use a username
+other than `pi`, see [service user setup](docs/troubleshooting.md#the-service-wont-start)
+before starting it.
 
-## Running the Assistant
+## 5. Check sound and add your key
 
-### As a service (recommended):
-```bash
-sudo systemctl enable rpi-assistant.service
-sudo systemctl start rpi-assistant.service
-sudo journalctl -u rpi-assistant.service -f  # View logs
-```
+Connect your phone to the same Wi-Fi and open **`http://<device-IP>:8767`**, replacing
+`<device-IP>` with the address above. Use the address, not `assistant.local`, for this page.
 
-### From command line:
-```bash
-rpi-assistant
-```
+1. Open **Settings**, enter your OpenAI API key and choose **Save & apply**.
+   A blank key field keeps the saved key; the page only shows whether it is configured.
+2. Set a comfortable volume and choose **Play test sound**.
+3. Choose **Record 3 seconds and play back**, and say a short sentence.
+   You should hear yourself. This check stays on the Pi and needs no API key.
 
-## WiFi Setup
+If nothing plays, follow [audio troubleshooting](docs/troubleshooting.md#no-sound-or-very-quiet-sound).
+Settings include **Undo last change** if you need to go back.
 
-### First time or new location:
-1. During installation, run `sudo piwifi-setup-code` privately and save the displayed network name/code for a device label.
-2. When no saved Wi-Fi is available, join that setup network using the device code as its password.
-3. Open http://192.168.4.1 — there is no second login.
-4. Select or enter your network, enter its password (use **Show Wi-Fi password** to check it), and choose **Save & connect**.
-5. Setup disconnects while joining. Rejoin home Wi-Fi on success; otherwise reconnect to setup and retry.
+## 6. Have a conversation
 
-There is no shared default password. See [setup access, recovery and limits](docs/wifi-setup.md).
+Wait for the blue listening lights, then say **“Hey Jarvis”** and ask a short
+question, such as **“What's a manifold?”**
 
-### Commands:
-```bash
-# Check status
-sudo systemctl status piwifi-manager.service
+After the reply, wait for **steady green** and ask **“What about a cube?”**
+You have about six seconds to begin a follow-up. Stay quiet to finish; blue returns.
+Press the HAT button to stop a reply, or hold it for 1.5 seconds to mute/unmute.
+Steady red means the assistant microphone is muted.
 
-# View logs
-sudo journalctl -u piwifi-manager.service -f
+## Take it further
 
-# List saved networks
-nmcli connection show
+Try [timers](docs/timers.md), [Shopping and reminders](docs/household.md),
+[weather](docs/weather.md) or [Dice](docs/voice-apps.md).
+For moving between networks, install the optional [phone Wi-Fi setup](docs/wifi-setup.md)
+while you still have terminal access. The [guide index](docs/README.md) has the rest.
 
-# Force AP mode (testing)
-sudo systemctl restart piwifi-manager.service
-```
-
-## Common Operations
-
-### Service Management
-```bash
-# Status
-sudo systemctl status rpi-assistant.service
-
-# Start/stop
-sudo systemctl start rpi-assistant.service
-sudo systemctl stop rpi-assistant.service
-
-# Enable/disable autostart
-sudo systemctl enable rpi-assistant.service
-sudo systemctl disable rpi-assistant.service
-
-# Restart
-sudo systemctl restart rpi-assistant.service
-```
-
-### Logs
-```bash
-# Follow assistant logs
-sudo journalctl -u rpi-assistant.service -f
-
-# Follow wifi manager logs
-sudo journalctl -u piwifi-manager.service -f
-
-# View interaction log
-tail -f rpi_assistant/openai_interactions.log
-```
-
-Conversation content is excluded from new logs by default. Phone Settings can enable
-private content logs; the page also provides confirmed local conversation-data deletion.
-See [privacy, retention and historical-log limits](docs/conversation-privacy.md).
-
-### Audio Testing
-```bash
-# Test speaker
-speaker-test -c2
-
-# List audio devices
-aplay -L
-
-# Record test (check microphone)
-arecord -D hw:2,0 -f cd -d 5 test.wav
-aplay test.wav
-```
-
-## Troubleshooting
-
-### No wake word detection
-- Check LED is showing blue breathing pattern
-- Try lowering `wakeword.threshold` in config.ini (0.3 is more sensitive)
-- Test different `mic_channel_index` values (0-3)
-
-### Recording cuts off too early
-- Increase `silence_hold_seconds` to 1.5
-- Increase `silence_rms_threshold` to 0.01
-
-### No audio playback
-- Test speaker: `speaker-test -c2`
-- List devices: `aplay -L`
-- Update `audio_output.device` in config.ini
-
-### WiFi not connecting
-- Check NetworkManager: `sudo systemctl status NetworkManager`
-- Wait 20 seconds after entering credentials
-- Check password was entered correctly
-- View logs: `sudo journalctl -u piwifi-manager.service -n 50`
-
-## File Locations
-
-- **Config**: `~/GitHub/LLMRPiAssistant/rpi_assistant/config.ini`
-- **Logs**: `~/GitHub/LLMRPiAssistant/rpi_assistant/openai_interactions.log`
-- **Virtual env**: `/opt/venvs/rpi-assistant/`
-- **Services**: `/etc/systemd/system/rpi-assistant.service`
-- **WiFi config**: `/etc/default/piwifi`
-
-## Project Structure
-
-```
-LLMRPiAssistant/
-├── Makefile                    # make setup, make install-wifi
-├── README.md                   # Full documentation
-├── QUICKSTART.md              # This file
-├── TODO.md                    # Planned features
-├── rpi_assistant/             # Python package (note underscore!)
-│   ├── config.ini             # Your configuration
-│   ├── app/                   # Voice assistant code
-│   └── piwifi/                # WiFi provisioning
-├── systemd/                   # Service definitions
-│   ├── rpi-assistant.service
-│   ├── piwifi-manager.service
-│   └── piwifi-flask.service
-└── scripts/
-    ├── piwifi-manager.sh      # Network manager
-    └── install-wifi.sh        # WiFi setup
-```
-
-## Wake Words
-
-Default models support:
-- "hey mycroft"
-- "alexa"
-- "hey jarvis"
-- "timer"
-
-## Follow-Up Questions
-
-After the answer finishes and the LEDs turn green, ask another question without
-repeating the wake word. The window lasts six seconds; silence closes it. Set
-`[recording] follow_up_window_seconds = 0` to disable it. See
-[follow-up listening](docs/follow-up-listening.md) for settings and checks.
-
-## Next Steps
-
-- Customize system prompt in config.ini for different personalities
-- See [OpenAI model migration](docs/openai-upgrade.md) for the supported transcription, chat and Realtime speech configuration.
-- The tested Realtime voice is alloy; validate other supported voices on your speaker.
-- See TODO.md for game development features
-
-## Getting Help
-
-1. Check [README.md](README.md) troubleshooting section
-2. View logs: `sudo journalctl -u rpi-assistant.service -f`
-3. Test hardware: speaker-test, arecord/aplay
-4. Check config: verify all required fields in config.ini
+This walkthrough follows the installer and the tested Zero 2 W setup. A complete
+fresh-card trial has not yet been recorded; the [release notes](docs/reference/release-check-2026-11-25.md)
+distinguish hardware checks from remaining gaps.
