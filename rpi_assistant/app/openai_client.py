@@ -13,6 +13,7 @@ from .config import OpenAIConfig
 from .timers import TIMER_TOOLS, TIMER_NAMES, TIMER_INSTRUCTIONS, timer_action
 from .household import HOUSEHOLD_TOOLS, HOUSEHOLD_NAMES, HOUSEHOLD_MUTATIONS, household_instructions, household_action
 from .web_lookup import LOOKUP_NAME, LOOKUP_TOOL, lookup, lookup_instructions, spoken_without_links, unavailable
+from .weather import WEATHER_NAME, WEATHER_TOOL, LOCATION_NAME, LOCATION_TOOL
 
 if TYPE_CHECKING:
     from .mcp_manager import MCPClientManager
@@ -34,6 +35,7 @@ class OpenAIClient:
         self.mcp_manager = mcp_manager
         self.timers = None
         self.household = None
+        self.weather = None
         self.conversation_history = []
         self.compacted_contexts = []
         self.last_response_output_finished_at: Optional[float] = None
@@ -108,6 +110,10 @@ class OpenAIClient:
         manager = getattr(self, "mcp_manager", None)
         tools = list(manager.openai_tools()) if manager is not None else []
         max_rounds = manager.config.max_tool_rounds if manager is not None else 0
+        weather = getattr(self, "weather", None)
+        if weather is not None:
+            tools.extend((WEATHER_TOOL, LOCATION_TOOL))
+            max_rounds = max(max_rounds, 1)
         if self.config.web_search_enabled:
             tools.append(LOOKUP_TOOL)
             max_rounds = max(max_rounds, 1)
@@ -132,7 +138,7 @@ class OpenAIClient:
             request = {
                 "model": self.config.chat_model,
                 "messages": [self.conversation_history[0],
-                             {"role": "system", "content": lookup_instructions(self.config.web_search_enabled) + ("\n" + TIMER_INSTRUCTIONS if timers is not None else "") + ("\n" + household_instructions(household) if household is not None else "")},
+                             {"role": "system", "content": lookup_instructions(self.config.web_search_enabled) + ("\n" + TIMER_INSTRUCTIONS if timers is not None else "") + ("\n" + household_instructions(household) if household is not None else "") + ("\n" + weather.instructions() if weather is not None else "")},
                              *self.conversation_history[1:]],
                 **self._completion_options(self.config.max_tokens, self.config.temperature),
             }
@@ -154,7 +160,7 @@ class OpenAIClient:
                 raise RuntimeError("Tool round limit reached")
 
             self.conversation_history.append(_assistant_tool_message(message, tool_calls))
-            if any(call.function.name == LOOKUP_NAME for call in tool_calls):
+            if any(call.function.name in (LOOKUP_NAME, WEATHER_NAME, LOCATION_NAME) for call in tool_calls):
                 return self._answer_lookup(tool_calls, usage)
             mutation_receipts = []
             blocked_actions = False
@@ -207,14 +213,15 @@ class OpenAIClient:
             tool_rounds += 1
 
     def _answer_lookup(self, tool_calls, usage: dict) -> tuple[str, dict]:
-        """Finish a lookup with a read-only reader; never dispatch co-requested actions."""
+        """Return one evidence/explicit location result; never dispatch co-requested actions."""
         evidence = None
         blocked_actions = False
         for call in tool_calls:
-            if call.function.name == LOOKUP_NAME and evidence is None:
+            if call.function.name in (LOOKUP_NAME, WEATHER_NAME, LOCATION_NAME) and evidence is None:
                 try:
                     arguments = json.loads(call.function.arguments or "{}")
-                    query = arguments.get("query") if isinstance(arguments, dict) else None
+                    key = {WEATHER_NAME: "period", LOCATION_NAME: "city"}.get(call.function.name, "query")
+                    query = arguments.get(key) if isinstance(arguments, dict) else None
                 except (json.JSONDecodeError, TypeError):
                     query = None
                 try:
@@ -222,14 +229,19 @@ class OpenAIClient:
                 except PlaybackStopped:
                     evidence = unavailable("cancelled")
                 else:
-                    evidence = (lookup(self.client, self.config, query) if self.config.web_search_enabled
-                                else unavailable("disabled"))
+                    if call.function.name in (WEATHER_NAME, LOCATION_NAME):
+                        weather = getattr(self, "weather", None)
+                        action = weather.set_city if weather is not None and call.function.name == LOCATION_NAME else weather.lookup if weather is not None else None
+                        evidence = action(query) if action is not None else unavailable("weather_disabled")
+                    else:
+                        evidence = (lookup(self.client, self.config, query) if self.config.web_search_enabled
+                                    else unavailable("disabled"))
                 # Only a bounded answer/source summary enters ordinary conversation.
                 result = {key: evidence[key] for key in ("status", "answer", "sources", "retrieved_at")}
                 result["untrusted_evidence"] = True
             else:
-                blocked_actions |= call.function.name != LOOKUP_NAME
-                result = {"is_error": True, "error": "Lookup turns are read-only and permit one lookup. Ask separately for an action."}
+                blocked_actions |= call.function.name not in (LOOKUP_NAME, WEATHER_NAME)
+                result = {"is_error": True, "error": "Only one lookup or explicit weather-city selection is allowed. Ask separately for another action."}
             self.conversation_history.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
         answer, spoken = evidence["answer"], evidence["spoken_answer"]
         if blocked_actions:
@@ -413,6 +425,9 @@ class OpenAIClient:
         self._initialize_conversation()
         self.compacted_contexts.clear()
         self.last_response_output_finished_at = None
+        weather = getattr(self, "weather", None)
+        if weather is not None:
+            weather.pending_period = None
 
 
 def _usage_dict(response: Any, model: str) -> dict:

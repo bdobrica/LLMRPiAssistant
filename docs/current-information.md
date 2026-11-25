@@ -53,8 +53,9 @@ before budgeting. Model selection and source quality still affect results.
   within that lookup. Co-requested actions are blocked and reported as unperformed;
   ask separately for an action. Retained source summaries are explicitly marked as
   untrusted evidence, and instructions inside retrieved text are never authorization.
-- For a local question, supply the city or relevant location. This feature does not
-  configure household location or implement the separate weather/timer items.
+- For a local question, supply the city or relevant location. Home weather uses the
+  dedicated [weather provider and saved city](weather.md); other changing facts retain
+  this general search path.
 
 ## Checks and rollback
 

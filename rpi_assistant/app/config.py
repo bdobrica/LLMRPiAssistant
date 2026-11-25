@@ -196,6 +196,36 @@ class MCPConfig:
 
 
 @dataclass
+class WeatherConfig:
+    """Home city override, optional IP discovery and persistent spoken selection."""
+
+    city: str = ""
+    latitude: str = ""
+    longitude: str = ""
+    timezone: str = ""
+    api_key: str = ""
+    ipgeolocation_api_key: str = ""
+    state_path: str = "~/.local/state/rpi-assistant/weather-location.json"
+    timeout_seconds: float = 8.0
+
+    def __post_init__(self):
+        import math
+        from zoneinfo import ZoneInfo
+        if self.timezone:
+            ZoneInfo(self.timezone)
+        supplied = [bool(str(value).strip()) for value in (self.latitude, self.longitude)]
+        if any(supplied) and (not all(supplied) or not self.city or not self.timezone):
+            raise ValueError("weather coordinates need both latitude/longitude plus city and timezone")
+        if all(supplied):
+            for value, limit in ((self.latitude, 90), (self.longitude, 180)):
+                number = float(value)
+                if not math.isfinite(number) or abs(number) > limit:
+                    raise ValueError("invalid weather coordinates")
+        if not math.isfinite(self.timeout_seconds) or not 0 < self.timeout_seconds <= 20:
+            raise ValueError("weather timeout_seconds must be between 0 and 20")
+
+
+@dataclass
 class Config:
     """Main configuration container."""
 
@@ -212,6 +242,7 @@ class Config:
     controls: ControlsConfig = field(default_factory=ControlsConfig)
     timers: TimerConfig = field(default_factory=TimerConfig)
     household: HouseholdConfig = field(default_factory=HouseholdConfig)
+    weather: WeatherConfig = field(default_factory=WeatherConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
@@ -489,6 +520,15 @@ def load_config(config_path: Optional[str] = None) -> Config:
         app_store=app_store_config,
         rpiface=rpiface_config,
         mcp=mcp_config,
+        weather=WeatherConfig(**{
+            name: get_value("weather", name, "WEATHER_" + name.upper(), default, kind)
+            for name, default, kind in (
+                ("city", "", str), ("latitude", "", str), ("longitude", "", str),
+                ("timezone", "", str), ("api_key", "", str), ("timeout_seconds", 8.0, float),
+                ("ipgeolocation_api_key", "", str),
+                ("state_path", "~/.local/state/rpi-assistant/weather-location.json", str),
+            )
+        }),
         household=HouseholdConfig(
             state_path=get_value("household", "state_path", "HOUSEHOLD_STATE_PATH", "~/.local/state/rpi-assistant/household.sqlite3", str),
             timezone=get_value("household", "timezone", "HOUSEHOLD_TIMEZONE", "Europe/Bucharest", str),

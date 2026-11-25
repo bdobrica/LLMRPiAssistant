@@ -26,6 +26,7 @@ from .controls import LocalControls
 from .control_server import ControlServer
 from .timers import Timers, TimerAlerts
 from .household import Household
+from .weather import Weather
 from .rpiface_client import RPiFaceClient
 
 try:
@@ -96,6 +97,7 @@ def main():
         mcp_manager = MCPClientManager(config.mcp)
         mcp_manager.start()
         openai_client = OpenAIClient(config.openai, mcp_manager=mcp_manager)
+        openai_client.weather = Weather(config.weather)
         repository_roots: list[str | Path] = []
         if config.app_store.default_repository_url:
             repository_roots.append(config.app_store.default_repository_url)

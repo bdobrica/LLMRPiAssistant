@@ -186,3 +186,20 @@ alert_seconds = 120
 # Existing reminders keep their scheduled UTC instant when this is changed.
 timezone = Europe/Bucharest
 state_path = ~/.local/state/rpi-assistant/household.sqlite3
+
+[weather]
+# Optional home override, e.g. Bucharest, Romania. Overrides saved spoken/IP city.
+city =
+# Optional precise coordinates require city and timezone; otherwise city is geocoded.
+latitude =
+longitude =
+# Blank uses the resolved city's zone, independently of reminder timezone.
+timezone =
+timeout_seconds = 8
+# Optional paid Open-Meteo key selects customer-api.open-meteo.com automatically.
+# Free endpoint is for non-commercial use; commercial products need a subscription.
+api_key =
+# Optional opt-in IP city detection when there is no configured/saved spoken city.
+# Without this key, the first weather request asks for a city and remembers it.
+ipgeolocation_api_key =
+state_path = ~/.local/state/rpi-assistant/weather-location.json
