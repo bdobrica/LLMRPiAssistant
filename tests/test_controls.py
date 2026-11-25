@@ -133,7 +133,7 @@ class ControlsTests(unittest.TestCase):
                 apps.handle.return_value = None
                 apps.should_classify_app_intent.return_value = False
                 player = Mock()
-                handler = VoiceCommandHandler(NS(audio_output=AudioOutputConfig(tts_output_path=str(output)),
+                handler = VoiceCommandHandler(NS(audio_output=AudioOutputConfig(tts_output_path=str(output), stream_realtime=False),
                                                  openai=NS(tts_voice='alloy', tts_backend='realtime')),
                                                client, apps, Mock(), player, Mock(), controls=self.controls)
                 self.assertFalse(handler.process('unused.wav'))
@@ -245,7 +245,7 @@ class ControlsTests(unittest.TestCase):
                 client.transcribe_audio.return_value = text
                 output = self.directory / 'reply.wav'
                 client.generate_speech.side_effect = lambda *args: output.write_bytes(b'volume confirmation')
-                handler = VoiceCommandHandler(NS(audio_output=AudioOutputConfig(tts_output_path=str(output)),
+                handler = VoiceCommandHandler(NS(audio_output=AudioOutputConfig(tts_output_path=str(output), stream_realtime=False),
                                                  openai=NS(tts_voice='alloy',tts_backend='realtime')),
                                               client, apps, Mock(), player, Mock(), controls=self.controls)
                 handler.process('unused.wav')

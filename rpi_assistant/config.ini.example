@@ -83,7 +83,7 @@ request_timeout_seconds = 20
 # Optional hosted current-information lookup using chat_model and the existing key.
 # Read-only Responses web_search; up to two hosted tool calls per lookup (paid).
 web_search_enabled = true
-# Total Realtime speech-generation deadline.
+# Realtime provider time budget, excluding local speaker backpressure.
 tts_timeout_seconds = 30
 # Maximum tokens in response
 max_tokens = 500
@@ -109,6 +109,8 @@ count = 12
 
 [audio_output]
 # Audio output configuration for TTS playback
+# Start speaking as Realtime audio arrives. False uses the completed WAV.
+stream_realtime = true
 # Enable/disable audio output
 enabled = true
 # ReSpeaker 2-Mic v1 PCM configured by make install-voicecard (32-bit playback).

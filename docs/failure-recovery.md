@@ -35,7 +35,9 @@ tts_timeout_seconds = 30
 
 Restart after manual edits. The first is a network-operation timeout, not a total
 turn limit; a turn can make several requests. The second limits Realtime speech
-generation. Automatic provider retries are disabled. Increasing waits will not fix
+generation. Time spent waiting for the speaker pipe to accept audio is charged
+to the playback deadline. Each streamed answer is capped at 120 seconds of PCM.
+Automatic provider retries are disabled. Increasing waits will not fix
 an invalid key or disconnected network.
 
 If the speaker fails, a spoken error is impossible; use the phone status and logs

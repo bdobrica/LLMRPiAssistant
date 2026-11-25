@@ -149,16 +149,17 @@ class OpenAIClientConversationTests(unittest.TestCase):
         apps.handle.return_value = None
         apps.should_classify_app_intent.return_value = False
         playback = Mock()
-        playback.play.side_effect = [PlaybackInterrupted(), True]
+        playback.play_stream.side_effect = [PlaybackInterrupted(), True]
         with TemporaryDirectory() as directory:
             output = Path(directory) / "reply.wav"
-            client.generate_speech = Mock(side_effect=lambda *args: output.write_bytes(b"fresh audio"))
+            client.generate_speech = Mock()
             config = SimpleNamespace(openai=client.config, audio_output=AudioOutputConfig(tts_output_path=str(output)))
             handler = VoiceCommandHandler(config, client, apps, Mock(), playback, Mock())
             with self.assertRaises(PlaybackInterrupted):
                 handler.process("unused.wav")
             self.assertFalse(output.exists())
             self.assertTrue(handler.process("unused.wav", continue_conversation=True))
+            client.generate_speech.assert_not_called()
         manager.call_tool.assert_called_once_with("utility__roll", {})
         self.assertEqual(len(client.client.chat.completions.calls), 3)
         results = [message for message in client.conversation_history if message["role"] == "tool"]

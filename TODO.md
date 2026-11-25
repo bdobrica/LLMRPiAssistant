@@ -40,13 +40,16 @@ See [speaker controls](docs/local-controls.md#change-volume-or-mute).
   - **Implemented.** Settings → Advanced covers 74 static options in 14 groups and seven fields per named MCP server. Settings writes authenticate as `admin` with the existing device setup code. A 360px Chromium trial exercised browser sign-in, live Save, Undo and adding a server definition. The 72 focused local checks passed.
   - **Accepted on the Zero 2 W.** Forty isolated checks passed. A separate systemd service with a synthetic recorder applied a key live, restarted with a different timer setting, recovered after an occupied-port trial, then undid the timer change. On deployed build `58e2d82`, all six pages responded on the LAN and Advanced settings accepted the existing device code. The owner confirmed clear spoken replies to a wake-word question and a contextual follow-up. See [Advanced settings](docs/phone-setup.md#advanced-settings).
 
-## Next: Faster Spoken Replies
+## Faster Spoken Replies
 
-- [ ] **S01 — Play generated speech incrementally.**
+- [x] **S01 — Play generated speech incrementally.**
   - Feed existing Realtime audio chunks into playback before generation completes, with bounded buffering/backpressure and the tested WM8960 format. Preserve models, completed answer text, tool receipts and conversation history.
   - Carry cancellation through the provider session, queued chunks and player; never resume stale speech or replay actions. Preserve volume/mute, physical-button correction, local checks and timer/reminder alerts. Open the green follow-up window only after playback and echo guard finish.
   - Keep bounded deadlines and private audio cleanup. Handle empty streams, malformed audio, disconnects and partial playback with local feedback and recovery; do not automatically restart a partly spoken answer. Retain a selectable working fallback during validation.
   - **Accept:** focused chunk/order/bounds/cancellation/failure tests plus live streaming on the Zero 2 W. Compare repeated short/long replies before/after: end-of-question to first audible speech, first audio arrival, completion, memory and audible gaps. Confirm clear volume, interruption without duplicate actions, contextual follow-ups without echo, offline recovery and alert coexistence. Report variability and remaining limits. No fillers or filler-decision calls.
+
+  - **Zero 2 W.** Eight live turns compared short and longer replies through both modes. First PCM to sound was 0.08–0.11 s streamed and 1.44–1.91 s via WAV. Peak assistant RSS was 176.8–178.9 MiB streamed. All eight turns opened a follow-up window, with zero ALSA underruns or speaker-triggered follow-ups. The owner confirmed the last longer reply was clear and continuous. [Per-run timing, completion and limits](docs/openai-upgrade.md#measured-on-the-zero-2-w).
+  - **Recovery and controls.** 127 focused checks passed locally and on the Pi. They covered backpressure, cancellation before and during audio, disconnects and malformed data, a timer taking over the speaker, contextual correction without repeating a tool, local failure feedback and a fresh turn after offline failure. Button, outage and timer failure cases used automated fixtures. Earlier owner acceptance covers ordinary contextual conversation. The regular UI04 service was restored after the trial. The Pi 3 A+ remains untested.
 
 ## Known Reliability Follow-Up
 

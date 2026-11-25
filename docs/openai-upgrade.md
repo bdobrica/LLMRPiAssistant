@@ -24,6 +24,7 @@ tts_timeout_seconds = 30
 
 [audio_output]
 device = assistant_wm8960
+stream_realtime = true
 tts_output_path = /tmp/response.wav
 ```
 
@@ -31,10 +32,39 @@ tts_output_path = /tmp/response.wav
 Chat Completions tool flow uses `reasoning_effort = none`. For other audio hardware,
 choose its output instead of the WM8960 device. Restart after manual changes.
 
-Speech uses a short Realtime WebSocket session to read the completed answer.
-This is not a model-name swap into the legacy Speech endpoint. The assistant waits
-for the generated audio before playing it, so longer answers can mean a longer pause.
-It sends no idle microphone stream to Realtime; wake detection remains local.
+Speech uses a short Realtime session to read the completed answer. By default the
+speaker starts as audio arrives. Press the button during speech to interrupt,
+then wait for green before giving a correction. The follow-up window opens after
+the player finishes and the echo guard expires.
+
+To compare playback on your own device, open **Settings → Advanced settings →
+Speaker** and set **stream realtime** to **Disabled**. This plays a completed WAV
+using the same model and voice. Choose **Enabled** to stream again. If the
+connection drops during a reply, you hear local failure feedback. The assistant
+leaves completed actions in place and waits for another question.
+
+### Measured on the Zero 2 W
+
+The same two synthetic questions went through recording, transcription, chat and
+the wired ReSpeaker on November 25, 2026. Each cell below shows two runs. Times
+start at the last block of the question and include the recorder's silence wait
+(0.92–0.95 seconds). **First sound** is the first microphone block above the
+background threshold after the player opened. The probe kept levels and timing.
+
+| Reply and playback | First PCM (s) | First sound (s) | Playback finished (s) | Speech duration (s) | Peak assistant RSS (MiB) |
+| --- | --- | --- | --- | --- | --- |
+| Short, WAV | 9.19 / 5.04 | 10.81 / 6.48 | 13.43 / 8.99 | 2.55 / 2.50 | 181.8 / 177.6 |
+| Short, streamed | 4.78 / 4.93 | 4.88 / 5.04 | 7.01 / 7.86 | 2.15 / 2.85 | 176.8 / 177.6 |
+| Longer, WAV | 5.04 / 4.65 | 6.88 / 6.56 | 15.10 / 14.77 | 8.20 / 8.20 | 176.5 / 177.6 |
+| Longer, streamed | 4.56 / 4.80 | 4.64 / 4.88 | 17.59 / 18.43 | 12.95 / 13.55 | 178.9 / 178.6 |
+
+Streaming reduced the wait **after the first PCM arrived** from 1.44–1.91 seconds
+to 0.08–0.11 seconds. Provider latency and generated answer length varied. The
+longer streamed answers started sooner and took longer to finish. ALSA reported
+zero underruns across the eight turns. Each opened its follow-up window, with
+zero follow-up speech detections from playback. The owner heard the last streamed
+answer clearly at normal volume through the final word. The trial covered one
+Zero 2 W, one network and one speaker.
 
 ## Check availability and cost
 

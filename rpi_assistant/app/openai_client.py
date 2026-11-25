@@ -455,6 +455,10 @@ class OpenAIClient:
             raise
         return {}
 
+    async def stream_speech(self, text, voice, write_pcm):
+        from .realtime_speech import render_realtime_speech
+        return await render_realtime_speech(self.config, text, voice, write_pcm)
+
     def process_voice_command(self, audio_file_path: str) -> tuple[str, str, dict]:
         """Complete pipeline: transcribe audio and get chat response.
         

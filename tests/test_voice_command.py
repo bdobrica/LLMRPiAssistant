@@ -1,9 +1,10 @@
+import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace as NS
 import subprocess
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from rpi_assistant.app.config import AudioOutputConfig, OpenAIConfig
 from rpi_assistant.app.playback import AudioPlayback, PlaybackInterrupted
@@ -15,7 +16,7 @@ class VoiceCommandTests(unittest.TestCase):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.output = Path(directory.name) / "reply.wav"
-        self.config = NS(audio_output=AudioOutputConfig(tts_output_path=str(self.output)),
+        self.config = NS(audio_output=AudioOutputConfig(tts_output_path=str(self.output), stream_realtime=False),
                          openai=OpenAIConfig(api_key="test"))
         self.client = Mock()
         self.client.transcribe_audio.return_value = "What about a cube?"
@@ -70,6 +71,37 @@ class VoiceCommandTests(unittest.TestCase):
         self.assertFalse(self.handler.process("unused.wav"))
         self.assertFalse(self.output.exists())
         self.playback.play.assert_not_called()
+
+    def test_stream_failure_after_app_action_uses_local_feedback_without_replay(self):
+        self.config.audio_output.stream_realtime = True
+        self.apps.handle.return_value = NS(text="You rolled a six.")
+        self.playback.play_stream.side_effect = ConnectionError("partial output")
+        self.assertFalse(self.handler.process("unused.wav"))
+        self.apps.handle.assert_called_once()
+        self.playback.play_stream.assert_called_once()
+        self.client.remember_app_response.assert_called_once_with("What about a cube?", "You rolled a six.")
+        self.playback.prompt.assert_called_once_with("request_failed.wav")
+        self.client.generate_speech.assert_not_called()
+
+    def test_stream_recovers_from_offline_and_reads_only_the_attributed_spoken_answer(self):
+        self.config.audio_output.stream_realtime = True
+        self.handler.is_online = lambda: False
+        self.client.stream_speech = AsyncMock(side_effect=ConnectionError())
+        sink = AsyncMock()
+        def play(produce, **kwargs):
+            asyncio.run(produce(sink))
+            return True
+        self.playback.play_stream.side_effect = play
+        self.assertFalse(self.handler.process("unused.wav"))
+        self.playback.prompt.assert_called_once_with("offline.mp3")
+        self.handler.is_online = lambda: True
+        self.client.stream_speech.side_effect = None
+        self.client.get_chat_response.return_value = ("Answer with source URL.", {"spoken_response":"According to the source, six."})
+        self.assertTrue(self.handler.process("unused.wav", continue_conversation=True))
+        self.client.stream_speech.assert_awaited_with("According to the source, six.", "alloy", sink)
+        self.assertEqual(self.handler.logger.log_complete_interaction.call_args.args[2], "Answer with source URL.")
+        self.client.generate_speech.assert_not_called()
+        self.assertFalse(self.output.exists())
 
     def test_classifier_failure_does_not_fall_through_to_chat_or_execute_action(self):
         self.apps.should_classify_app_intent.return_value = True

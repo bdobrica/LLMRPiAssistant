@@ -1,6 +1,8 @@
+import asyncio
 import json
 from pathlib import Path
 import sqlite3
+import sys
 from tempfile import TemporaryDirectory
 import threading
 import time
@@ -146,6 +148,51 @@ class TimerTests(unittest.TestCase):
         self.assertEqual(recorder.state,'MUTED')
         recorder.end_alert();self.assertTrue(recorder.muted)
         recorder.pixels.set_muted.assert_called_with(True)
+
+    def test_timer_preempts_a_partly_spoken_stream_and_releases_for_chime(self):
+        fixture = test_controls.ControlsTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        controls = fixture.controls
+        controls.recorder.alert_active = False
+        started, closed, chime = threading.Event(), threading.Event(), threading.Event()
+        stopped = []
+        async def produce(write):
+            try:
+                await write(b"ab" * 2400)
+                started.set()
+                await asyncio.sleep(10)
+            finally:
+                closed.set()
+        def speak():
+            try:
+                controls.playback.play_stream(produce, timeout=5)
+            except PlaybackStopped:
+                stopped.append(True)
+        def prompt(*args, **kwargs):
+            with controls.playback.lock:
+                if closed.is_set():
+                    chime.set()
+        controls.playback.prompt = prompt
+        runner = TimerAlerts(self.store, controls)
+        controls.timer_alerts = runner
+        self.addCleanup(runner.close)
+        with patch("rpi_assistant.app.playback.stream_playback_command",
+                   return_value=[sys.executable, "-c", "import sys; sys.stdin.buffer.read()"]):
+            worker = threading.Thread(target=speak)
+            worker.start()
+            try:
+                self.assertTrue(started.wait(2))
+                self.store.create(1)
+                self.clock.mono += 2
+                runner.start()
+                self.assertTrue(chime.wait(2))
+                worker.join(2)
+                self.assertEqual(stopped, [True])
+                controls.button_press()
+            finally:
+                controls.playback.stop()
+                worker.join(2)
 
     def test_alert_capture_never_submits_a_recording_or_followup(self):
         fixture=test_controls.ControlsTests();fixture.setUp();self.addCleanup(fixture.doCleanups)

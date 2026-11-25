@@ -92,17 +92,24 @@ class VoiceCommandHandler:
             print("\n🔊 Generating speech...")
             if self.pixels:
                 self.pixels.speak()
+            spoken = usage.get("spoken_response", response)
+            options = {"expected_generation": generation} if self.controls else {}
+            if self.config.openai.tts_backend == "realtime" and self.config.audio_output.stream_realtime:
+                self.rpiface.set_state("speaking")
+                return self.playback.play_stream(
+                    lambda sink: self.client.stream_speech(spoken, self.config.openai.tts_voice, sink),
+                    timeout=self.config.openai.tts_timeout_seconds + 125, **options,
+                )
             output = Path(self.config.audio_output.tts_output_path)
             # Clear the preceding answer before generation, including legacy Speech output.
             output.unlink(missing_ok=True)
             try:
-                self.client.generate_speech(usage.get("spoken_response", response), str(output), self.config.openai.tts_voice)
+                self.client.generate_speech(spoken, str(output), self.config.openai.tts_voice)
                 if not output.is_file() or not output.stat().st_size:
                     raise RuntimeError("Speech output is empty")
                 self._check_cancelled()
                 stage = "playback"
                 self.rpiface.set_state("speaking")
-                options = {"expected_generation": generation} if self.controls else {}
                 return self.playback.play(str(output), backend=self.config.openai.tts_backend, interruptible=True, **options)
             finally:
                 output.unlink(missing_ok=True)
@@ -118,6 +125,8 @@ class VoiceCommandHandler:
             print("Answer interrupted; preparing to listen for a correction.")
             raise
         except Exception as exc:
+            if app_response is not None and stage in ("speech", "playback"):
+                self.client.remember_app_response(transcription, response)
             message = f"{stage} failed ({type(exc).__name__})"
             print(f"\n⚠️ {message}")
             self.logger.log_error(message, {})

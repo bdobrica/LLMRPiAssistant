@@ -101,6 +101,7 @@ class AudioOutputConfig:
     enabled: bool = True
     device: str = "hw:0,0"
     tts_output_path: str = "/tmp/response.wav"
+    stream_realtime: bool = True
 
 
 @dataclass
@@ -464,6 +465,7 @@ def parse_config(parser, *, allow_missing_api_key=False, inventory=None):
     )
 
     audio_output = AudioOutputConfig(
+        stream_realtime=get_value("audio_output", "stream_realtime", "AUDIO_OUTPUT_STREAM_REALTIME", True, bool),
         enabled=get_value("audio_output", "enabled", "AUDIO_OUTPUT_ENABLED", True, bool),
         device=get_value("audio_output", "device", "AUDIO_OUTPUT_DEVICE", "hw:0,0", str),
         tts_output_path=get_value(

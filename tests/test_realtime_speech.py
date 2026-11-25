@@ -9,7 +9,7 @@ import wave
 
 from rpi_assistant.app.config import OpenAIConfig
 from rpi_assistant.app.playback import speech_playback_command
-from rpi_assistant.app.realtime_speech import generate_realtime_speech
+from rpi_assistant.app.realtime_speech import generate_realtime_speech, render_realtime_speech
 
 
 def delta(data=b"\x00\x01" * 240):
@@ -21,7 +21,7 @@ def done(status="completed"):
 
 
 class RealtimeSpeechTests(unittest.TestCase):
-    def render(self, directory, events, *, stall=False):
+    def render(self, directory, events, *, stall=False, sink=None):
         connection = MagicMock()
         connection.session.update = AsyncMock()
         connection.response.create = AsyncMock()
@@ -45,8 +45,11 @@ class RealtimeSpeechTests(unittest.TestCase):
         self.connection_context = connection_context
         self.client_context = client_context
         with patch("rpi_assistant.app.realtime_speech.AsyncOpenAI", return_value=client_context):
+            if sink is not None:
+                return asyncio.run(render_realtime_speech(
+                    OpenAIConfig(api_key="test", tts_timeout_seconds=.05), "Synthetic.", "alloy", sink))
             return generate_realtime_speech(
-                OpenAIConfig(api_key="test", tts_timeout_seconds=0.05),
+                OpenAIConfig(api_key="test", tts_timeout_seconds=0.05 if stall else 1),
                 "Read this exact answer.", str(Path(directory) / "reply.wav"), "alloy",
             )
 
@@ -67,7 +70,8 @@ class RealtimeSpeechTests(unittest.TestCase):
     def test_failed_incomplete_empty_disconnected_and_bad_audio_never_publish(self):
         for events in ([delta(), done("incomplete")], [done()], [delta()],
                        [NS(type="error")], [delta(b"x"), done()],
-                       [delta(b"\x00" * (24000 * 2 * 120 + 2)), done()]):
+                       [delta(b"\x00" * (24000 * 2 * 120 + 2)), done()],
+                       [delta(b"\x00" * 480000)] * 13 + [done()]):
             with self.subTest(events=events[-1].type), TemporaryDirectory() as directory:
                 target = Path(directory) / "reply.wav"
                 target.write_bytes(b"previous completed response")
@@ -83,6 +87,26 @@ class RealtimeSpeechTests(unittest.TestCase):
                 self.render(directory, [delta()], stall=True)
             self.assertEqual(list(Path(directory).iterdir()), [])
         self.connection_context.__aexit__.assert_awaited_once()
+
+    def test_slow_sink_preserves_network_budget_and_malformed_tail_is_not_replayed(self):
+        received = []
+        async def slow(chunk):
+            received.append(chunk)
+            await asyncio.sleep(.07)
+        self.render(None, [delta(b"ab"), delta(b"cd"), done()], sink=slow)
+        self.assertEqual(received, [b"ab", b"cd"])
+        with self.assertRaises(ValueError):
+            self.render(None, [delta(b"ef"), NS(type="response.output_audio.delta", delta="!")], sink=slow)
+        self.assertEqual(received, [b"ab", b"cd", b"ef"])
+        self.connection_context.__aexit__.assert_awaited_once()
+
+    def test_cancelling_mid_response_closes_socket_and_client(self):
+        async def cancel_after_first(chunk):
+            asyncio.get_running_loop().call_soon(asyncio.current_task().cancel)
+        with self.assertRaises(asyncio.CancelledError):
+            self.render(None, [delta()], stall=True, sink=cancel_after_first)
+        self.connection_context.__aexit__.assert_awaited_once()
+        self.client_context.__aexit__.assert_awaited_once()
 
     def test_playback_uses_configured_named_device_for_both_workflows(self):
         self.assertEqual(speech_playback_command("realtime", "assistant_wm8960", "reply.wav"),

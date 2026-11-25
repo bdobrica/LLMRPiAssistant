@@ -17,8 +17,8 @@ Normal administration now opens at the device IP. Keep its trusted-LAN access ru
 Home, Timers, Reminders, Shopping, Settings and Privacy each have their own URL.
 Keep navigation, local assets and draft protection consistent across those pages.
 Home now has a speaker slider and separate controls for speaker output and
-microphone capture. The owner accepted UI04 on the Zero 2 W. **S01 streaming
-playback** is the next priority before optional entertainment or SecondContext work.
+microphone capture. The owner accepted UI04 and the sound of S01 streaming
+playback on the Zero 2 W.
 
 ### UI04 — All configuration available from the phone
 
@@ -33,13 +33,9 @@ code. Everyday household controls remain shared on the trusted LAN.
 
 ## S01 — Start Speaking While Audio Arrives
 
-The current Realtime adapter receives audio chunks but writes a complete WAV before playback. Feed those chunks to playback as they arrive, using a small bounded buffer. Retain the current transcription, reasoning, tool actions and conversation history; text-generation streaming and continuous cloud microphone sessions are separate work.
-
-Start playback before generation finishes, with clear speech and no gaps under normal conditions. Preserve the WM8960 playback format/volume fix, speaker controls, button interruption and stale-output cancellation. Cancellation must stop both queued audio and the provider stream without replaying an executed action. Open follow-up listening only after actual playback ends and the echo guard completes. Timer/reminder alerts and local audio checks must still coexist with speech.
-
-Handle a disconnect before audio and a failure after partial speech honestly: stop, give appropriate local feedback, and recover to listening without replaying the answer. Keep timeouts, buffer limits, audio cleanup and content-free diagnostics. Retain a working fallback while validating the change.
-
-Compare the current and streaming paths on the Zero 2 W using short and longer synthetic replies: end-of-question to first audible speech, first audio arrival, playback completion, memory and audible continuity. Report repeated observations and cloud variability; do not claim that faster playback removes transcription or reasoning delays. No fillers, hesitation sounds or filler-selection API calls are planned.
+Realtime speech now plays incrementally after the answer and any tool results
+are ready. Keep the completed-WAV fallback available for comparison and recovery.
+The Zero 2 W measurements and sound check are in the [speech guide](docs/openai-upgrade.md#measured-on-the-zero-2-w).
 
 ## Boundaries to Preserve
 
