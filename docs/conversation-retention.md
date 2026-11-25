@@ -40,7 +40,8 @@ to change them.
 
 If an old detail has left context, tell the assistant again. Missing memory doesn't
 undo an action: check the phone's timer/reminder list before repeating a request
-whose result you didn't hear. See [privacy](conversation-privacy.md) for deletion,
-and [TODO](../TODO.md) for the measured retention changes.
+whose result you didn't hear. See [privacy](conversation-privacy.md) for deletion.
+Historical retention measurements and acceptance are preserved in Git history;
+[the release check](reference/release-check-2026-11-25.md) records later resource observations.
 
 [Back to the guides](README.md)

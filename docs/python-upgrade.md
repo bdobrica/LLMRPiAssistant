@@ -65,6 +65,7 @@ wheel-availability reason. `make install-deps` supplies the build libraries.
 
 Setup downloads and verifies wake assets. Startup loads one `hey_jarvis` model by
 default and does not download or patch installed packages. Keep this small on the
-512 MB boards. Tested versions and hardware limits are recorded in [TODO](../TODO.md).
+512 MB boards. The pinned requirements record the dependency versions; see
+[the release check](reference/release-check-2026-11-25.md) for device checks and hardware limits.
 
 [Back to maintenance](maintenance.md)

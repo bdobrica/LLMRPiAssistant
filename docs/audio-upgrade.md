@@ -65,7 +65,8 @@ saved boot/kernel image or working SD card if the new OS cannot boot or use audi
 Inspect the snapshot's `legacy-service-state.txt` before restoring old services.
 
 The existing Zero 2 W passed kernel 6.18.60 audio and spoken checks in November
-2026; a fresh-card installation and Pi 3 A+ were not tested. Detailed migration
-evidence is in [TODO](../TODO.md). Other HATs need their own driver and hardware checks.
+2026; a fresh-card installation and Pi 3 A+ were not tested. Historical migration
+acceptance is preserved in Git history; see [the release check](reference/release-check-2026-11-25.md)
+for later device checks and limits. Other HATs need their own driver and hardware checks.
 
 [Back to maintenance](maintenance.md)

@@ -45,7 +45,8 @@ finish and inspect status before assuming the new version failed.
 
 The [dated release check](reference/release-check-2026-11-25.md) records what worked
 on a 512 MB Zero 2 W, measured API costs and known gaps. It is not proof of fresh-card
-setup, Pi 3 A+ compatibility or multi-day reliability. [TODO](../TODO.md) contains
-feature-level acceptance records; no new hardware test is implied by editing a guide.
+setup, Pi 3 A+ compatibility or multi-day reliability. [TODO](../TODO.md) tracks
+remaining work; historical feature acceptance is preserved in Git history.
+No new hardware test is implied by editing a guide.
 
 [Back to the guides](README.md)
