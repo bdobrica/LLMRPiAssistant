@@ -245,7 +245,7 @@ class Config:
     weather: WeatherConfig = field(default_factory=WeatherConfig)
 
 
-def load_config(config_path: Optional[str] = None) -> Config:
+def load_config(config_path: Optional[str] = None, *, allow_missing_api_key: bool = False) -> Config:
     """Load configuration from config.ini or environment variables.
 
     Priority:
@@ -377,14 +377,14 @@ def load_config(config_path: Optional[str] = None) -> Config:
     )
 
     api_key = get_value("openai", "api_key", "OPENAI_API_KEY", None, str)
-    if not api_key:
+    if not api_key and not allow_missing_api_key:
         raise ValueError(
             "OPENAI_API_KEY is required. Set it in config.ini [openai] section "
             "or as environment variable OPENAI_API_KEY"
         )
 
     openai_config = OpenAIConfig(
-        api_key=api_key,
+        api_key=api_key or "",
         whisper_model=get_value(
             "openai",
             "whisper_model",

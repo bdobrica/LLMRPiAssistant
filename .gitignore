@@ -182,6 +182,8 @@ cython_debug/
 
 # Config files
 config.ini
+*.phone-undo.json
+.phone-settings-*
 .secrets/
 
 # VS Code

@@ -1,6 +1,16 @@
 const el = id => document.getElementById(id);
 let muted = false;
 let resetPending = false;
+let settingsRevision = null;
+let lastSettings = null;
+function loadSettings(s) {
+  settingsRevision=s.revision;
+  el('follow-up').value=s.follow_up_seconds;
+  el('timezone').value=s.reminder_timezone;
+  el('weather-city').value=s.weather_city;
+  for(const id of ['openai-key','weather-key','ipgeolocation-key']) el(id).value='';
+  el('clear-weather-key').checked=el('clear-ipgeolocation-key').checked=false;
+}
 function show(s) {
   if (resetPending && !s.reset_pending) el('message').textContent = 'New conversation ready.';
   resetPending = s.reset_pending;
@@ -10,6 +20,21 @@ function show(s) {
   el('capture').textContent = muted ? 'Microphone closed · steady red' : s.capture_active ? 'Microphone capture active' : 'Capture unavailable · mute not confirmed';
   el('status').textContent = s.state === 'CAPTURE_ERROR' ? 'Microphone control needs attention' : s.reset_pending ? 'New conversation pending · previous request finishing' : s.state === 'ALERT' ? 'Timer ringing · amber' : s.busy ? 'Finishing request…' : s.state === 'FOLLOW_UP' ? 'Ready for a follow-up · green' : muted ? 'Muted' : s.capture_active ? 'Ready for wake word' : 'Microphone unavailable';
   el('volume').textContent = s.volume === null ? 'Unavailable' : s.volume + '%';
+  el('connection').textContent = s.online === true ? 'Internet reachable · provider access is checked during requests' : s.online === false ? 'Internet unavailable · local controls and audio checks still work' : 'Internet status not yet known';
+  if(s.audio_check) {
+    el('audio-check').textContent=s.audio_check.message;
+    el('check-speaker').disabled=s.audio_check.active || s.busy || s.state==='ALERT';
+    el('check-microphone').disabled=s.audio_check.active || s.busy || s.state==='ALERT' || !s.capture_active || muted;
+    if(s.audio_check.active) el('status').textContent=s.audio_check.state==='recording'?'Microphone check · speak now':'Local audio check · playing';
+  }
+  if(s.settings) {
+    lastSettings=s.settings;
+    if(settingsRevision===null) loadSettings(lastSettings);
+    for(const name of ['openai','weather','ipgeolocation']) el(name+'-key-state').textContent=lastSettings.keys_configured[name+'_key']?'Key configured (hidden)':'No key configured';
+    el('settings-undo').disabled=!lastSettings.can_undo;
+    el('weather-location').textContent=lastSettings.weather_location?'Last resolved city: '+lastSettings.weather_location:'City will be resolved on the next weather request.';
+    if(lastSettings.error) el('settings-message').textContent=lastSettings.error;
+  }
   if(s.error) el('message').textContent = s.error;
   el('household-error').textContent = s.household_error || '';
   el('reminder-zone').textContent = s.timezone ? 'Timezone: ' + s.timezone : 'Reminder timezone unavailable';
@@ -81,5 +106,24 @@ el('timer-add').onclick = async () => {
   finally { el('timer-add').disabled = false; }
 };
 el('new').onclick = () => command('new_conversation');
+el('check-speaker').onclick=()=>command('audio_check','speaker');
+el('check-microphone').onclick=()=>command('audio_check','microphone');
+el('settings-reload').onclick=()=>{if(lastSettings) {loadSettings(lastSettings);el('settings-message').textContent='Current settings loaded.';}};
+async function saveSettings(undo=false) {
+  const value=undo?{revision:lastSettings?.revision}:{
+    revision:settingsRevision,follow_up_seconds:Number(el('follow-up').value),reminder_timezone:el('timezone').value.trim(),weather_city:el('weather-city').value.trim(),
+    openai_key:el('openai-key').value.trim(),weather_key:el('weather-key').value.trim(),ipgeolocation_key:el('ipgeolocation-key').value.trim(),
+    clear_weather_key:el('clear-weather-key').checked,clear_ipgeolocation_key:el('clear-ipgeolocation-key').checked
+  };
+  el('settings-save').disabled=el('settings-undo').disabled=true;
+  for(const id of ['openai-key','weather-key','ipgeolocation-key']) el(id).value='';
+  try {
+    const data=await request('/control',{method:'POST',headers:{'Content-Type':'application/json','X-Assistant-Control':'1'},body:JSON.stringify({action:undo?'settings_undo':'settings_apply',value})});
+    show(data); loadSettings(data.settings); el('settings-message').textContent=data.message;
+  } catch(e) {el('settings-message').textContent=e.message;}
+  finally {el('settings-save').disabled=false;el('settings-undo').disabled=!lastSettings?.can_undo;}
+}
+el('settings-save').onclick=()=>saveSettings();
+el('settings-undo').onclick=()=>saveSettings(true);
 async function poll() { await refresh(); setTimeout(poll, 2500); }
 poll();

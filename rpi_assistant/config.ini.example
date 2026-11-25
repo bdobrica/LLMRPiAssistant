@@ -62,7 +62,8 @@ output_path = /tmp/command.wav
 
 [openai]
 # OpenAI API configuration
-# REQUIRED: Set your API key here or via OPENAI_API_KEY environment variable
+# Set here, via OPENAI_API_KEY, or using the trusted-LAN phone Settings page.
+# Local controls/checks can start without a key; voice requests require one.
 api_key = 
 
 # Recorded-speech transcription (legacy setting name retained)
@@ -163,6 +164,8 @@ trusted_public_key =
 require_signature = true
 
 [controls]
+# Settings include write-only provider keys and local microphone/speaker checks.
+# Save & apply is explicit; the private config.ini.phone-undo.json supports undo.
 # Phone page: use host = 0.0.0.0 only on a trusted private LAN.
 # Open http://<device-IP>:8767 (literal IP). No cloud or external assets.
 # Everyone on that LAN can control it; never expose this port to the Internet.

@@ -26,8 +26,15 @@ sudo reboot
 ```bash
 cd rpi_assistant
 cp config.ini.example config.ini
-nano config.ini  # Add your OPENAI_API_KEY
+nano config.ini  # Set hardware options and optionally your OpenAI key
 ```
+
+To enter the OpenAI key from a phone instead, set `[controls] host = 0.0.0.0`
+on your trusted home LAN, start the assistant, then open `http://<device-IP>:8767`.
+Expand **Settings**, paste the key and press **Save & apply**. The page and local
+microphone/speaker checks work before a key is set; voice requests need the key.
+Keys are never displayed back. This LAN page has no sign-in or HTTPS; never expose
+it to the Internet. See [phone setup and undo](docs/phone-setup.md).
 
 ## Running the Assistant
 

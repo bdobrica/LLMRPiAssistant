@@ -7,6 +7,7 @@ from pathlib import Path
 import threading
 from urllib.parse import urlsplit
 from .household import HouseholdInputError
+from .phone_settings import SettingsError
 
 
 class ControlServer(HTTPServer):
@@ -76,14 +77,14 @@ class ControlHandler(BaseHTTPRequestHandler):
             return self._reply(404, {"error": "Not found"})
         try:
             size = int(self.headers.get('Content-Length', '0'))
-            if not 0 < size <= 1024:
+            if not 0 < size <= 4096:
                 raise ValueError("Invalid request size")
             payload = json.loads(self.rfile.read(size))
             if not isinstance(payload, dict):
                 raise ValueError("Expected an object")
             message = self.server.controls.command(payload.get('action'), payload.get('value'))
             self._reply(200, {"message": message, **self.server.controls.status()})
-        except HouseholdInputError as exc:
+        except (HouseholdInputError, SettingsError) as exc:
             self._reply(400, {"error": str(exc)})
         except (ValueError, TypeError):
             self._reply(400, {"error": "Invalid control request"})

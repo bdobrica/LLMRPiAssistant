@@ -68,6 +68,9 @@ class LocalControls:
         self.timers = None
         self.household = None
         self.timer_alerts = None
+        self.settings = None
+        self.audio_checks = None
+        self.connection_status = lambda: None
         self.client.cancel_check = self.check
         # Fail closed for corrupt/unreadable persisted mute settings.
         try:
@@ -84,7 +87,7 @@ class LocalControls:
 
     def begin_turn(self):
         with self.lock:
-            if (self.recorder.capture_paused or self.recorder.recording_generation != self.recorder.capture_generation):
+            if (self.recorder.capture_paused or getattr(self.recorder, "diagnostic_active", False) or self.recorder.recording_generation != self.recorder.capture_generation):
                 raise PlaybackStopped()
             self.cancelled.clear()
             self.busy = True
@@ -102,13 +105,23 @@ class LocalControls:
             self.busy = False
 
     def _stop(self):
+        if self.audio_checks:
+            self.audio_checks.stop()
         self.cancelled.set()
         self.playback.stop()
         self.recorder.cancel_capture()
 
     def command(self, action, value=None):
         with self.lock:
-            if action == "stop":
+            if action in ("settings_apply", "settings_undo"):
+                if self.settings is None:
+                    raise ValueError("Phone settings unavailable")
+                return self.settings.change(value, undo=action == "settings_undo")
+            elif action == "audio_check":
+                if self.audio_checks is None:
+                    raise ValueError("Audio checks unavailable")
+                return self.audio_checks.start(value)
+            elif action == "stop":
                 try:
                     if self.timer_alerts and self.timer_alerts.active:
                         self.timer_alerts.dismiss()
@@ -232,4 +245,9 @@ class LocalControls:
             except Exception:
                 state["reminders"], state["shopping"] = [], []
                 state["household_error"] = "Reminder/Shopping storage is unavailable; changes cannot be confirmed."
+        state["online"] = self.connection_status()
+        if self.settings:
+            state["settings"] = self.settings.status()
+        if self.audio_checks:
+            state["audio_check"] = {"active": self.audio_checks.active, **self.audio_checks.result}
         return state

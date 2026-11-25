@@ -27,6 +27,8 @@ from .control_server import ControlServer
 from .timers import Timers, TimerAlerts
 from .household import Household
 from .weather import Weather
+from .phone_settings import PhoneSettings
+from .audio_checks import AudioChecks
 from .rpiface_client import RPiFaceClient
 
 try:
@@ -54,6 +56,8 @@ def main():
     def cleanup():
         """Cleanup resources before exit."""
         stop_monitor.set()
+        if controls is not None and controls.audio_checks is not None:
+            controls.audio_checks.close()
         if timer_alerts is not None:
             timer_alerts.close()
         if control_server is not None:
@@ -84,7 +88,7 @@ def main():
 
     try:
         # Load configuration
-        config = load_config()
+        config = load_config(allow_missing_api_key=True)
         rpiface = RPiFaceClient(
             base_url=config.rpiface.base_url,
             timeout_seconds=config.rpiface.timeout_seconds,
@@ -124,7 +128,7 @@ def main():
 
         playback = AudioPlayback(config.audio_output)
         def play_audio_prompt(filename: str):
-            if recorder is not None and (recorder.capture_paused or recorder.alert_active):
+            if recorder is not None and (recorder.capture_paused or recorder.alert_active or recorder.diagnostic_active):
                 return
             if recorder is not None:
                 recorder.cancel_follow_up()
@@ -147,18 +151,18 @@ def main():
                         if was_offline and not connection_state["first_check"]:
                             # Was offline, now online - announce return
                             print("\n✅ Internet connection restored!")
-                            if pixels and not (recorder and (recorder.capture_paused or recorder.alert_active)):
+                            if pixels and not (recorder and (recorder.capture_paused or recorder.alert_active or recorder.diagnostic_active)):
                                 pixels.listen()
                             play_audio_prompt("online.mp3")
                         elif connection_state["first_check"]:
                             # First check and online - don't announce
                             print("✅ Internet connection OK")
-                            if pixels and not (recorder and (recorder.capture_paused or recorder.alert_active)):
+                            if pixels and not (recorder and (recorder.capture_paused or recorder.alert_active or recorder.diagnostic_active)):
                                 pixels.listen()
                     else:
                         # Lost connection
                         print("\n⚠️  Internet connection lost!")
-                        if pixels and not (recorder and (recorder.capture_paused or recorder.alert_active)):
+                        if pixels and not (recorder and (recorder.capture_paused or recorder.alert_active or recorder.diagnostic_active)):
                             pixels.offline()
                         if not connection_state["first_check"]:
                             play_audio_prompt("offline.mp3")
@@ -193,6 +197,9 @@ def main():
         )
 
         controls = LocalControls(config.controls, recorder, playback, openai_client)
+        controls.connection_status = lambda: connection_state["online"]
+        controls.settings = PhoneSettings(config, Path(__file__).resolve().parents[1] / "config.ini", controls)
+        controls.audio_checks = AudioChecks(controls)
         handler.controls = controls
         timers = Timers(config.timers.state_path, config.timers.alert_seconds)
         openai_client.timers = controls.timers = timers

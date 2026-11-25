@@ -170,6 +170,9 @@ class WakeWordRecorder:
         self.recording_generation = 0
         self.processing_active = False
         self.alert_active = False
+        self.diagnostic_active = False
+        self.diagnostic_audio = None
+        self.diagnostic_frames = 0
         
         # Register cleanup on exit as a safety net
         atexit.register(self.stop)
@@ -292,6 +295,49 @@ class WakeWordRecorder:
                         self.pixels.set_muted(False)
                         (self.pixels.timer_alert if self.alert_active else self.pixels.listen)()
 
+    def prepare_follow_up(self, seconds):
+        """Prepare the small VAD before applying a phone setting; no state changes."""
+        if seconds > 0 and self.follow_up_vad is None:
+            return VAD(model_path=str(Path(__file__).resolve().parents[1] / "models/silero_vad.onnx"), n_threads=1)
+        return self.follow_up_vad
+
+    def begin_diagnostic(self, record):
+        with self.lock:
+            if self.processing_active or self.alert_active or self.state == "RECORD":
+                raise RuntimeError("Assistant is busy")
+            if record and (self.capture_paused or self.stream is None or not self.stream.active):
+                raise RuntimeError("Unmute an available microphone before recording")
+            self.cancel_capture()
+            self.diagnostic_active = True
+            self.diagnostic_audio = [] if record else None
+            self.diagnostic_frames = 0
+            if not self.capture_paused:
+                self.state = "CHECK_MIC" if record else "CHECK_SPEAKER"
+                if self.pixels:
+                    (self.pixels.follow_up if record else self.pixels.timer_alert)()
+
+    def take_diagnostic_audio(self):
+        with self.lock:
+            blocks = self.diagnostic_audio or []
+            self.diagnostic_audio = None
+            if not self.capture_paused:
+                self.state = "CHECK_SPEAKER"
+                if self.pixels:
+                    self.pixels.timer_alert()
+            return np.concatenate(blocks) if blocks else np.array([], dtype=np.float32)
+
+    def end_diagnostic(self):
+        with self.lock:
+            self.diagnostic_active = False
+            self.diagnostic_audio = None
+            self.cancel_capture()
+            if not self.capture_paused:
+                self.state = "ALERT" if self.alert_active else "LISTEN_WAKE"
+                self.skip_chunks = 30
+                self.last_wake = time.time()
+                if self.pixels:
+                    (self.pixels.timer_alert if self.alert_active else self.pixels.listen)()
+
     def begin_alert(self):
         """Discard microphone input while the local chime plays; preserve real mute."""
         with self.lock:
@@ -381,6 +427,14 @@ class WakeWordRecorder:
                 print("Audio status:", status)
 
             with self.lock:
+                if getattr(self, "diagnostic_active", False):
+                    if self.running and not self.capture_paused and self.diagnostic_audio is not None:
+                        remaining = 3 * self.audio_config.sample_rate - self.diagnostic_frames
+                        if remaining > 0:
+                            block = indata[:remaining, self.audio_config.mic_channel_index].copy()
+                            self.diagnostic_audio.append(block)
+                            self.diagnostic_frames += len(block)
+                    return
                 if not self.running or getattr(self, "capture_paused", False) or self.state in ("PROCESSING", "ALERT"):
                     return
             
@@ -401,7 +455,7 @@ class WakeWordRecorder:
     
     def _process_chunk(self, mono: np.ndarray) -> None:
         with self.lock:
-            if getattr(self, "capture_paused", False) or getattr(self, "alert_active", False):
+            if getattr(self, "capture_paused", False) or getattr(self, "alert_active", False) or getattr(self, "diagnostic_active", False):
                 return
             self._process_active_chunk(mono)
 

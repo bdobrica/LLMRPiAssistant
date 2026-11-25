@@ -30,7 +30,7 @@ class OpenAIClient:
         """
         self.config = config
         self.client = OpenAI(
-            api_key=config.api_key, timeout=config.request_timeout_seconds, max_retries=0,
+            api_key=config.api_key or "not-configured", timeout=config.request_timeout_seconds, max_retries=0,
         )
         self.mcp_manager = mcp_manager
         self.timers = None
@@ -59,6 +59,8 @@ class OpenAIClient:
         Raises:
             Exception: If transcription fails.
         """
+        if not self.config.api_key:
+            raise RuntimeError("Set the OpenAI key on the local phone page before making voice requests")
         try:
             with open(audio_file_path, "rb") as audio_file:
                 transcript = self.client.audio.transcriptions.create(
