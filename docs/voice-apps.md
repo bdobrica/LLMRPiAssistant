@@ -21,6 +21,16 @@ choices. During green, say the answer or say **“first”** or **“second.”*
 You'll hear the answer and a short fact before the next question. Your score
 comes after question three. Say **“repeat”** if you missed a choice.
 
+If Trivia misses your answer, it keeps your place. Wait for green and try
+again. **“A person. That's my answer”** works too. Say **“I don't want to
+play anymore”** to leave at any question.
+
+The assistant will ask again up to three times per question. After that,
+or if you stay quiet until the lights turn blue, use the wake word and say
+**“resume game.”** To change the limit, open Settings → Advanced settings
+→ Recording and button, or set `game_answer_retries` in the `[recording]`
+section of `config.ini`. Choose 0–10. Zero disables automatic retries.
+
 Say **“pause trivia”** to keep your place, even across a restart.
 **“Resume game”** repeats the current question. To go back to ordinary
 questions and discard the round, say **“stop game.”**

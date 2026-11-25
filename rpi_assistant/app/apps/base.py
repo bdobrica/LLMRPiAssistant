@@ -18,6 +18,7 @@ class AppResponse:
     done: bool = False
     expect_input: bool = False
     state: Dict[str, str] = field(default_factory=dict)
+    retry_input: bool = False  # The previous answer was unclear; this is the same question.
 
 
 class VoiceApp(ABC):

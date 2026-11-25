@@ -732,6 +732,12 @@ class AppManager:
         )
 
     def _is_cancel_command(self, text: str) -> bool:
+        if self.active_app is not None:
+            words = normalize_text(text.replace("’", "'").replace("'", "")).removesuffix(" please")
+            if words in {"i dont want to play anymore", "i dont want to play any more",
+                          "i do not want to play anymore", "i do not want to play any more",
+                          "stop playing", "quit the game"}:
+                return True
         lowered = text.lower()
         return any(trigger in lowered for trigger in self.CANCEL_TRIGGERS)
 

@@ -7,6 +7,7 @@ This directory contains pre-generated audio prompts for system messages.
 - `offline.mp3` - Played when internet connection is lost
 - `online.mp3` - Played when internet connection is restored
 - `unheard.wav` - Played when transcription returns no words
+- `game_repeat.wav` - Asks for the same game answer again before follow-up listening reopens
 - `request_failed.wav` - Played when a request cannot finish
 - `timer.wav` - Original synthesized three-note local timer chime (24 kHz mono PCM); no API needed
 - `new_conversation.wav` - Local acknowledgment for the explicit spoken reset control
@@ -15,7 +16,7 @@ This directory contains pre-generated audio prompts for system messages.
 
 These clips ship with the repository and play without API access. The WAV clips
 use the Realtime voice; regenerate them from the repository root with
-`python -m scripts.generate_failure_prompts` (two paid API calls). Their exact text
+`python -m scripts.generate_failure_prompts` (three paid API calls). Their exact text
 is in that script. Listen to regenerated files before shipping.
 
 The older `generate_prompts.sh` targets the legacy Speech API for the original

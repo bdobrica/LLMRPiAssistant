@@ -10,6 +10,7 @@ from rpi_assistant.app.realtime_speech import generate_realtime_speech
 
 PROMPTS = {
     "unheard.wav": "I didn't catch that. Please say my wake word and try again.",
+    "game_repeat.wav": "I didn't catch that. Could you repeat your answer?",
     "request_failed.wav": "Sorry, I couldn't finish the reply. Say my wake word when you're ready.",
 }
 

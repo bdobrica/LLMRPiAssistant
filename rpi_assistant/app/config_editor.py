@@ -130,6 +130,7 @@ BOUNDS = {
     "recording": {"max_duration_seconds": (0.1, 120), "silence_hold_seconds": (0, 30),
                   "silence_rms_threshold": (0, 1), "pre_roll_seconds": (0, 10),
                   "follow_up_window_seconds": (0, 15), "follow_up_echo_guard_seconds": (0, 10),
+                  "game_answer_retries": (0, 10),
                   "processing_drain_seconds": (0, 30), "correction_window_seconds": (0.1, 30)},
     "led": {"count": (1, 256)},
     "openai": {"temperature": (0, 2), "max_tokens": (1, 32768), "request_timeout_seconds": (0.1, 180),

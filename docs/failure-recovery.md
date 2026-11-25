@@ -7,9 +7,10 @@ stored on the Pi; explaining a failure needs no cloud call.
 
 ## Try again
 
-Wait for blue wake-listening lights, then use the wake word again. A failed request
-does not open a green follow-up window. An earlier answer should not play in place
-of the failed one.
+During a game, **“Could you repeat your answer?”** means the same question
+is waiting. Speak again when the lights turn green. If you hear the wake-word
+prompt instead, wait for blue and use the wake word. Say **“resume game”**
+to hear the question again. Provider failures also return to blue.
 
 If you requested an action, check whether it happened before repeating it. A timer
 may have been saved even though speech generation failed. The assistant does not

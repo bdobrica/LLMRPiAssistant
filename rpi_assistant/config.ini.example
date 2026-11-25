@@ -52,6 +52,8 @@ processing_drain_seconds = 3.0
 follow_up_window_seconds = 6.0
 # Drop residual speaker audio before opening the window.
 follow_up_echo_guard_seconds = 0.35
+# How many times a voice game can ask again for an unclear answer during follow-up (0–10).
+game_answer_retries = 3
 # Optional button: BCM GPIO17 on the ReSpeaker 2-Mics HAT; -1 disables it.
 # Press during spoken answers, wait for green, then speak a correction.
 interrupt_button_gpio = -1

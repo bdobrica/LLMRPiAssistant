@@ -64,6 +64,22 @@ class TriviaTests(unittest.TestCase):
         self.assertEqual(len(set(state["round"])), 3)
         self.assertEqual(state["score"], 0)
 
+    def test_moon_guess_with_confirmation_and_natural_exit(self):
+        self.say("Stop game")
+        with patch("random.sample", return_value=["watch", "tracks", "compass"]):
+            self.say("Play trivia")
+        self.say("second")
+        saved = self.save.read_bytes()
+        self.assertTrue(self.say("A person or a dinosaur. That's my answer.").retry_input)
+        self.assertEqual(saved, self.save.read_bytes())
+        answer = self.say("Hey Jarvis, a person. That’s my answer. Let’s continue playing trivia.")
+        self.assertIn("That's right!", answer.text)
+        self.assertIn("Question 3.", answer.text)
+        self.assertEqual(json.loads(self.save.read_bytes())["state"]["score"], 2)
+        self.assertTrue(self.say("I don’t want to play anymore.").done)
+        self.assertFalse(self.save.exists())
+        self.assertIsNone(self.say("I don't want to play anymore."))
+
     def test_invalid_restored_round_finishes_without_scoring(self):
         saved = json.loads(self.save.read_bytes())
         saved["state"]["position"] = -1

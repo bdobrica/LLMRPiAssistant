@@ -19,9 +19,11 @@ class VoiceCommandHandler:
         self.pixels = pixels
         self.is_online = is_online
         self.controls = controls
+        self.awaiting_app = None
+        self.game_repeats = 0
 
     def process(self, audio_path: str, *, continue_conversation: bool = False) -> bool:
-        """True permits a follow-up window only after a successful spoken answer."""
+        """True opens a follow-up after an answer or a successfully played retry prompt."""
         stage = "transcription"
         print("\n🔄 Processing voice command...")
         app_response = None
@@ -29,6 +31,10 @@ class VoiceCommandHandler:
         turn_started = False
         generation = None
         self.turn_generation = None
+        waiting = self.awaiting_app
+        self.awaiting_app = None
+        if not continue_conversation:
+            self.game_repeats = 0
         try:
             if self.controls:
                 generation = self.controls.begin_turn()
@@ -37,6 +43,11 @@ class VoiceCommandHandler:
             transcription = self.client.transcribe_audio(audio_path).strip()
             self._check_cancelled()
             if not transcription:
+                if waiting is not None and waiting is self.apps.active_app and self._allow_game_retry():
+                    if self._feedback("game_repeat.wav"):
+                        self.awaiting_app = waiting
+                        return True
+                    return False
                 self._feedback("unheard.wav")
                 return False
 
@@ -65,6 +76,12 @@ class VoiceCommandHandler:
                 self._check_cancelled()
                 stage = "answer"
                 if app_response is not None:
+                    if getattr(app_response, "retry_input", False):
+                        if not self._allow_game_retry():
+                            self._feedback("unheard.wav")
+                            return False
+                    else:
+                        self.game_repeats = 0
                     response = app_response.text
                     usage = {
                         "model": "local_app" if classifier_usage is None else f"local_app via {classifier_usage['model']}",
@@ -96,23 +113,23 @@ class VoiceCommandHandler:
             options = {"expected_generation": generation} if self.controls else {}
             if self.config.openai.tts_backend == "realtime" and self.config.audio_output.stream_realtime:
                 self.rpiface.set_state("speaking")
-                return self.playback.play_stream(
+                played = self.playback.play_stream(
                     lambda sink: self.client.stream_speech(spoken, self.config.openai.tts_voice, sink),
                     timeout=self.config.openai.tts_timeout_seconds + 125, **options,
                 )
-            output = Path(self.config.audio_output.tts_output_path)
-            # Clear the preceding answer before generation, including legacy Speech output.
-            output.unlink(missing_ok=True)
-            try:
+            else:
+                output = Path(self.config.audio_output.tts_output_path)
+                output.unlink(missing_ok=True)
                 self.client.generate_speech(spoken, str(output), self.config.openai.tts_voice)
                 if not output.is_file() or not output.stat().st_size:
                     raise RuntimeError("Speech output is empty")
                 self._check_cancelled()
                 stage = "playback"
                 self.rpiface.set_state("speaking")
-                return self.playback.play(str(output), backend=self.config.openai.tts_backend, interruptible=True, **options)
-            finally:
-                output.unlink(missing_ok=True)
+                played = self.playback.play(str(output), backend=self.config.openai.tts_backend, interruptible=True, **options)
+            if played and getattr(app_response, "expect_input", False):
+                self.awaiting_app = self.apps.active_app
+            return played
         except PlaybackStopped:
             if app_response is not None:
                 self.client.remember_app_response(transcription, app_response.text)
@@ -149,17 +166,25 @@ class VoiceCommandHandler:
         if self.controls:
             self.controls.check()
 
-    def _feedback(self, filename: str) -> None:
+    def _allow_game_retry(self) -> bool:
+        recording = self.config.recording
+        if recording.follow_up_window_seconds <= 0 or self.game_repeats >= recording.game_answer_retries:
+            return False
+        self.game_repeats += 1
+        return True
+
+    def _feedback(self, filename: str) -> bool:
         """Local only: a failed provider is never used to explain its own failure."""
         try:
             self.rpiface.set_state("speaking")
             if self.pixels:
                 self.pixels.speak()
             options = {"expected_generation": self.turn_generation} if self.controls else {}
-            self.playback.prompt(filename, **options)
+            return self.playback.prompt(filename, **options)
         except Exception as exc:
             # A failed/missing speaker must still release the recording worker.
             print(f"Local feedback unavailable ({type(exc).__name__})")
+            return False
         finally:
             if self.pixels:
                 self.pixels.listen()

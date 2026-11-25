@@ -6,7 +6,8 @@ import subprocess
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-from rpi_assistant.app.config import AudioOutputConfig, OpenAIConfig
+from rpi_assistant.app.apps.base import AppResponse
+from rpi_assistant.app.config import AudioOutputConfig, OpenAIConfig, RecordingConfig
 from rpi_assistant.app.playback import AudioPlayback, PlaybackInterrupted
 from rpi_assistant.app.voice_command import VoiceCommandHandler
 
@@ -17,7 +18,7 @@ class VoiceCommandTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.output = Path(directory.name) / "reply.wav"
         self.config = NS(audio_output=AudioOutputConfig(tts_output_path=str(self.output), stream_realtime=False),
-                         openai=OpenAIConfig(api_key="test"))
+                         openai=OpenAIConfig(api_key="test"), recording=RecordingConfig())
         self.client = Mock()
         self.client.transcribe_audio.return_value = "What about a cube?"
         self.client.get_chat_response.return_value = ("A fresh answer.", {"total_tokens": 2})
@@ -38,6 +39,54 @@ class VoiceCommandTests(unittest.TestCase):
         self.apps.handle.assert_not_called()
         self.client.get_chat_response.assert_not_called()
         self.client.generate_speech.assert_not_called()
+
+    def test_game_shares_retry_limit_across_empty_and_ambiguous_answers(self):
+        self.apps.handle.return_value = AppResponse("Person or dinosaur?", expect_input=True)
+        self.playback.prompt.return_value = True
+        self.assertTrue(self.handler.process("unused.wav"))
+        self.client.transcribe_audio.return_value = ""
+        self.assertTrue(self.handler.process("unused.wav", continue_conversation=True))
+        self.playback.prompt.assert_called_with("game_repeat.wav")
+        self.apps.handle.assert_called_once()
+        self.apps.handle.return_value = AppResponse("Which one?", expect_input=True, retry_input=True)
+        self.client.transcribe_audio.return_value = "Both."
+        self.assertTrue(self.handler.process("unused.wav", continue_conversation=True))
+        self.client.transcribe_audio.return_value = ""
+        self.assertTrue(self.handler.process("unused.wav", continue_conversation=True))
+        self.assertFalse(self.handler.process("unused.wav", continue_conversation=True))
+        self.playback.prompt.assert_called_with("unheard.wav")
+        self.assertEqual(self.apps.handle.call_count, 2)
+        self.client.get_chat_response.assert_not_called()
+
+    def test_next_game_question_gets_its_own_budget_and_exit_disarms_retry(self):
+        self.config.recording.game_answer_retries = 1
+        self.apps.handle.return_value = AppResponse("Question?", expect_input=True)
+        self.playback.prompt.return_value = True
+        for _ in range(2):
+            self.client.transcribe_audio.return_value = "A person."
+            self.assertTrue(self.handler.process("unused.wav", continue_conversation=True))
+            self.client.transcribe_audio.return_value = " "
+            self.assertTrue(self.handler.process("unused.wav", continue_conversation=True))
+        self.client.transcribe_audio.return_value = "I don't want to play anymore."
+        self.apps.handle.return_value = AppResponse("Stopped Trivia.", done=True)
+        self.assertTrue(self.handler.process("unused.wav", continue_conversation=True))
+        self.client.transcribe_audio.return_value = ""
+        self.assertFalse(self.handler.process("unused.wav", continue_conversation=True))
+        self.playback.prompt.assert_called_with("unheard.wav")
+
+    def test_disabled_windows_zero_budget_or_failed_clip_do_not_reopen_listening(self):
+        for seconds, retries, played in [(0, 3, True), (6, 0, True), (6, 3, False)]:
+            with self.subTest(seconds=seconds, retries=retries, played=played):
+                self.config.recording.follow_up_window_seconds = seconds
+                self.config.recording.game_answer_retries = retries
+                self.apps.handle.return_value = AppResponse("Question?", expect_input=True)
+                self.client.transcribe_audio.return_value = "Play trivia"
+                self.handler.process("unused.wav")
+                self.client.transcribe_audio.return_value = ""
+                self.playback.prompt.return_value = played
+                self.playback.prompt.reset_mock()
+                self.assertFalse(self.handler.process("unused.wav", continue_conversation=True))
+                self.playback.prompt.assert_called_once_with("unheard.wav" if played else "game_repeat.wav")
 
     def test_provider_failures_recover_and_next_turn_plays_only_fresh_audio(self):
         for stage in ("transcribe_audio", "get_chat_response", "generate_speech"):

@@ -47,9 +47,12 @@ class RecordingConfig:
     correction_window_seconds: float = 6.0
     processing_drain_seconds: float = 3.0
     output_path: str = "/tmp/command.wav"
+    game_answer_retries: int = 3
 
     def __post_init__(self):
         import math
+        if type(self.game_answer_retries) is not int or not 0 <= self.game_answer_retries <= 10:
+            raise ValueError("game_answer_retries must be an integer from 0 to 10")
         if self.interrupt_button_gpio < -1 or self.interrupt_button_gpio > 27:
             raise ValueError("interrupt_button_gpio must be -1 (disabled) or a BCM pin from 0 to 27")
         if not math.isfinite(self.correction_window_seconds) or self.correction_window_seconds <= 0:
@@ -389,6 +392,7 @@ def parse_config(parser, *, allow_missing_api_key=False, inventory=None):
         follow_up_echo_guard_seconds=get_value(
             "recording", "follow_up_echo_guard_seconds", "RECORDING_FOLLOW_UP_ECHO_GUARD", 0.35, float,
         ),
+        game_answer_retries=get_value("recording", "game_answer_retries", "RECORDING_GAME_ANSWER_RETRIES", 3, int),
         interrupt_button_gpio=get_value("recording", "interrupt_button_gpio", "RECORDING_INTERRUPT_BUTTON_GPIO", -1, int),
         correction_window_seconds=get_value("recording", "correction_window_seconds", "RECORDING_CORRECTION_WINDOW", 6.0, float),
         processing_drain_seconds=get_value(

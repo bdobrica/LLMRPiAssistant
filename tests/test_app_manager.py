@@ -8,6 +8,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from json import dumps
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from rpi_assistant.app.app_manager import AppManager
 from rpi_assistant.app.app_loader import discover_apps
@@ -27,6 +28,12 @@ VOICE_APPS_PUBLIC_KEY = (VOICE_APPS_REPOSITORY / "public_key.txt").read_text(
 
 
 class AppManagerTests(unittest.TestCase):
+    def setUp(self):
+        # A development Pi may already have installed games and a round in progress.
+        root = Path(self.enterContext(TemporaryDirectory()))
+        self.enterContext(patch("rpi_assistant.app.app_manager.DEFAULT_EXTERNAL_APP_DIRS", [root / "apps"]))
+        self.enterContext(patch("rpi_assistant.app.app_manager.DEFAULT_ACTIVE_APP_STATE_PATH", root / "active.json"))
+
     def create_app_bundle(
         self,
         parent_dir: Path,
