@@ -54,8 +54,14 @@ not claim to fix it.
 
 ## Change settings
 
-Open **Settings** to adjust follow-up listening, reminder timezone, home weather
-city, API keys or optional conversation logging. Choose **Save & apply** to use
+Use **Home** for status, volume, microphone mute, Stop and New conversation.
+Open **Timers**, **Reminders** or **Shopping** for the list you want. Each page has
+its own address you can bookmark. Status updates preserve what you are typing.
+If you leave an edited form, your browser can prompt you to discard the draft.
+
+Open **Privacy** for conversation logging, retention details and deletion.
+Open **Settings** for audio checks, follow-up listening, reminder timezone,
+home weather city and API keys. Choose **Save & apply** to use
 your changes; typing alone changes nothing. The page can work before an OpenAI
 key is set, so you can add the key here before your first spoken question.
 
@@ -105,5 +111,10 @@ The brief Internet block ended before an offline control result was recorded.
 Live Wi-Fi onboarding was not repeated for this revision. The [earlier release
 check](reference/release-check-2026-11-25.md) records offline behavior on the
 previous version.
+
+The six-page layout was checked separately in local Chromium at a 360-pixel
+viewport using synthetic device data. Direct links, refresh, Back, draft
+protection and independent form submissions worked with local resources. That
+trial covered browser behavior. The hardware results above apply to port-80 access.
 
 [Back to the guides](README.md)

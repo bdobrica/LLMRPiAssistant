@@ -1,0 +1,8 @@
+<p id="status" role="status">Connecting…</p>
+<p id="capture">Capture status unknown</p>
+<div class="buttons"><button id="stop">Stop</button><button id="mute" disabled>Microphone</button></div>
+<h2>Speaker volume</h2><div class="buttons"><button id="down">Quieter</button><output id="volume">—</output><button id="up">Louder</button></div>
+<form method="post" action="/control" id="volume-form"><label for="level">Set volume (0–100)</label><div class="buttons"><input required id="level" type="number" min="0" max="100" value="70"><button id="set">Set volume</button></div></form>
+<button id="new">New conversation</button>
+<p id="connection"></p><p class="hint">Hold the device button for 1.5 seconds to mute or unmute. Steady red means microphone capture is closed. A short press stops an answer and opens a correction window.</p>
+<p class="hint">These controls work without Internet on the same Wi-Fi. Voice requests need Internet. New conversation clears chat context; it does not delete logs, cancel apps or undo actions.</p>

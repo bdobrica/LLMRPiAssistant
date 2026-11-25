@@ -1,0 +1,11 @@
+<p id="timer-error" role="status"></p>
+<form id="timers-form" method="post" action="/control">
+<fieldset>
+<label for="timer-name">Name (optional)</label><input id="timer-name" maxlength="64" placeholder="Tea">
+<div class="buttons"><label for="timer-minutes">Minutes</label><input id="timer-minutes" type="number" min="0" max="10080" value="5">
+<label for="timer-seconds">Seconds</label><input id="timer-seconds" type="number" min="0" max="59" value="0"></div>
+<button id="timer-add">Start timer</button>
+</fieldset>
+</form>
+<ul id="timers"></ul>
+<p class="hint">Timers ring without Internet, including when the microphone is muted. Speaker volume still applies. Press the device button or Stop to dismiss a ringing timer. Alerts repeat for a limited time (two minutes by default); missed timers remain here.</p>

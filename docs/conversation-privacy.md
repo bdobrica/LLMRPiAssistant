@@ -21,7 +21,7 @@ include them when sharing the project or asking for help.
 
 ## Choose whether to save conversation text
 
-On the phone, enable **Save conversation text and source evidence** in Settings,
+On the phone, open **Privacy** and enable **Save conversation text and source evidence**,
 then choose **Save & apply**. This writes private files, not console/system-journal
 content. Turning it off stops new conversation entries but doesn't delete old ones.
 

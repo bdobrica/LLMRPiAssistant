@@ -1,0 +1,11 @@
+<p id="reminder-zone"></p>
+<p id="household-error" role="status"></p><form id="reminders-form" method="post" action="/control">
+<fieldset>
+<label for="reminder-text">Remind me to</label><input required id="reminder-text" maxlength="160" placeholder="Take the bread out">
+<label for="reminder-time">Date and time in the timezone above</label><input required id="reminder-time" type="datetime-local" step="1">
+<details><summary>If the clocks change at this time</summary><label for="reminder-occurrence">If the time occurs twice</label><select id="reminder-occurrence"><option value="unspecified">Ask me</option><option value="first">First occurrence</option><option value="second">Second occurrence</option></select></details>
+<button id="reminder-add">Save reminder</button>
+</fieldset>
+</form>
+<ul id="reminders"></ul>
+<p class="hint">One-off reminders use the local chime and show their text here, even without Internet. Stop or the device button dismisses ringing timers and reminders. Microphone mute does not silence them.</p>

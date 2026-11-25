@@ -1,0 +1,20 @@
+<form id="settings" method="post" action="/control">
+<fieldset disabled>
+<p class="hint">Use this page only on your trusted home Wi-Fi. It has no sign-in or HTTPS. Changes take effect only when you press Save &amp; apply.</p>
+<label for="follow-up">Follow-up listening (seconds; 0 disables)</label><input id="follow-up" type="number" min="0" max="15" step="0.5">
+<label for="timezone">Reminder timezone</label><input id="timezone" placeholder="Europe/Bucharest" maxlength="100">
+<label for="weather-city">Home weather city and country</label><input id="weather-city" placeholder="Leave blank to use a remembered or detected city" maxlength="160">
+<p id="weather-location" class="hint"></p><p class="hint">Changing the city clears manual weather coordinates and uses the city's timezone. Existing reminders keep their scheduled instant.</p>
+<label for="openai-key">OpenAI API key</label><p id="openai-key-state" class="hint"></p><input id="openai-key" type="password" autocomplete="new-password" maxlength="512" placeholder="Paste a new key; blank keeps the current key">
+<label for="weather-key">Open-Meteo paid API key (optional)</label><p id="weather-key-state" class="hint"></p><input id="weather-key" type="password" autocomplete="new-password" maxlength="512" placeholder="Blank keeps the current key">
+<label class="check"><input id="clear-weather-key" type="checkbox">Remove paid weather key and use the personal-use endpoint</label>
+<label for="ipgeolocation-key">ipgeolocation.io API key (optional)</label><p id="ipgeolocation-key-state" class="hint"></p><input id="ipgeolocation-key" type="password" autocomplete="new-password" maxlength="512" placeholder="Blank keeps the current key">
+<label class="check"><input id="clear-ipgeolocation-key" type="checkbox">Remove IP-location key and disable automatic city detection</label>
+<p class="hint">Keys are never shown back. Saving a key does not verify its account access; try a voice question afterwards. Undo restores the last saved change across Settings and Privacy. Other reasoning providers need an integration before their keys can be used.</p>
+<div class="buttons"><button id="settings-save" disabled>Save &amp; apply</button><button type="button" id="settings-undo" disabled>Undo last change</button><button type="button" id="settings-reload">Reload settings</button></div>
+<p id="settings-message" role="status"></p>
+</fieldset>
+</form>
+<h2>Audio checks</h2>
+<div class="buttons"><button disabled id="check-speaker">Play test sound</button><button disabled id="check-microphone">Record 3 seconds and play back</button><button disabled id="check-stop">Stop check</button></div>
+<p id="audio-check" role="status"></p><p class="hint">Microphone checks stay on this device and are deleted after playback. Speak when the check starts; Stop cancels it. Unmute first to record. The test sound can play while muted.</p>

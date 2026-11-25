@@ -10,6 +10,33 @@ from .household import HouseholdInputError
 from .phone_settings import SettingsError
 
 
+PAGE_DIR = Path(__file__).parent / "control_page"
+# Only these literal routes and assets are served.
+PAGES = {
+    "/": ("Home", "home"),
+    "/timers": ("Timers", "household"),
+    "/reminders": ("Reminders", "household"),
+    "/shopping": ("Shopping", "household"),
+    "/settings": ("Settings", "settings"),
+    "/privacy": ("Privacy", "settings"),
+}
+ASSETS = {"/" + name: "text/javascript; charset=utf-8"
+          for name in ("controls.js", "home.js", "household.js", "settings.js")}
+ASSETS["/controls.css"] = "text/css; charset=utf-8"
+
+
+def render_page(path):
+    title, script = PAGES[path]
+    links = []
+    for href, (label, _) in PAGES.items():
+        current = ' aria-current="page"' if href == path else ''
+        links.append(f'<a href="{href}"{current}>{label}</a>')
+    layout = (PAGE_DIR / "index.html").read_text(encoding="utf-8")
+    content = (PAGE_DIR / (title.lower() + ".html")).read_text(encoding="utf-8")
+    return (layout.replace("{{title}}", title).replace("{{script}}", script)
+            .replace("{{nav}}", "\n".join(links)).replace("{{content}}", content).encode())
+
+
 class ControlServer(HTTPServer):
     allow_reuse_address = True
 
@@ -68,13 +95,12 @@ class ControlHandler(BaseHTTPRequestHandler):
             return self._reply(403, {"error": "Use the device IP address."})
         if self.path == '/status':
             return self._reply(200, self.server.controls.status())
-        assets = {'/': ('index.html', 'text/html; charset=utf-8'),
-                  '/controls.js': ('controls.js', 'text/javascript; charset=utf-8'),
-                  '/controls.css': ('controls.css', 'text/css; charset=utf-8')}
-        if self.path not in assets:
-            return self._reply(404, {"error": "Not found"})
-        filename, content_type = assets[self.path]
-        return self._reply(200, (Path(__file__).parent / 'control_page' / filename).read_bytes(), content_type)
+        if self.path in PAGES:
+            return self._reply(200, render_page(self.path), 'text/html; charset=utf-8')
+        if self.path in ASSETS:
+            asset = PAGE_DIR / self.path[1:]
+            return self._reply(200, asset.read_bytes(), ASSETS[self.path])
+        return self._reply(404, {"error": "Not found"})
 
     def do_POST(self):
         origin = self.headers.get('Origin')

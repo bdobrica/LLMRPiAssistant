@@ -120,7 +120,7 @@ Connect your phone to the same Wi-Fi and open **`http://<device-IP>/`**, replaci
 
 1. Open **Settings**, enter your OpenAI API key and choose **Save & apply**.
    A blank key field keeps the saved key; the page only shows whether it is configured.
-2. Set a comfortable volume and choose **Play test sound**.
+2. Set a comfortable volume on **Home**, then open **Settings** and choose **Play test sound**.
 3. Choose **Record 3 seconds and play back**, and say a short sentence.
    You should hear yourself. This check stays on the Pi and needs no API key.
 

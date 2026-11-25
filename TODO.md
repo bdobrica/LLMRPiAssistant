@@ -12,10 +12,12 @@ Work in the order below before optional items. Implement one bounded item, recor
 
 UI01 delivered port-80 access on the Zero 2 W. The owner confirmed the phone page, volume change and conversation. Offline access and live Wi-Fi onboarding remain unverified on this revision. See [phone access validation](docs/phone-setup.md#tested-on-the-zero-2-w).
 
-- [ ] **UI02 — Split the interface into task pages.**
-  - Add Home, Timers, Reminders, Shopping, Settings and Privacy with consistent navigation and distinct URLs. Keep status and everyday controls on Home; place audio checks in Settings.
-  - Use lightweight local assets, phone-friendly layouts and accessible labels/focus. Preserve form edits during status polling and handle unsaved navigation deliberately. Retain existing control and household behavior.
-  - **Accept:** verify direct links, refresh, browser Back and independent household forms at phone width using local assets. Check Settings and Privacy have distinct destinations. Reuse the existing evidence for household actions behind those forms. Investigate Pi resource use if navigation shows a concrete regression.
+UI02 split the phone controls into six linked pages. Thirteen focused tests passed.
+A 360px Chromium trial used the local HTTP server and synthetic offline device
+status. It exercised direct links, refresh, Back, draft retention across polling,
+cancelled navigation, all three household forms and separate Settings/Privacy saves.
+All network requests stayed on loopback. Physical phone and Pi use of the new layout
+remain untested. See the [phone guide](docs/phone-setup.md#change-settings).
 
 - [ ] **UI03 — Replace awkward controls with practical inputs.**
   - Replace louder/quieter and numeric volume entry with a percentage slider and speaker-mute toggle. Restore the prior audible volume on unmute; keep microphone mute separately labelled and truthful.

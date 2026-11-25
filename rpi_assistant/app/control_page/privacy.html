@@ -1,0 +1,13 @@
+<form id="settings" method="post" action="/control">
+<fieldset disabled>
+<label class="check"><input id="conversation-logging" type="checkbox">Save conversation text and source evidence in private local log files</label>
+<p class="hint">Off by default. Console/journal output never includes conversation text. Turning this off keeps existing files until deletion or expiry.</p>
+
+<p class="hint">Undo restores the last saved change across Settings and Privacy.</p>
+<div class="buttons"><button id="settings-save" disabled>Save &amp; apply</button><button type="button" id="settings-undo" disabled>Undo last change</button><button type="button" id="settings-reload">Reload settings</button></div>
+<p id="settings-message" role="status"></p>
+</fieldset>
+</form>
+<p id="privacy-status"></p>
+<button id="privacy-delete">Delete local conversation data</button>
+<p class="hint">Clears conversation memory and this installation's log/audio files. Keeps timers, reminders, Shopping, app data, settings and keys. Historical system journals, other installations and provider records are outside this action.</p>

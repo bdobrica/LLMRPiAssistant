@@ -14,22 +14,9 @@ This plan describes remaining work. Delivered behavior belongs in [the capabilit
 
 Normal administration now opens at the device IP. Keep its trusted-LAN access rules and the separate single-code Wi-Fi setup as the interface evolves. See [phone access and recovery](docs/phone-setup.md).
 
-Complete **UI02–UI04**, then **S01 streaming playback**, before optional entertainment or SecondContext work.
-
-### UI02 — Separate pages for separate tasks
-
-Use a small router-style interface with consistent navigation and distinct URLs:
-
-| Page | Purpose |
-| --- | --- |
-| Home | Understand connection/listening status; volume, speaker mute, microphone mute, Stop and New conversation |
-| Timers | Create, inspect, cancel and dismiss countdowns |
-| Reminders | Schedule and manage reminders, with the active timezone visible |
-| Shopping | Add, remove and read the shared list |
-| Settings | Everyday settings, provider keys, audio checks and advanced configuration |
-| Privacy | Conversation logging, retention and deliberate deletion |
-
-Keep pages usable on a phone, with readable labels, keyboard-accessible controls and clear success/error feedback. Preserve edits during status refreshes and explain unsaved changes when navigating away. Use local assets; household pages and controls must remain usable without Internet. Do not redesign the working Wi-Fi setup page.
+Home, Timers, Reminders, Shopping, Settings and Privacy each have their own URL.
+Keep navigation, local assets and draft protection consistent across those pages.
+Complete **UI03–UI04**, then **S01 streaming playback**, before optional entertainment or SecondContext work.
 
 ### UI03 — Controls that fit their purpose
 
