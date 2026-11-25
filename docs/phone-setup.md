@@ -147,4 +147,9 @@ viewport using synthetic device data. Direct links, refresh, Back, draft
 protection and independent form submissions worked with local resources. That
 trial covered browser behavior. The hardware results above apply to port-80 access.
 
+On the deployed Zero 2 W build `58e2d82`, all six pages responded over home Wi-Fi.
+Advanced settings challenged unsigned-in requests and accepted the existing device
+setup code. The editor returned all 74 static options and showed the OpenAI key
+as configured without returning its value.
+
 [Back to the guides](README.md)
