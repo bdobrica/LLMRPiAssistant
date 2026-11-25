@@ -18,7 +18,9 @@ Complete **UI01–UI04**, then **S01 streaming playback**, before optional enter
 
 Serve normal administration at `http://<device-IP>/` on port 80. Make installation and upgrades configure this reliably without running the assistant as root. Keep the current trusted-LAN access model explicit; port 80 does not add authentication or HTTPS.
 
-Preserve Wi-Fi onboarding at `http://192.168.4.1`: one device code to join the protected setup network, no second page login, network selection/manual entry, and shutdown after joining Wi-Fi. Normal administration must not conflict with its listener or become available to setup clients accidentally. Choose a lightweight binding or forwarding arrangement after checking both service lifecycles. Test normal LAN operation, setup handoff and recovery; leave a recoverable configuration if binding fails.
+Keep the existing single-code Wi-Fi setup at `http://192.168.4.1`. The admin listener binds to connected private LAN IPv4 addresses, accepts requests from the same subnet and closes when it detects the setup hotspot. A failed bind should retry while voice continues working. Keep private configuration and service backups for recovery.
+
+Verify the new address on the home LAN. Exercise hotspot detection, rebinding and port conflicts with controlled listener tests. A confirmed phone interaction and passing listener checks are sufficient for this change. Previous onboarding and offline-control trials provide background evidence. Reserve a live network interruption for a specific failure that needs reproduction.
 
 ### UI02 — Separate pages for separate tasks
 
@@ -74,6 +76,6 @@ The reproduced approximately 90-second shutdown hang remains unresolved. Track i
 
 ## Delivery and Documentation
 
-Implement one bounded item at a time. Use focused regression checks and real phone/voice trials for changed behavior; tests alone do not establish usability. Keep measurements attached to the feature rather than creating a prerequisite benchmark or judging platform. Record exact evidence and limits when completing an item, update its component guide, and commit code, relevant tests/config/docs and TODO together. Remove completed entries from active planning once their evidence is recorded in documentation and Git history. Local commits do not authorize pushing or deployment.
+Implement one bounded item at a time. Reuse evidence for working features and check what this change could affect. Involve the owner when a specific usability question needs their judgment. Record the result and any untested limits, update the component guide, and commit code, relevant tests/config/docs and TODO together. Remove completed entries from active planning once their evidence is recorded in documentation and Git history. Local commits do not authorize pushing or deployment.
 
 Keep README short, QUICKSTART a path to the first reply, and the guide index focused on things to try. Update usage instructions when behavior ships, not merely when it is planned. Never commit credentials or `CODE_REVIEW_2026_06_27.md`; preserve unrelated user edits.

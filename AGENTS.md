@@ -4,7 +4,7 @@
 
 Prioritize useful features and a usable product over software engineering perfection. Start with the user’s task and deliver the smallest complete improvement they can use. Avoid speculative abstractions, broad refactors, and tooling work unless they directly enable a feature or fix a user-visible problem. Keep essential security and reliability safeguards.
 
-Treat the current assistant as a working prototype, not a proven product. Validate everyday voice interactions on hardware, including responsiveness, understandable feedback, and recovery from failures. A passing unit test alone does not establish usability.
+Use the working prototype to judge changes people can hear or feel. When playback changes, for example, listen for clear speech on the target board. Reuse recorded hardware results and owner feedback wherever they still apply.
 
 Preserve capabilities the owner has demonstrated. Distinguish observed failures from code-level limitations and untested assumptions; reproduce the specific problem before prescribing a replacement architecture. Useful spoken answers and short follow-ups already work on the owner's device.
 
@@ -45,7 +45,9 @@ Use four-space Python indentation, `snake_case` for modules/functions, `PascalCa
 
 ## Testing Guidelines
 
-Use `unittest`, naming files `test_*.py` and methods `test_<behavior>`. Mock external APIs and hardware; use temporary directories for filesystem tests. MCP integration tests launch subprocesses and require the MCP dependency plus the separate `rpiface` package for `rpiface.mcp.server`. Add regression tests for behavior changes. No coverage threshold is configured; report any hardware checks performed separately.
+Choose the smallest check that answers a specific question about the change. Run it yourself where possible. Ask the owner only for an observation you cannot obtain independently, such as whether a streamed reply sounds choppy. Record their answer once and stop when the question is answered. Identify any remaining uncertainty and distinguish earlier evidence from checks on this revision.
+
+Use `unittest`, naming files `test_*.py` and methods `test_<behavior>`. Mock external APIs and hardware and use temporary directories for filesystem tests. MCP integration tests launch subprocesses and require the MCP dependency plus the separate `rpiface` package for `rpiface.mcp.server`. Add regression tests for changed behavior. No coverage threshold is configured.
 
 ## Commit & Pull Request Guidelines
 
@@ -59,4 +61,4 @@ Keep API keys, signing private keys, and local `config.ini` files out of commits
 
 Use a Raspberry Pi on your local network for end-to-end development. Configure SSH key access locally, for example `ssh -i <private-key-path> <user>@<device-address>`, or use an alias in `~/.ssh/config`. Keep device addresses, usernames, key paths, and privilege details in private local notes rather than this guide.
 
-Clone the repository into the device user’s home directory and follow `QUICKSTART.md` for setup. For an existing clone, inspect its branch and uncommitted changes before updating; preserve device configuration. Use `sudo` for installation and service management as needed. Validate wake-word detection, recording, responses, and playback on the device, and report what was actually tested and any remaining usability gaps.
+Follow [QUICKSTART.md](QUICKSTART.md) for a new build. For a working Pi, inspect the checkout and preserve local configuration and installed model assets before switching versions. Choose hardware checks for the components affected by the change. A live outage or Wi-Fi reprovisioning trial needs a specific unresolved problem and the owner's agreement before interrupting the device.

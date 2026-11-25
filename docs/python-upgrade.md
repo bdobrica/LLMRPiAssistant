@@ -18,6 +18,12 @@ make install-wakeword-models VENV_DIR=/opt/venvs/rpi-assistant-next
 /opt/venvs/rpi-assistant-next/bin/python -m pip check
 ```
 
+The follow-up speech detector loads `rpi_assistant/models/silero_vad.onnx` from
+the checkout. Git does not carry this file. Even when reusing a working Python
+environment, run `make install-wakeword-models` with that environment's `VENV_DIR`
+from the new checkout before switching. The target checks installed assets against
+the repository manifest.
+
 If preparation fails, start the existing service again; it still points to the old
 environment. On 512 MB boards, dependency builds can use more memory than normal
 assistant operation. Keep temporary files on SD-backed `/var/tmp`, as the Makefile
@@ -32,16 +38,7 @@ permissions. Run tests in the new environment:
 /opt/venvs/rpi-assistant-next/bin/python -m unittest discover -s tests -v
 ```
 
-An optional RPiFace integration test needs that separate package. Mocked audio tests
-don't establish hardware compatibility. With the old service stopped, run the
-candidate from its repository root:
-
-```sh
-/opt/venvs/rpi-assistant-next/bin/python -m rpi_assistant.app
-```
-
-Try wake detection, clear playback, LEDs and a contextual follow-up. Stop the foreground
-process before starting a service. If old configuration lacked idle/topic-reset
+An optional RPiFace integration test needs that separate package. If old configuration lacked idle/topic-reset
 settings, explicitly set both to zero to preserve that behaviour; see
 [conversation memory](conversation-retention.md).
 
@@ -49,7 +46,10 @@ settings, explicitly set both to zero to preserve that behaviour; see
 
 Save the existing service file privately before replacing it. From the candidate
 checkout, `make install-service VENV_DIR=/opt/venvs/rpi-assistant-next` points the
-service at that checkout/environment. Start it and repeat the spoken check.
+service at that checkout/environment. Start the service. For changes to wake or
+audio dependencies, a short wake-word question and audible reply exercise the
+installed runtime. If you already tried that interaction with the same candidate
+and configuration, check that the service is listening and use the earlier result.
 To go back, restore your saved unit and matching private configuration, run
 `sudo systemctl daemon-reload`, then restart the service. Preserve any custom service
 user override. Keep the old checkout/environment until you're happy with the new one.

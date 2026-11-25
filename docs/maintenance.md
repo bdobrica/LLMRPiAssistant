@@ -34,9 +34,10 @@ as described in the Python guide. Keep the working service file before switching
 `make update` exists, but changes the existing environment in place; it is not an
 isolated trial or automatic rollback mechanism. Review local changes before pulling code.
 
-After an update, test one wake-word question, a contextual follow-up, the button,
-phone audio checks and a short timer. Try a normal reply with capture active;
-standalone playback can miss the WM8960 quiet-audio problem.
+Check the part you changed. For a new phone address, open it and use one control.
+For an audio driver update, listen to one spoken reply with the microphone active.
+That exercises the WM8960 capture and playback combination that previously sounded
+too quiet. Once the changed feature works, return to normal use.
 
 The tested service can take about 90 seconds to stop during restart. Allow that to
 finish and inspect status before assuming the new version failed.

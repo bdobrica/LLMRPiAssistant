@@ -14,12 +14,12 @@ Work in the order below before optional items. Implement one bounded item, recor
   - Make `http://<device-IP>/` work through installation and upgrade configuration without running the assistant as root. Keep access restricted to the intended trusted LAN and preserve request-origin protections.
   - Coordinate listeners with the separate setup service at `http://192.168.4.1`; avoid wildcard binding conflicts and unintended admin access from the setup network. Preserve the single-code Wi-Fi flow and provisioning shutdown.
   - Handle occupied ports and failed application with useful diagnostics and a way back. Update access URLs in the quick start, guides and config example when shipped.
-  - **Accept:** phone access without a port after restart, offline LAN controls, successful setup-to-home-Wi-Fi handoff, setup service closing afterwards, and no regression in wake/answer behavior on the Zero 2 W. Use a recovery timer for any intentional network interruption.
+  - **Acceptance.** Open the device IP on a phone after service restart and use a control. Check listener isolation, origin rejection and bind recovery independently.
 
 - [ ] **UI02 — Split the interface into task pages.**
   - Add Home, Timers, Reminders, Shopping, Settings and Privacy with consistent navigation and distinct URLs. Keep status and everyday controls on Home; place audio checks in Settings.
   - Use lightweight local assets, phone-friendly layouts and accessible labels/focus. Preserve form edits during status polling and handle unsaved navigation deliberately. Retain existing control and household behavior.
-  - **Accept:** direct links, refresh and browser Back work; each household task can be completed on its own page without Internet; settings/privacy actions remain separate; phone screenshots and owner trial confirm navigation. Check Pi resource use for a concrete regression, not a new benchmark project.
+  - **Accept:** verify direct links, refresh, browser Back and independent household forms at phone width using local assets. Check Settings and Privacy have distinct destinations. Reuse the existing evidence for household actions behind those forms. Investigate Pi resource use if navigation shows a concrete regression.
 
 - [ ] **UI03 — Replace awkward controls with practical inputs.**
   - Replace louder/quieter and numeric volume entry with a percentage slider and speaker-mute toggle. Restore the prior audible volume on unmute; keep microphone mute separately labelled and truthful.
