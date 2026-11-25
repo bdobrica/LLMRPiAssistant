@@ -14,6 +14,17 @@ The catalog lists apps you *can* install; it doesn't mean they are installed.
 A recognized request for a missing app gives installation guidance. App actions
 run locally, but speaking to them still uses cloud transcription and speech output.
 
+## Play a three-question trivia round
+
+Say **“Install app trivia”**, then **“Play trivia.”** Each question has two
+choices. During green, say the answer or say **“first”** or **“second.”**
+You'll hear the answer and a short fact before the next question. Your score
+comes after question three. Say **“repeat”** if you missed a choice.
+
+Say **“pause trivia”** to keep your place, even across a restart.
+**“Resume game”** repeats the current question. To go back to ordinary
+questions and discard the round, say **“stop game.”**
+
 ## Explore the other apps
 
 | Try saying | What it does |

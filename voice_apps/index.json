@@ -30,6 +30,20 @@
         ]
       },
       {
+        "id": "trivia",
+        "versions": [
+          {
+            "version": "0.1.0",
+            "bundle": "apps/trivia/0.1.0",
+            "files": [
+              "app.py",
+              "manifest.json"
+            ],
+            "sha256": "b74efb483ca4405cea9145f38e4cbffe57e4b1f59743b72efea4bb38b07b5a03"
+          }
+        ]
+      },
+      {
         "id": "truth_or_dare",
         "versions": [
           {
@@ -49,6 +63,6 @@
   "signing": {
     "algorithm": "ed25519",
     "key_id": "owner",
-    "signature": "Sv3GxZHfa4W1Nqz32n7KVHGFMXWE8IyzgTchyuj8FfnltO6LuLk3v1Xww3bQPwfOT+s29n2t9qRncJs0Cd4GCg=="
+    "signature": "OixZGt2oMYVAqN1VCsTry1a5z4kE5bu5eMpXkyqAKaGFvSIAPnnsjnftu9573ksvr7zMiZstTsx4+duo4pK9CQ=="
   }
 }
