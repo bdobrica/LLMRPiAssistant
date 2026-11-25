@@ -22,6 +22,8 @@ from .mcp_manager import MCPClientManager
 from .openai_client import OpenAIClient
 from .playback import AudioPlayback
 from .voice_command import VoiceCommandHandler
+from .controls import LocalControls
+from .control_server import ControlServer
 from .rpiface_client import RPiFaceClient
 
 try:
@@ -42,10 +44,14 @@ def main():
     rpiface = None
     mcp_manager = None
     interrupt_button = None
+    controls = None
+    control_server = None
 
     def cleanup():
         """Cleanup resources before exit."""
         stop_monitor.set()
+        if control_server is not None:
+            control_server.close()
         if interrupt_button is not None:
             interrupt_button.close()
         if connection_monitor_thread is not None:
@@ -110,12 +116,9 @@ def main():
         print("=" * 60)
 
         playback = AudioPlayback(config.audio_output)
-        try:
-            interrupt_button = open_interrupt_button(config.recording, playback)
-        except Exception as exc:
-            print(f"Interruption button unavailable ({type(exc).__name__}); voice assistant remains enabled.")
-
         def play_audio_prompt(filename: str):
+            if recorder is not None and recorder.capture_paused:
+                return
             if recorder is not None:
                 recorder.cancel_follow_up()
             try:
@@ -137,18 +140,18 @@ def main():
                         if was_offline and not connection_state["first_check"]:
                             # Was offline, now online - announce return
                             print("\n✅ Internet connection restored!")
-                            if pixels:
+                            if pixels and not (recorder and recorder.capture_paused):
                                 pixels.listen()
                             play_audio_prompt("online.mp3")
                         elif connection_state["first_check"]:
                             # First check and online - don't announce
                             print("✅ Internet connection OK")
-                            if pixels:
+                            if pixels and not (recorder and recorder.capture_paused):
                                 pixels.listen()
                     else:
                         # Lost connection
                         print("\n⚠️  Internet connection lost!")
-                        if pixels:
+                        if pixels and not (recorder and recorder.capture_paused):
                             pixels.offline()
                         if not connection_state["first_check"]:
                             play_audio_prompt("offline.mp3")
@@ -182,6 +185,15 @@ def main():
             pixels=pixels,
         )
 
+        controls = LocalControls(config.controls, recorder, playback, openai_client)
+        handler.controls = controls
+        try:
+            interrupt_button = open_interrupt_button(config.recording, playback, controls)
+        except Exception as exc:
+            print(f"Control button unavailable ({type(exc).__name__}); local page and voice remain available.")
+        if config.controls.enabled:
+            control_server = ControlServer(config.controls, controls)
+            print(f"Local controls listening on {config.controls.host}:{config.controls.port}.")
         recorder.start()
 
     except KeyboardInterrupt:

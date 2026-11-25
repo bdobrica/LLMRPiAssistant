@@ -29,9 +29,10 @@ Python dependency is needed.
 
 ## What stopping means
 
-- Only spoken answers are interruptible. Presses during thinking, speech generation,
-  local status/error clips, or idle listening do nothing. Repeated/bouncing presses
-  do not start extra requests.
+- Spoken answers retain the immediate interruption/correction behavior. With F05
+  controls, other short presses stop pending work/output or discard partial capture;
+  a 1.5-second hold toggles microphone mute. See [local controls](local-controls.md).
+  Repeated/bouncing presses do not start extra requests.
 - The player is stopped and its generated file removed. An older queued answer
   cannot resume. The original request, app action and tools are not automatically
   retried. Completed tool results remain in history; an interrupted local app reply

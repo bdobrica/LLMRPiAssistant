@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Assistant controls</title><link rel="stylesheet" href="/controls.css"><script src="/controls.js" defer></script></head>
+<body><main><h1>Assistant controls</h1><p id="status" role="status">Connecting…</p>
+<p id="capture">Capture status unknown</p><p id="message" role="status"></p>
+<div class="buttons"><button id="stop">Stop</button><button id="mute" disabled>Microphone</button></div>
+<h2>Speaker volume</h2><div class="buttons"><button id="down">Quieter</button><output id="volume">—</output><button id="up">Louder</button></div>
+<label for="level">Set volume (0–100)</label><div class="buttons"><input id="level" type="number" min="0" max="100" value="70"><button id="set">Set volume</button></div>
+<button id="new">New conversation</button>
+<p class="hint">Hold the device button for 1.5 seconds to mute or unmute. Steady red means microphone capture is closed. A short press stops an answer and opens a correction window.</p>
+<p class="hint">These controls work without Internet on the same Wi-Fi. Voice requests need Internet. New conversation clears chat context; it does not delete logs, cancel apps or undo actions.</p>
+</main></body></html>

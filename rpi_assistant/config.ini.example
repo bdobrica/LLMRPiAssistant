@@ -161,3 +161,16 @@ trusted_public_key =
 # Require repository catalogs to be signed. Remote repositories are always
 # required to be signed unless this is explicitly set to false in local config.
 require_signature = true
+
+[controls]
+# Phone page: use host = 0.0.0.0 only on a trusted private LAN.
+# Open http://<device-IP>:8767 (literal IP). No cloud or external assets.
+# Everyone on that LAN can control it; never expose this port to the Internet.
+enabled = true
+host = 127.0.0.1
+port = 8767
+mixer_card = seeed2micvoicec
+# Speaker for the wired HAT speaker; Headphone for its 3.5 mm output.
+mixer_control = Speaker
+# Saved mute preference; survives restart. Volume uses the current ALSA setting.
+state_path = ~/.local/state/rpi-assistant/controls.json

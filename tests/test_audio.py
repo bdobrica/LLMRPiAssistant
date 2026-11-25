@@ -119,7 +119,7 @@ class WakeWordRecorderTests(unittest.TestCase):
         recorder.stream = None
         recorder.running = True
         recorder.processing_drain_seconds = 0.01
-        recorder.lock = threading.Lock()
+        recorder.lock = threading.RLock()
         return recorder
 
     def test_save_recording_hands_slow_callback_to_worker(self):

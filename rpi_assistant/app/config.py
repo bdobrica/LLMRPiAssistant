@@ -8,7 +8,7 @@ import json
 import os
 import re
 from configparser import ConfigParser
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -98,6 +98,22 @@ class AudioOutputConfig:
 
 
 @dataclass
+class ControlsConfig:
+    """Local controls; LAN access is an explicit deployment choice."""
+
+    host: str = "127.0.0.1"
+    port: int = 8767
+    enabled: bool = True
+    mixer_card: str = "seeed2micvoicec"
+    mixer_control: str = "Speaker"
+    state_path: str = "~/.local/state/rpi-assistant/controls.json"
+
+    def __post_init__(self):
+        if not 1 <= self.port <= 65535:
+            raise ValueError("controls port must be between 1 and 65535")
+
+
+@dataclass
 class LEDConfig:
     """LED configuration."""
 
@@ -170,6 +186,7 @@ class Config:
     app_store: AppStoreConfig
     rpiface: RPiFaceConfig
     mcp: MCPConfig
+    controls: ControlsConfig = field(default_factory=ControlsConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
@@ -447,6 +464,14 @@ def load_config(config_path: Optional[str] = None) -> Config:
         app_store=app_store_config,
         rpiface=rpiface_config,
         mcp=mcp_config,
+        controls=ControlsConfig(**{
+            name: get_value("controls", name, "CONTROLS_" + name.upper(), default, kind)
+            for name, default, kind in (
+                ("host", "127.0.0.1", str), ("port", 8767, int), ("enabled", True, bool),
+                ("mixer_card", "seeed2micvoicec", str), ("mixer_control", "Speaker", str),
+                ("state_path", "~/.local/state/rpi-assistant/controls.json", str),
+            )
+        }),
     )
 
 

@@ -21,6 +21,8 @@ class Pixels:
         self.power = LED(5)
         self.power.on()
 
+        self._indicator_lock = threading.Lock()
+        self.muted = False
         self.queue = queue.Queue()
         self.thread = threading.Thread(target=self._run)
         self.thread.daemon = True
@@ -58,6 +60,20 @@ class Pixels:
     def off(self):
         self.put(self.pattern.off)
 
+    def set_muted(self, muted):
+        # Update the physical indication synchronously before capture can reopen.
+        with self._indicator_lock:
+            self.muted = muted
+            self._show_data(([0, 32, 0, 0] if muted else [0, 0, 0, 0]) * self.PIXELS_N)
+        while True:
+            try:
+                self.queue.get_nowait()
+            except queue.Empty:
+                break
+        # This cue checks the current state when executed; an old mute cue cannot
+        # turn the LEDs red after unmute. All animations pass through show().
+        self.put(lambda: self.show([0] * 4 * self.PIXELS_N) if self.muted else self.pattern.listen())
+
     def put(self, func):
         self.pattern.stop = True
         self.queue.put(func)
@@ -69,6 +85,12 @@ class Pixels:
             func()
 
     def show(self, data):
+        with self._indicator_lock:
+            if self.muted:
+                data = [0, 32, 0, 0] * self.PIXELS_N
+            self._show_data(data)
+
+    def _show_data(self, data):
         for i in range(self.PIXELS_N):
             self.dev.set_pixel(i, int(data[4*i + 1]), int(data[4*i + 2]), int(data[4*i + 3]))
 

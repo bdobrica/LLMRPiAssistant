@@ -162,7 +162,13 @@ class WakeWordRecorder:
         self.processing_drain_seconds = max(0.0, recording_config.processing_drain_seconds)
         
         # Thread synchronization
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+        self.stream_lock = threading.Lock()
+        self.capture_paused = False
+        self.muted = False
+        self.capture_generation = 0
+        self.recording_generation = 0
+        self.processing_active = False
         
         # Register cleanup on exit as a safety net
         atexit.register(self.stop)
@@ -185,7 +191,9 @@ class WakeWordRecorder:
         print("Listening... Ctrl+C to stop.\n")
         
         if self.pixels:
-            self.pixels.listen()
+            self.pixels.set_muted(self.muted)
+            if not self.muted:
+                self.pixels.listen()
         
         self.running = True
         self.processing_thread = threading.Thread(
@@ -196,16 +204,12 @@ class WakeWordRecorder:
         self.processing_thread.start()
         
         try:
-            self.stream = sd.InputStream(
-                device=self.device,
-                channels=self.audio_config.channels,
-                samplerate=self.audio_config.sample_rate,
-                blocksize=self.audio_config.chunk_size,
-                dtype="float32",
-                callback=self._audio_callback,
-            )
-            self.stream.start()
-            
+            with self.stream_lock:
+                if not self.capture_paused:
+                    self._open_stream()
+                elif self.pixels:
+                    self.pixels.set_muted(True)
+
             # Process audio chunks from queue in main thread
             while self.running:
                 try:
@@ -222,6 +226,85 @@ class WakeWordRecorder:
         finally:
             self.stop()
     
+    def _open_stream(self):
+        stream = sd.InputStream(
+            device=self.device, channels=self.audio_config.channels,
+            samplerate=self.audio_config.sample_rate, blocksize=self.audio_config.chunk_size,
+            dtype="float32", callback=self._audio_callback,
+        )
+        self.stream = stream
+        try:
+            stream.start()
+        except Exception:
+            stream.close()
+            if stream.closed:
+                self.stream = None
+            raise
+
+    def set_muted(self, muted: bool):
+        """Close capture, not just recognition. Never confirm mute before close succeeds."""
+        with self.stream_lock:
+            with self.lock:
+                self.capture_paused = True
+                self.follow_up_cancelled = True
+                self.pre_roll.clear()
+                self.rec = []
+                self._clear_audio_queue()
+            if self.stream is not None:
+                self.stream.abort()
+                self.stream.close()
+                if not self.stream.closed:
+                    raise RuntimeError("Microphone stream did not close")
+                self.stream = None
+            with self.lock:
+                self.muted = True
+                self.state = "MUTED"
+                if self.pixels:
+                    self.pixels.set_muted(True)
+            if not muted:
+                # Clear the closed-capture indication BEFORE PortAudio starts capture.
+                # On failure restore red only if the new stream is confirmed closed.
+                self.muted = False
+                self.state = "OPENING"
+                if self.pixels:
+                    self.pixels.set_muted(False)
+                try:
+                    if self.running:
+                        self._open_stream()
+                except Exception:
+                    self.muted = self.stream is None
+                    self.state = "MUTED" if self.muted else "CAPTURE_ERROR"
+                    if self.pixels:
+                        self.pixels.set_muted(self.muted)
+                        if not self.muted:
+                            self.pixels.offline()
+                    raise
+                with self.lock:
+                    self._reset_model_state()
+                    self._clear_audio_queue()
+                    self.muted = False
+                    self.capture_paused = False
+                    self.state = "LISTEN_WAKE"
+                    self.last_wake = time.time()
+                    self.skip_chunks = 30
+                    if self.pixels:
+                        self.pixels.set_muted(False)
+                        self.pixels.listen()
+
+    def cancel_capture(self):
+        """Discard a partial command/follow-up; never submit it after a local stop."""
+        with self.lock:
+            self.capture_generation += 1
+            self.follow_up_cancelled = True
+            self.rec = []
+            self.pre_roll.clear()
+            self._clear_audio_queue()
+            if self.state in ("RECORD", "FOLLOW_UP"):
+                self.state = "LISTEN_WAKE"
+                self.skip_chunks = 30
+                if self.pixels:
+                    self.pixels.listen()
+
     def stop(self) -> None:
         """Stop and cleanup audio stream."""
         # First, signal that we're stopping
@@ -275,7 +358,7 @@ class WakeWordRecorder:
                 print("Audio status:", status)
 
             with self.lock:
-                if not self.running or self.state == "PROCESSING":
+                if not self.running or getattr(self, "capture_paused", False) or self.state == "PROCESSING":
                     return
             
             # Just enqueue the audio chunk - processing happens in main thread
@@ -294,6 +377,12 @@ class WakeWordRecorder:
             # Don't crash the callback thread - just log and continue
     
     def _process_chunk(self, mono: np.ndarray) -> None:
+        with self.lock:
+            if getattr(self, "capture_paused", False):
+                return
+            self._process_active_chunk(mono)
+
+    def _process_active_chunk(self, mono: np.ndarray) -> None:
         """Process single audio chunk for wake word or recording.
         
         Args:
@@ -423,7 +512,9 @@ class WakeWordRecorder:
             
             # Set to PROCESSING state to block new wake word detection
             self.state = "PROCESSING"
+            self.processing_active = True
             
+            self.recording_generation = getattr(self, "capture_generation", 0)
             should_callback = self.running
         
         # File I/O outside lock to minimize hold time
@@ -465,13 +556,19 @@ class WakeWordRecorder:
                         print(f"\n⚠️  Error processing recording: {e}")
             finally:
                 if recording_path is not None:
-                    self._finish_processing(allow_follow_up=allow_follow_up, correction=correction)
+                    try:
+                        self._finish_processing(allow_follow_up=allow_follow_up, correction=correction)
+                    finally:
+                        self.processing_active = False
                 self.recording_queue.task_done()
 
     def _finish_processing(self, *, allow_follow_up: bool = False, correction: bool = False) -> None:
         """Discard playback audio, then open a follow-up window or resume wake detection."""
-        # Reset model state to clear any buffered audio from overflow
-        self._reset_model_state()
+        # Serialize resets with local mute/unmute and audio inference.
+        with self.lock:
+            if getattr(self, "capture_paused", False):
+                return
+            self._reset_model_state()
         
         # Clear the audio queue to drop all buffered overflow chunks
         cleared = self._clear_audio_queue()
@@ -487,14 +584,14 @@ class WakeWordRecorder:
         drain_until = time.monotonic() + delay
         while time.monotonic() < drain_until:
             with self.lock:
-                if not self.running:
+                if not self.running or getattr(self, "capture_paused", False):
                     return
             time.sleep(0.1)
 
         cleared = self._clear_audio_queue()
 
         with self.lock:
-            if not self.running:
+            if not self.running or getattr(self, "capture_paused", False):
                 return
             self.pre_roll.clear()
             if follow_up and not self.follow_up_cancelled:

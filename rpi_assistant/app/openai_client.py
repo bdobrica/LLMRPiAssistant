@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from openai import OpenAI
 
+from .playback import PlaybackStopped
 from .config import OpenAIConfig
 from .web_lookup import LOOKUP_NAME, LOOKUP_TOOL, lookup, lookup_instructions, spoken_without_links, unavailable
 
@@ -81,8 +82,15 @@ class OpenAIClient:
             self.conversation_history.append({"role": "user", "content": user_message})
             
             return self._chat_with_tools()
+        except PlaybackStopped:
+            raise
         except Exception as e:
             raise Exception(f"Chat completion failed: {e}")
+
+    def _check_cancelled(self):
+        check = getattr(self, "cancel_check", None)
+        if check is not None:
+            check()
 
     def _completion_options(self, max_tokens: int, temperature: float) -> dict:
         options = {"max_completion_tokens": max_tokens, "temperature": temperature}
@@ -101,6 +109,7 @@ class OpenAIClient:
         tool_rounds = 0
 
         while True:
+            self._check_cancelled()
             request = {
                 "model": self.config.chat_model,
                 "messages": [self.conversation_history[0],
@@ -112,6 +121,7 @@ class OpenAIClient:
                 request["tools"] = tools
                 request["tool_choice"] = "auto"
             response = self.client.chat.completions.create(**request)
+            self._check_cancelled()
             _add_usage(usage, response)
             message = response.choices[0].message
             tool_calls = list(getattr(message, "tool_calls", None) or [])
@@ -137,7 +147,12 @@ class OpenAIClient:
                         {"is_error": True, "error": "Invalid tool arguments"}
                     )
                 else:
-                    result = manager.call_tool(tool_call.function.name, arguments)
+                    try:
+                        self._check_cancelled()
+                    except PlaybackStopped:
+                        result = json.dumps({"is_error": True, "error": "Cancelled before execution"})
+                    else:
+                        result = manager.call_tool(tool_call.function.name, arguments)
                 self.conversation_history.append(
                     {"role": "tool", "tool_call_id": tool_call.id, "content": result}
                 )
@@ -154,8 +169,13 @@ class OpenAIClient:
                     query = arguments.get("query") if isinstance(arguments, dict) else None
                 except (json.JSONDecodeError, TypeError):
                     query = None
-                evidence = (lookup(self.client, self.config, query) if self.config.web_search_enabled
-                            else unavailable("disabled"))
+                try:
+                    self._check_cancelled()
+                except PlaybackStopped:
+                    evidence = unavailable("cancelled")
+                else:
+                    evidence = (lookup(self.client, self.config, query) if self.config.web_search_enabled
+                                else unavailable("disabled"))
                 # Only a bounded answer/source summary enters ordinary conversation.
                 result = {key: evidence[key] for key in ("status", "answer", "sources", "retrieved_at")}
                 result["untrusted_evidence"] = True
@@ -343,6 +363,8 @@ class OpenAIClient:
     def reset_conversation(self) -> None:
         """Reset conversation history, keeping only system prompt."""
         self._initialize_conversation()
+        self.compacted_contexts.clear()
+        self.last_response_output_finished_at = None
 
 
 def _usage_dict(response: Any, model: str) -> dict:
