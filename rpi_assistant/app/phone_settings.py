@@ -1,4 +1,4 @@
-"""Small settings whitelist with explicit apply, private persistence and one-step undo."""
+"""Live phone settings and authenticated, restartable INI changes."""
 
 from collections import deque
 from configparser import ConfigParser
@@ -10,15 +10,17 @@ import math
 import os
 from pathlib import Path
 import re
+import signal
 import tempfile
+import threading
 from zoneinfo import ZoneInfo
 
 from openai import OpenAI
 from .weather import Weather
-
-
-class SettingsError(ValueError):
-    """Safe message for the phone; never includes submitted secrets."""
+from .config import parse_config
+from .config_editor import (EditorError as SettingsError, GROUPS, candidate, describe,
+                            read_ini, server_options)
+from .settings_trial import SettingsTrial
 
 
 FIELDS = {
@@ -64,7 +66,36 @@ class PhoneSettings:
     def __init__(self, config, path, controls):
         self.config, self.path, self.controls = config, Path(path), controls
         self.backup = self.path.with_name(self.path.name + ".phone-undo.json")
+        self.trial = SettingsTrial(self.path)
         self.error = None
+
+    def options(self):
+        with self.controls.lock:
+            before = self._read()
+            parser = read_ini(before)
+            undo = json.loads(self.backup.read_bytes()) if self.backup.exists() else {}
+            return {"options": describe(parser), "groups": GROUPS, "revision": revision(before),
+                    "live": list(FIELDS.values()), "server": server_options(parser, "mcp.server."),
+                    "undo_restart": bool(undo.get("restart")),
+                    "undo_groups": sorted({s for s, _ in undo.get("fields", [])}),
+                    "can_undo": self.status()["can_undo"]}
+
+    def _restart(self, before, after, fields, undo=False):
+        if not os.environ.get("INVOCATION_ID") or not os.environ.get("CREDENTIALS_DIRECTORY"):
+            raise SettingsError("Restart changes need the installed systemd service. Reinstall the service and try again.")
+        config = self.trial.arm(before, after, fields, undo=undo)
+        # Exit after sending the HTTP acknowledgement. Restart=on-failure relaunches
+        # the service without granting it systemctl privileges.
+        timer = threading.Timer(1, os.kill, args=(os.getpid(), signal.SIGUSR1))
+        timer.daemon = True
+        timer.start()
+        if not config.controls.enabled:
+            destination = "Phone controls will close."
+        elif config.controls.host in ("lan", "0.0.0.0"):
+            destination = f"Reconnect at the device IP on port {config.controls.port}."
+        else:
+            destination = f"Configured address: http://{config.controls.host}:{config.controls.port}/."
+        return f"Restart requested. {destination} Failed startup restores the previous settings."
 
     def _read(self):
         try:
@@ -96,6 +127,10 @@ class PhoneSettings:
             except Exception:
                 status.update(revision=None, can_undo=False)
             status["error"] = self.error
+            if self.trial.journal.exists():
+                status["restart_status"] = "Testing settings during restart."
+            elif self.trial.result.exists():
+                status["restart_status"] = self.trial.result.read_text()
             location = self.controls.client.weather.location
             saved = location.resolved or (location._load() if not self.config.weather.city else None)
             status["weather_location"] = saved["name"] if saved else None
@@ -182,7 +217,7 @@ class PhoneSettings:
         else:
             atomic_write(self.path, data)
 
-    def change(self, payload, *, undo=False):
+    def change(self, payload, *, undo=False, advanced=False):
         """Caller holds controls.lock; block capture transitions through the transaction."""
         controls = self.controls
         with controls.recorder.lock:
@@ -192,15 +227,42 @@ class PhoneSettings:
             if not isinstance(payload, dict) or payload.get("revision") != revision(before):
                 raise SettingsError("Settings changed since this page was loaded. Reload settings before saving.")
             old = self._values()
+            if self.trial.journal.exists():
+                raise SettingsError("Wait for the settings restart to finish.")
             if undo:
                 try:
                     backup = json.loads(self.backup.read_text())
                     if backup["applied_revision"] != revision(before):
                         raise ValueError()
-                    values = {**old, **backup["values"]}
                     after = backup["config_text"].encode() if backup["config_text"] is not None else None
+                    values = old.copy()
+                    if not backup.get("restart"):
+                        restored = parse_config(read_ini(after), allow_missing_api_key=True)
+                        # Older undo files stored absolute values. Resolve the
+                        # original INI against today's service environment.
+                        for name in backup.get("changed", backup.get("values", {})):
+                            section, key = FIELDS[name]
+                            values[name] = getattr(getattr(restored, section), key)
                 except Exception:
                     raise SettingsError("No matching saved change is available to undo.") from None
+                if backup.get("restart"):
+                    if not payload.get("confirm_restart"):
+                        raise SettingsError("Open Advanced settings to confirm Undo and restart.")
+                    if any(s == "app_store" for s, _ in backup["fields"]) and payload.get("confirm_trust") is not True:
+                        raise SettingsError("Confirm restoration of the previous app trust policy.")
+                    return self._restart(before, after, backup["fields"], undo=True)
+            elif advanced:
+                after, config, touched = candidate(before, payload.get("edits"))
+                if touched - set(FIELDS.values()):
+                    if payload.get("confirm_restart") is not True:
+                        raise SettingsError("Confirm the service restart before applying these settings.")
+                    if config.app_store != self.config.app_store and payload.get("confirm_trust") is not True:
+                        raise SettingsError("Confirm the change to trusted app sources and signatures.")
+                    return self._restart(before, after, touched)
+                values = old.copy()
+                for name, (section, key) in FIELDS.items():
+                    if (section, key) in touched:
+                        values[name] = getattr(getattr(config, section), key)
             else:
                 values = self._validate(payload)
                 if values == old:
@@ -212,25 +274,38 @@ class PhoneSettings:
                     if values[key] != old[key]:
                         if not parser.has_section(section):
                             parser.add_section(section)
-                        parser.set(section, name, str(values[key]))
+                        parser.set(section, name, str(values[key]).replace("%", "%%"))
                 text = io.StringIO()
                 parser.write(text)
                 after = text.getvalue().encode()
             previous = (controls.client.client, controls.client.weather,
                         controls.household.zone if controls.household else ZoneInfo(old["reminder_timezone"]),
                         controls.recorder.follow_up_vad)
-            prepared = None
+            previous_backup = self.backup.read_bytes() if self.backup.exists() else None
             try:
                 prepared = self._prepare(values)
+            except Exception:
+                raise SettingsError("Could not prepare the new settings. Previous settings are still active.") from None
+            if self._read() != before:
+                if prepared[0] is not previous[0]:
+                    prepared[0].close()
+                raise SettingsError("Settings changed while preparing the update. Reload before saving.")
+            try:
                 if not undo:
+                    changed = ([name for name, pair in FIELDS.items() if pair in touched] if advanced
+                               else [name for name in values if values[name] != old[name]])
                     atomic_write(self.backup, json.dumps({"config_text": before.decode() if before is not None else None,
-                                                        "values": old, "applied_revision": revision(after)}).encode())
+                                                        "changed": changed, "applied_revision": revision(after)}).encode())
                 self._write_config(after)
                 self._install(values, prepared)
             except Exception:
                 try:
                     self._write_config(before)
                     self._install(old, previous)
+                    if previous_backup is None:
+                        self.backup.unlink(missing_ok=True)
+                    else:
+                        atomic_write(self.backup, previous_backup)
                     self.error = "Settings were not applied; the previous configuration was restored."
                 except Exception:
                     self.error = "Settings recovery needs attention. The private phone undo file retains the previous configuration."
@@ -243,4 +318,6 @@ class PhoneSettings:
                 except Exception:
                     pass
             self.error = None
+            if undo:
+                self.backup.unlink(missing_ok=True)
             return "Previous settings restored." if undo else "Settings saved and applied. Provider keys are checked when you use their service."

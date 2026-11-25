@@ -154,9 +154,19 @@ class ServiceInstallerTests(unittest.TestCase):
         unit = self.unit.read_text()
         self.assertIn('User=maker', unit)
         self.assertIn('AmbientCapabilities=CAP_NET_BIND_SERVICE', unit)
+        from rpi_assistant.app.admin_auth import verifier
+        from rpi_assistant.piwifi.credentials import load
+        code = load(self.root/'etc/piwifi/setup.json')['code']
+        digest = self.root/'etc/rpi-assistant/phone-admin.digest'
+        self.assertEqual(digest.read_text().strip(), verifier(code))
+        self.assertEqual(digest.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn(code, unit)
         before = self.config.read_text()
         self.installer.install(self.project, Path('/opt/test/bin/python'), root=self.root)
         self.assertEqual(self.config.read_text(), before)
+        self.config.write_text('[controls]\nport=8767\n')
+        self.installer.install(self.project, Path('/opt/test/bin/python'), root=self.root)
+        self.assertIn('port=8767', self.config.read_text())
 
     def test_custom_host_port_and_loopback_preference_survive(self):
         text = '[controls]\nhost=127.0.0.1\nport=9999\n'

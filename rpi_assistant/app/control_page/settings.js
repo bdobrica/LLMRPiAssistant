@@ -23,7 +23,7 @@ const command = initPage(s => {
   el('settings-save').disabled = !lastSettings.revision;
   el('settings-undo').disabled = !lastSettings.can_undo;
   el('settings-message').textContent = lastSettings.error ||
-    (loadedRevision !== lastSettings.revision ? 'Settings changed elsewhere. Reload to use the latest values.' : '');
+    (loadedRevision !== lastSettings.revision ? 'Settings changed elsewhere. Reload to use the latest values.' : lastSettings.restart_status || '');
   if (privacy) {
     if (s.privacy) el('privacy-status').textContent = (s.privacy.conversation_logging ? 'Conversation logging enabled. ' : 'Conversation logging off. ') +
       s.privacy.retention_days + '-day retention, ' + (s.privacy.max_bytes / 1048576).toFixed(2) + ' MiB file cap. ' + (s.privacy.error || '');

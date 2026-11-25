@@ -12,6 +12,7 @@ import test_controls
 from rpi_assistant.app.audio_checks import AudioChecks
 from rpi_assistant.app.config import load_config, ControlsConfig
 from rpi_assistant.app.control_server import ControlServer
+from rpi_assistant.app.admin_auth import DeviceAuth, verifier
 from rpi_assistant.app.phone_settings import PhoneSettings, SettingsError
 from rpi_assistant.app.weather import Weather
 
@@ -132,8 +133,13 @@ class PhoneSetupTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as caught:
             urlopen(Request(base+'/control',data=data,headers={'X-Assistant-Control':'1','Origin':'http://elsewhere.invalid'}))
         self.assertEqual(caught.exception.code, 403)
-        with urlopen(Request(base+'/control',data=data,headers={'X-Assistant-Control':'1','Origin':base})) as response:
-            self.assertEqual(json.load(response)['settings']['follow_up_seconds'], 4)
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(Request(base+'/control',data=data,headers={'X-Assistant-Control':'1','Origin':base}))
+        self.assertEqual(caught.exception.code, 403)
+        server.auth = DeviceAuth(verifier('synthetic-device-code'))
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(Request(base+'/admin/change',data=data,headers={'X-Assistant-Control':'1','Origin':base}))
+        self.assertEqual(caught.exception.code, 401)
 
     def test_microphone_check_is_bounded_and_never_enters_recognition_queue(self):
         self.recorder.begin_diagnostic(True)

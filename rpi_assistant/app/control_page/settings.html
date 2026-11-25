@@ -1,6 +1,6 @@
 <form id="settings" method="post" action="/control">
 <fieldset disabled>
-<p class="hint">Use this page only on your trusted home Wi-Fi. It has no sign-in or HTTPS. Changes take effect only when you press Save &amp; apply.</p>
+<p class="hint">Save changes on your trusted home Wi-Fi. When your browser asks, sign in as admin with the device’s Wi-Fi setup code.</p>
 <label for="follow-up">Follow-up listening (seconds; 0 disables)</label><input id="follow-up" type="number" min="0" max="15" step="0.5">
 <label for="timezone">Reminder timezone</label><input id="timezone" placeholder="Europe/Bucharest" maxlength="100">
 <label for="weather-city">Home weather city and country</label><input id="weather-city" placeholder="Leave blank to use a remembered or detected city" maxlength="160">
@@ -15,6 +15,7 @@
 <p id="settings-message" role="status"></p>
 </fieldset>
 </form>
+<p><a href="/admin/settings">Advanced settings · all config.ini options</a></p>
 <h2>Audio checks</h2>
 <div class="buttons"><button disabled id="check-speaker">Play test sound</button><button disabled id="check-microphone">Record 3 seconds and play back</button><button disabled id="check-stop">Stop check</button></div>
 <p id="audio-check" role="status"></p><p class="hint">Microphone checks stay on this device and are deleted after playback. Speak when the check starts; Stop cancels it. Unmute first to record. The test sound can play while muted.</p>

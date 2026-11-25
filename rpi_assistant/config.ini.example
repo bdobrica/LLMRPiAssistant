@@ -174,12 +174,15 @@ require_signature = true
 
 [controls]
 # Settings include write-only provider keys and local microphone/speaker checks.
+# Settings → Advanced mirrors the parsed INI. Sign in as admin with the device setup code.
+# Removing a file override restores environment/default precedence.
 # Save & apply is explicit; the private config.ini.phone-undo.json supports undo.
 # Phone page: host = lan binds connected private IPv4 LAN addresses only.
 # Open http://<device-IP>/ (literal IP). Closed during Wi-Fi setup.
 # Port 80 requires the installed systemd service; do not run the assistant as root.
 # For terminal-only development use host = 127.0.0.1 and port = 8767.
-# Everyone on that LAN can control it; never expose this port to the Internet.
+# Everyday controls are shared on that LAN. Settings writes require the device code.
+# Use a trusted network; HTTP does not encrypt submitted API keys.
 enabled = true
 host = lan
 port = 80

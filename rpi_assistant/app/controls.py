@@ -164,10 +164,11 @@ class LocalControls:
                 if self.privacy is None:
                     raise ValueError("Privacy controls unavailable")
                 return self.privacy.delete(value)
-            elif action in ("settings_apply", "settings_undo"):
+            elif action in ("settings_apply", "settings_undo", "settings_advanced"):
                 if self.settings is None:
                     raise ValueError("Phone settings unavailable")
-                return self.settings.change(value, undo=action == "settings_undo")
+                return self.settings.change(value, undo=action == "settings_undo",
+                                            advanced=action == "settings_advanced")
             elif action == "audio_check":
                 if self.audio_checks is None:
                     raise ValueError("Audio checks unavailable")

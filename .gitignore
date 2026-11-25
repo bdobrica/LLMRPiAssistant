@@ -183,6 +183,8 @@ cython_debug/
 # Config files
 config.ini
 *.phone-undo.json
+*.phone-trial.json
+*.phone-result
 .phone-settings-*
 .secrets/
 

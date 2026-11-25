@@ -16,7 +16,7 @@ window.addEventListener('beforeunload', event => {
 });
 
 async function request(path, options) {
-  const response = await fetch(path, {...options, signal: AbortSignal.timeout(7000)});
+  const response = await fetch(path, {...options, signal: AbortSignal.timeout(path.startsWith('/admin/') ? 60000 : 7000)});
   const data = await response.json();
   if (!response.ok) throw Error(data.error || 'Control unavailable');
   return data;
@@ -42,7 +42,8 @@ function initPage(render, unavailable) {
   refresh();
   return async (action, value, fallback = 'Done.') => {
     try {
-      const data = await request('/control', {
+      const admin = action.startsWith('settings_') || action === 'privacy_delete';
+      const data = await request(admin ? '/admin/change' : '/control', {
         method: 'POST',
         headers: {'Content-Type':'application/json', 'X-Assistant-Control':'1'},
         body: JSON.stringify({action, value})

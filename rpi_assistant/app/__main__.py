@@ -10,6 +10,8 @@ import signal
 import os
 import sys
 import threading
+import time
+import subprocess
 from pathlib import Path
 
 from .app_manager import AppManager
@@ -29,6 +31,7 @@ from .timers import Timers, TimerAlerts
 from .household import Household
 from .weather import Weather
 from .phone_settings import PhoneSettings
+from .settings_trial import SettingsTrial
 from .audio_checks import AudioChecks
 from .privacy import ConversationPrivacy, quiet_provider_logs
 from .rpiface_client import RPiFaceClient
@@ -92,9 +95,24 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
+    def restart_for_settings(signum, frame):
+        # Allow ordinary cleanup. Bound it because a stuck audio stop otherwise
+        # prevents systemd from starting the candidate or restoring the old INI.
+        fallback = threading.Timer(8, os._exit, args=(75,))
+        fallback.daemon = True
+        fallback.start()
+        sys.exit(75)
+
+    signal.signal(signal.SIGUSR1, restart_for_settings)
+
     try:
         # Load configuration
-        config = load_config(allow_missing_api_key=True)
+        config_path = Path(__file__).resolve().parents[1] / "config.ini"
+        trial = SettingsTrial(config_path)
+        candidate = trial.begin()
+        if candidate is not None:
+            trial.watch()
+        config = candidate or load_config(allow_missing_api_key=True)
         rpiface = RPiFaceClient(
             base_url=config.rpiface.base_url,
             timeout_seconds=config.rpiface.timeout_seconds,
@@ -204,7 +222,7 @@ def main():
 
         controls = LocalControls(config.controls, recorder, playback, openai_client)
         controls.connection_status = lambda: connection_state["online"]
-        controls.settings = PhoneSettings(config, Path(__file__).resolve().parents[1] / "config.ini", controls)
+        controls.settings = PhoneSettings(config, config_path, controls)
         controls.audio_checks = AudioChecks(controls)
         controls.privacy = ConversationPrivacy(config, logger, controls)
         controls.privacy.start()
@@ -222,7 +240,34 @@ def main():
             print(f"Control button unavailable ({type(exc).__name__}); local page and voice remain available.")
         if config.controls.enabled:
             control_server = ControlListeners(config.controls, controls)
-        recorder.start()
+        def check_restart():
+            fields = {tuple(pair) for pair in trial.record["fields"]}
+            changed = {s for s, _ in fields}
+            if any(section in changed and component.error for section, component in
+                   (("controls", controls), ("timers", timers), ("household", household), ("logging", logger))):
+                raise RuntimeError("Local storage unavailable")
+            if "led" in changed and pixels is None:
+                raise RuntimeError("LED initialization failed")
+            if ("recording", "interrupt_button_gpio") in fields:
+                if config.recording.interrupt_button_gpio >= 0 and interrupt_button is None:
+                    raise RuntimeError("Button initialization failed")
+            if any(s == "mcp" or s.startswith("mcp.server.") for s in changed) and mcp_manager.discovery_failed:
+                raise RuntimeError("MCP discovery failed")
+            if fields & {("controls", "mixer_card"), ("controls", "mixer_control")}:
+                controls.volume.get()
+            if "audio_output" in changed and config.audio_output.enabled:
+                subprocess.run(["aplay", "-q", "-D", config.audio_output.device, "-t", "raw",
+                                "-f", "S32_LE", "-r", "24000", "-c", "2", "/dev/null"],
+                               check=True, timeout=4, capture_output=True)
+            if control_server:
+                deadline = time.monotonic() + 12
+                while not control_server.servers:
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError("Phone listener unavailable")
+                    time.sleep(.1)
+            trial.finish()
+
+        recorder.start(on_ready=check_restart if candidate is not None else None)
 
     except KeyboardInterrupt:
         print("\n\n👋 Shutting down...")

@@ -10,6 +10,10 @@ import re
 import shutil
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from rpi_assistant.app.admin_auth import verifier
+from rpi_assistant.piwifi.credentials import initialize
+
 
 def migrate_config(text):
     parser = ConfigParser(interpolation=None)
@@ -45,11 +49,17 @@ def install(project, python, *, root=Path('/')):
     text = re.sub(r'^WorkingDirectory=.*$', lambda _: 'WorkingDirectory='+str(project), text, flags=re.MULTILINE)
     text = re.sub(r'^ExecStart=.*$', lambda _: 'ExecStart='+json.dumps(str(python))+' -m rpi_assistant.app', text, flags=re.MULTILINE)
     updates = {unit: text}
-    if config.exists():
+    # Units with low-port capability have already migrated. Respect later edits,
+    # including a deliberate return to the old high port.
+    if config.exists() and not (unit.exists() and 'AmbientCapabilities=CAP_NET_BIND_SERVICE' in unit.read_text()):
         original = config.read_text()
         migrated = migrate_config(original)
         if original != migrated:
             updates[config] = migrated
+    # Only the verifier goes into the unprivileged service's credential directory.
+    credential = root/'etc/rpi-assistant/phone-admin.digest'
+    code = initialize(root/'etc/piwifi/setup.json')['code']
+    updates[credential] = verifier(code) + '\n'
     backup = root/'var/backups/rpi-assistant-controls'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     backup.mkdir(parents=True, mode=0o700)
     saved = {}
@@ -77,7 +87,7 @@ def install(project, python, *, root=Path('/')):
     try:
         for path, data in updates.items():
             owner = saved[path][1] if path in saved else None
-            atomic_write(path, data, 0o600 if path == config else 0o644, owner)
+            atomic_write(path, data, 0o644 if path == unit else 0o600, owner)
             changed.append(path)
     except Exception:
         for path in reversed(changed):

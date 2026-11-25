@@ -297,7 +297,14 @@ def load_config(config_path: Optional[str] = None, *, allow_missing_api_key: boo
     else:
         print("No config.ini found, using environment variables and defaults")
 
+    return parse_config(parser, allow_missing_api_key=allow_missing_api_key)
+
+
+def parse_config(parser, *, allow_missing_api_key=False, inventory=None):
+    """Use the same conversions for startup, previews and the phone field inventory."""
     def get_value(section: str, key: str, env_var: str, default=None, value_type=str):
+        if inventory is not None:
+            inventory[section, key] = (env_var, default, value_type)
         if parser.has_section(section) and parser.has_option(section, key):
             value = parser.get(section, key)
             if value_type == bool:
@@ -585,6 +592,7 @@ def _load_mcp_config(parser: ConfigParser, get_value) -> MCPConfig:
     if not 1 <= max_rounds <= 10:
         raise ValueError("MCP max_tool_rounds must be between 1 and 10")
 
+    names = get_value("mcp", "servers", "MCP_SERVERS", "", str)
     raw_json = os.getenv("MCP_SERVERS_JSON")
     if raw_json is not None and not parser.has_option("mcp", "servers"):
         try:
@@ -595,7 +603,6 @@ def _load_mcp_config(parser: ConfigParser, get_value) -> MCPConfig:
             raise ValueError("MCP_SERVERS_JSON must contain a JSON array")
         servers = tuple(_server_from_mapping(entry) for entry in entries)
     else:
-        names = get_value("mcp", "servers", "MCP_SERVERS", "", str)
         servers = tuple(
             _server_from_section(parser, name)
             for name in (item.strip() for item in names.split(","))

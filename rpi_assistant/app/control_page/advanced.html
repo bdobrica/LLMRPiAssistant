@@ -1,0 +1,13 @@
+<p>Open a group to edit its settings. Each field shows where its current value comes from. Removing a file override uses the environment or built-in default.</p>
+<form id="advanced" method="post" action="/admin/change">
+<fieldset disabled>
+<div id="groups"></div>
+<h2>Add an MCP server</h2>
+<label>Server name <input id="server-name" maxlength="24" placeholder="e.g. display"></label>
+<button type="button" id="add-server">Add definition</button>
+<p class="hint">Select the server in MCP tools → servers to activate it. To delete a definition, remove its file overrides and its name from the active list.</p>
+<p id="impact" role="status"></p>
+<div class="buttons"><button>Save &amp; apply</button><button type="button" id="undo">Undo last change</button></div>
+</fieldset>
+</form>
+<p id="restart" role="status"></p>

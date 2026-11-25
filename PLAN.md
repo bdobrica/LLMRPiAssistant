@@ -28,6 +28,9 @@ Keep explicit **Save & apply** and **Undo last change**. Validate fields and com
 
 Advanced changes to control binding, hardware, storage paths, app trust or MCP commands need clear consequences and recoverable application. Moving a state path must not silently make household data appear deleted. Do not extend this work into Wi-Fi provisioning's separate configuration. Verify complete coverage against the parser, including optional/commented settings and dynamic sections; no silently omitted fields.
 
+Configuration changes use phone-only approval with the existing device setup
+code. Everyday household controls remain shared on the trusted LAN.
+
 ## S01 — Start Speaking While Audio Arrives
 
 The current Realtime adapter receives audio chunks but writes a complete WAV before playback. Feed those chunks to playback as they arrive, using a small bounded buffer. Retain the current transcription, reasoning, tool actions and conversation history; text-generation streaming and continuous cloud microphone sessions are separate work.

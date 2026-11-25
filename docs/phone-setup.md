@@ -75,6 +75,35 @@ restore the previous settings and keys, even after restart. Only the most recent
 save is undoable. If another edit changed the file, **Reload settings** before
 trying again; this discards unsaved edits. Save may wait for a request or alert to finish.
 
+### Advanced settings
+
+Open **Settings → Advanced settings**. Sign in as **admin** with the code on your
+device’s Wi-Fi setup label. If you need to look up the code, run
+`sudo piwifi-setup-code` on the Pi. On a build without the hotspot tools, run
+`sudo python3 -m rpi_assistant.piwifi.credentials show` from the repository.
+
+Open a group such as **Speaker** or **OpenAI and conversation**. Choose **Set file
+value** to edit a field. **Remove file override** restores inheritance from the
+environment and then the built-in default. To disable a provider key even if
+its environment variable is set, explicitly set an empty value. Keys, tool
+arguments and potentially credential-bearing URLs stay hidden.
+
+For an MCP tool, add a named definition and select it in **MCP tools → servers**.
+Enter environment variable names for tokens. Setting the file's server list
+overrides an environment-supplied `MCP_SERVERS_JSON`. Review executable commands,
+app sources and signing keys before enabling them.
+
+**Save & apply** tells you when a restart is needed. The service tries the new
+settings and checks local startup and the phone listener. A failure returns to
+the previous configuration. After an address or port change, open the new address.
+Intentionally disabling controls or choosing loopback requires Pi terminal access
+to turn phone access back on. **Undo last change** in Advanced settings also works
+for a change that needs a restart. Provider model access is checked on use.
+
+To relocate a saved store, choose an unused path on the same filesystem. During
+restart the service moves its existing files, including SQLite journals. Undo
+moves the current data back, including items added since the move.
+
 ## Hear whether your hardware works
 
 1. Choose **Play test sound**. You should hear a chime at the selected volume.
@@ -89,13 +118,14 @@ check—listen yourself to confirm the sound is clear.
 
 ## Who can use the page?
 
-**Anyone who can reach this page on your LAN can control the assistant and replace
-its keys.** It has no login or HTTPS. Use a trusted private network; do not expose
-port 80 to the Internet or shared public Wi-Fi. Use your own private router at a
-Maker Faire, or disable the page with `[controls] enabled = false`.
+Anyone on the same LAN can use everyday controls and household lists.
+Saving settings, replacing keys and deleting conversation data require the device
+code. Browser Digest sign-in keeps that code off the wire. HTTP still leaves
+page contents and submitted API keys readable on the network. Use your own
+trusted Wi-Fi, including at a Maker Faire.
 
-Configuration and its one-step undo file are private files on the Pi. The adjacent
-`config.ini.phone-undo.json` can contain old keys: don't share it. Saving from the
+Configuration, the restart trial and the one-step undo file are private on the Pi.
+The adjacent `config.ini.phone-*.json` files can contain keys. Saving from the
 page retains other settings but removes INI comments. For conversation-data
 controls, see [privacy](conversation-privacy.md).
 

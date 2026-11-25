@@ -46,6 +46,7 @@ class MCPClientManager:
         self.config = config
         self._logger = logger or logging.getLogger(__name__)
         self._tools: dict[str, DiscoveredTool] = {}
+        self.discovery_failed = False
         self._started = False
         self._cancelled = False
         self._active_task: asyncio.Task | None = None
@@ -56,12 +57,14 @@ class MCPClientManager:
         if not self.config.enabled or self._started:
             return
         self._started = True
+        self.discovery_failed = False
         self._cancelled = False
         self._cancel_event.clear()
         for server in self.config.servers:
             try:
                 tools = self._submit(self._discover(server))
             except Exception as exc:  # noqa: BLE001 - isolate arbitrary server failures
+                self.discovery_failed = True
                 self._logger.warning(
                     "MCP server %s unavailable during discovery (%s)",
                     server.name,

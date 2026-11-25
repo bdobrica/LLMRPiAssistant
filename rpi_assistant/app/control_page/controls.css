@@ -15,3 +15,9 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 #network:empty, #message:empty { display: none; }
 #level { flex: 1; min-width: 100px; min-height: 44px; padding: 0; accent-color: #153c65; }
 @media (max-width: 400px) { body { padding: 12px; } }
+#advanced details { background: white; border-radius: .5rem; padding: .8rem; }
+#advanced summary { cursor: pointer; padding: .5rem; }
+#advanced details fieldset { margin: 1rem 0; border-top: 1px solid #ccd4dd; }
+#advanced legend { font-weight: 600; padding-right: .5rem; }
+#advanced details input, #advanced details select { box-sizing: border-box; width: 100%; margin-bottom: .4rem; }
+#advanced details p { font-size: .9rem; overflow-wrap: anywhere; }

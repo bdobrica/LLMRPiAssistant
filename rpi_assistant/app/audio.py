@@ -188,7 +188,7 @@ class WakeWordRecorder:
         self.stop()
         return False  # Don't suppress exceptions
     
-    def start(self) -> None:
+    def start(self, on_ready=None) -> None:
         """Start listening for wake word and recording."""
         print("Using input device:", sd.query_devices()[self.device]["name"])
         print("Loaded wakeword models:", list(self.model.models.keys()))
@@ -215,6 +215,8 @@ class WakeWordRecorder:
                     self._open_stream()
                 elif self.pixels:
                     self.pixels.set_muted(True)
+            if on_ready is not None:
+                on_ready()
 
             # Process audio chunks from queue in main thread
             while self.running:

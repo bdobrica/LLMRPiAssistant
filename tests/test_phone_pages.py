@@ -33,7 +33,7 @@ class PhonePagesTests(unittest.TestCase):
         for path, form in forms.items():
             with self.subTest(path=path):
                 page = PageElements(path)
-                self.assertEqual(page.links, list(forms))
+                self.assertEqual(page.links, list(forms) + (['/admin/settings'] if path == '/settings' else []))
                 self.assertEqual(page.current, [path])
                 self.assertEqual(page.forms, [form])
                 self.assertEqual('openai-key' in page.inputs, path == '/settings')
