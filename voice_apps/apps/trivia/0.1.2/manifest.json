@@ -1,0 +1,8 @@
+{
+  "id": "trivia",
+  "name": "Trivia",
+  "version": "0.1.2",
+  "entrypoint": "app:TriviaApp",
+  "triggers": ["play trivia", "start trivia"],
+  "description": "Three quick questions with two choices and a surprising fact after each guess."
+}

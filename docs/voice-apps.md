@@ -23,7 +23,9 @@ comes after question three. Say **“repeat”** if you missed a choice.
 
 If Trivia misses your answer, it keeps your place. Wait for green and try
 again. **“A person. That's my answer”** works too. Say **“I don't want to
-play anymore”** to leave at any question.
+play anymore”** to leave at any question. You can change your mind in the same
+turn: **“A shark. I changed my mind. My answer is an octopus.”** Trivia scores
+the final choice and explains the answer.
 
 The assistant will ask again up to three times per question. After that,
 or if you stay quiet until the lights turn blue, use the wake word and say

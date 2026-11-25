@@ -53,6 +53,34 @@ class TriviaTests(unittest.TestCase):
         self.assertIn("right", self.say("second").text)
         self.assertIn("3 out of 3", self.say("needle").text)
 
+    def test_corrected_guess_scores_and_reveals_once(self):
+        for guess, score in [
+            ("I changed my mind. My answer is an octopus.", 1),
+            ("I was going to say a shark, but I changed my mind. My final answer is an octopus.", 1),
+            ("An octopus. Actually, the second one.", 0),
+        ]:
+            with self.subTest(guess=guess):
+                self.say("Stop game")
+                with patch("random.sample", return_value=["hearts", "watch", "compass"]):
+                    self.say("Play trivia")
+                reply = self.say(guess)
+                self.assertFalse(reply.retry_input)
+                self.assertEqual(reply.text.count("Two hearts pump blood"), 1)
+                self.assertIn("Question 2.", reply.text)
+                state = json.loads(self.save.read_bytes())["state"]
+                self.assertEqual((state["position"], state["score"]), (1, score))
+
+    def test_uncertain_or_near_match_correction_keeps_the_question(self):
+        saved = self.save.read_bytes()
+        for guess in ("I changed my mind.", "My answer is not an octopus.",
+                      "I changed my mind. My answer is an octopus or a shark.",
+                      "I changed my mind. My answer is a sharkskin.",
+                      "If I changed my mind my answer is a shark.",
+                      "I was going to say an octopus."):
+            with self.subTest(guess=guess):
+                self.assertTrue(self.say(guess).retry_input)
+                self.assertEqual(self.save.read_bytes(), saved)
+
     def test_stop_while_paused_discards_round(self):
         self.say("pause")
         self.assertTrue(self.say("Stop game").done)

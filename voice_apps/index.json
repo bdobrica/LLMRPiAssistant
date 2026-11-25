@@ -49,6 +49,15 @@
               "manifest.json"
             ],
             "sha256": "4fdc91d0cbe11042881c132e63fa7c5dfbf2f1ee46e964f5c72f56b1c1b8dc48"
+          },
+          {
+            "version": "0.1.2",
+            "bundle": "apps/trivia/0.1.2",
+            "files": [
+              "app.py",
+              "manifest.json"
+            ],
+            "sha256": "19fe16dfb871fd6aefa42bff4982f432d99486999b75d8144301fb4d9cbe26b7"
           }
         ]
       },
@@ -72,6 +81,6 @@
   "signing": {
     "algorithm": "ed25519",
     "key_id": "owner",
-    "signature": "gy7SvMiihoRTDQOHYa48poRJ6iSTXTI72xwc33uinhvcBvlRnnZhg1O48GgNoDAV+wZlAOEQ2XgIwrkVT+vyCw=="
+    "signature": "xRM4lQ5onjMW3gbZLX3lR9ijD5SOLwmiQDzEXqYW5v3Qiwo90dtLysKnaDVNpRkleBRoyBn7+6CBfWhH5WKXBA=="
   }
 }
