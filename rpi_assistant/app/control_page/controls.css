@@ -13,4 +13,5 @@ nav a[aria-current] { color: white; background: #153c65; font-weight: bold; }
 .skip:focus { position: static; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 #network:empty, #message:empty { display: none; }
+#level { flex: 1; min-width: 100px; min-height: 44px; padding: 0; accent-color: #153c65; }
 @media (max-width: 400px) { body { padding: 12px; } }

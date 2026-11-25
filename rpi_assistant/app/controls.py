@@ -8,6 +8,7 @@ import threading
 
 from .playback import PlaybackStopped
 from .household import HouseholdInputError
+from .phone_settings import atomic_write
 
 
 def voice_control(text):
@@ -17,6 +18,8 @@ def voice_control(text):
         "stop": ("stop", None), "stop talking": ("stop", None),
         "mute": ("mute", True), "mute the microphone": ("mute", True),
         "mute microphone": ("mute", True),
+        "mute the speaker": ("speaker_mute", True), "mute speaker": ("speaker_mute", True),
+        "unmute the speaker": ("speaker_mute", False), "unmute speaker": ("speaker_mute", False),
         "new conversation": ("new_conversation", None),
         "start a new conversation": ("new_conversation", None),
         "volume up": ("volume_up", None), "turn it up": ("volume_up", None),
@@ -32,27 +35,70 @@ class MixerVolume:
     def __init__(self, config):
         self.config = config
         self.lock = threading.Lock()
+        self.restore_path = Path(config.state_path).expanduser().with_suffix('.speaker.json')
 
     def _run(self, *arguments):
         result = subprocess.run(
             ["amixer", "-M", "-c", self.config.mixer_card, *arguments],
             capture_output=True, text=True, timeout=2, check=True,
         )
-        values = re.findall(r'\[(\d+)%\]', result.stdout)
-        if not values:
+        channels = [line for line in result.stdout.splitlines()
+                    if "Playback" in line and re.search(r'\[\d+%\]', line)]
+        if not channels:
             raise RuntimeError("Mixer did not report a playback volume")
-        return int(values[0])
+        levels = [int(re.search(r'\[(\d+)%\]', line)[1]) for line in channels]
+        actual = max(level if '[off]' not in line else 0 for level, line in zip(levels, channels))
+        raw = [re.search(r'Playback (\d+) ', line) for line in channels]
+        restore = ','.join(match[1] for match in raw) if all(raw) else f'{actual}%'
+        return actual, restore, any('[off]' in line for line in channels)
 
     def get(self):
         with self.lock:
-            return self._run("sget", self.config.mixer_control)
+            return self._run("sget", self.config.mixer_control)[0]
+
+    def _remember(self, setting):
+        data = [self.config.mixer_card, self.config.mixer_control, setting]
+        atomic_write(self.restore_path, json.dumps(data).encode())
+
+    def _restore_value(self):
+        try:
+            card, control, setting = json.loads(self.restore_path.read_text())
+            if ((card, control) == (self.config.mixer_card, self.config.mixer_control)
+                    and re.fullmatch(r'\d+(?:,\d+)*|\d+%', setting)):
+                return setting
+        except (OSError, ValueError, TypeError):
+            pass
+        return "25%"
+
+    def _write(self, setting, unmute=False):
+        args = [self.config.mixer_control, setting]
+        if unmute:
+            args.append('unmute')
+        return self._run("sset", *args)[0]
+
+    def mute(self, muted):
+        with self.lock:
+            current, setting, switched_off = self._run("sget", self.config.mixer_control)
+            if muted == (current == 0):
+                return current
+            if muted:
+                self._remember(setting)
+                actual = self._write("0%")
+            else:
+                actual = self._write(self._restore_value(), switched_off)
+            if muted != (actual == 0):
+                raise RuntimeError("Mixer did not confirm speaker mute change")
+            return actual
 
     def set(self, value, *, relative=False):
         with self.lock:
+            current, setting, switched_off = self._run("sget", self.config.mixer_control)
             if relative:
-                value += self._run("sget", self.config.mixer_control)
+                value += current
             value = max(0, min(100, value))
-            return self._run("sset", self.config.mixer_control, f"{value}%")
+            if current and not value:
+                self._remember(setting)
+            return self._write(f"{value}%", bool(value and switched_off))
 
 
 class LocalControls:
@@ -196,6 +242,11 @@ class LocalControls:
                         temporary.replace(self.state_path)
                         raise
                 self.error = None
+            elif action == "speaker_mute":
+                if type(value) is not bool:
+                    raise ValueError("speaker_mute requires a boolean")
+                actual = self.volume.mute(value)
+                return "Speaker muted." if value else f"Speaker unmuted at {actual} percent."
             elif action in ("volume", "volume_up", "volume_down"):
                 if action == "volume" and (type(value) is not int or not 0 <= value <= 100):
                     raise ValueError("volume must be an integer from 0 to 100")

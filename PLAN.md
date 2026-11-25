@@ -16,13 +16,9 @@ Normal administration now opens at the device IP. Keep its trusted-LAN access ru
 
 Home, Timers, Reminders, Shopping, Settings and Privacy each have their own URL.
 Keep navigation, local assets and draft protection consistent across those pages.
-Complete **UI03–UI04**, then **S01 streaming playback**, before optional entertainment or SecondContext work.
-
-### UI03 — Controls that fit their purpose
-
-Replace louder/quieter buttons and numeric volume entry with a labelled slider showing the current percentage and a speaker-mute button. Unmuting restores the previous audible volume. Keep microphone mute visibly separate: it stops capture, while speaker mute silences replies and alerts. Show actual device state, including changes made by voice or another phone; failed mixer operations must not appear successful.
-
-Review the other pages for avoidable typing, unclear action names, missing feedback and accidental destructive actions. Use suitable input controls and empty states, preserving timer, reminder, Shopping and privacy semantics. Keep this a focused usability pass, not a new UI framework.
+Home now has a speaker slider and separate controls for speaker output and
+microphone capture. Complete **UI04**, then **S01 streaming playback**, before
+optional entertainment or SecondContext work.
 
 ### UI04 — All configuration available from the phone
 

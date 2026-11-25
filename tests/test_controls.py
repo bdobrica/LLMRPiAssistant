@@ -192,6 +192,33 @@ class ControlsTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0][-1], '100%')
             self.assertEqual(run.call_args.kwargs['timeout'], 2)
 
+    def test_speaker_mute_restores_raw_channels_after_restart(self):
+        config = self.controls.config
+        def reading(left, lp, right, rp):
+            return NS(stdout=f'Front Left: Playback {left} [{lp}%]\nFront Right: Playback {right} [{rp}%]')
+        audible = reading(117, 68, 100, 30)
+        silent = reading(0, 0, 0, 0)
+        with patch('rpi_assistant.app.controls.subprocess.run') as run:
+            run.side_effect = [audible, silent, silent, silent, audible]
+            self.controls.volume = MixerVolume(config)
+            self.controls.command('speaker_mute', True)
+            self.controls.command('speaker_mute', True)
+            self.controls.volume = MixerVolume(config)
+            self.controls.command('speaker_mute', False)
+            self.assertEqual(run.call_args.args[0][-1], '117,100')
+            self.assertTrue(self.recorder.stream.active)
+            self.assertFalse(self.recorder.muted)
+
+    def test_unconfirmed_mute_reports_failure_and_levels_follow_external_changes(self):
+        volume = MixerVolume(self.controls.config)
+        with patch('rpi_assistant.app.controls.subprocess.run') as run:
+            run.side_effect = [NS(stdout='Playback 80 [34%]')] * 2 + [NS(stdout='Playback 92 [45%]')]
+            with self.assertRaisesRegex(RuntimeError, 'did not confirm'):
+                volume.mute(True)
+            self.assertEqual(volume.get(), 45)
+        self.assertEqual(voice_control('unmute the speaker'), ('speaker_mute', False))
+        self.assertEqual(voice_control('mute'), ('mute', True))
+
     def test_local_http_controls_work_without_provider_and_reject_cross_origin(self):
         server = ControlServer(NS(host='127.0.0.1', port=0), self.controls)
         self.addCleanup(server.close)

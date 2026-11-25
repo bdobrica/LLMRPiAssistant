@@ -19,11 +19,18 @@ cancelled navigation, all three household forms and separate Settings/Privacy sa
 All network requests stayed on loopback. Physical phone and Pi use of the new layout
 remain untested. See the [phone guide](docs/phone-setup.md#change-settings).
 
-- [ ] **UI03 — Replace awkward controls with practical inputs.**
-  - Replace louder/quieter and numeric volume entry with a percentage slider and speaker-mute toggle. Restore the prior audible volume on unmute; keep microphone mute separately labelled and truthful.
-  - Reflect actual mixer state, including changes from voice/another phone. Bound slider writes, show errors honestly, and define visible behavior when moving the slider while muted.
-  - Review remaining forms for appropriate inputs, readable timezone/date information, empty states, feedback and destructive-action confirmation. Keep existing data semantics.
-  - **Accept:** phone volume/mute/unmute, voice-to-page state updates, mixer failure feedback and keyboard/touch controls work. Verify offline operation, microphone capture state and how speaker mute affects replies and timer/reminder chimes on the Zero 2 W.
+UI03 delivered the speaker slider and restoring mute. Twenty-one focused checks
+passed. In 360px Chromium a touch drag and a burst of six arrow presses each
+produced one write. The page reflected external changes, showed mixer failure
+and recovered. Timers, Reminders and Shopping showed their empty states.
+
+On the Zero 2 W, an isolated HTTP server with no external route exercised the
+real mixer. Both channels stayed at raw zero during bundled speech playback and
+temporary timer and reminder alerts. ALSA reported active microphone capture.
+Unmute restored 117/117 (68%), and HTTP reported a 40% change dispatched through
+the spoken-command handler using text. The original volume was restored. No
+acoustic measurement, live transcription or physical phone trial was performed.
+See [speaker controls](docs/local-controls.md#change-volume-or-mute).
 
 - [ ] **UI04 — Mirror all supported INI configuration in the UI.**
   - Map every parsed option, including commented alternatives and named `mcp.server.*` sections. Cover audio/output, wake word, recording/buttons, models/provider keys, logging, LEDs, RPiFace, MCP, app sources/trust, controls, timers, household and weather.
