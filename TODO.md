@@ -10,11 +10,7 @@ Work in the order below before optional items. Implement one bounded item, recor
 
 ## First: Easier Phone Administration
 
-- [ ] **UI01 — Serve administration on port 80.**
-  - Make `http://<device-IP>/` work through installation and upgrade configuration without running the assistant as root. Keep access restricted to the intended trusted LAN and preserve request-origin protections.
-  - Coordinate listeners with the separate setup service at `http://192.168.4.1`; avoid wildcard binding conflicts and unintended admin access from the setup network. Preserve the single-code Wi-Fi flow and provisioning shutdown.
-  - Handle occupied ports and failed application with useful diagnostics and a way back. Update access URLs in the quick start, guides and config example when shipped.
-  - **Acceptance.** Open the device IP on a phone after service restart and use a control. Check listener isolation, origin rejection and bind recovery independently.
+UI01 delivered port-80 access on the Zero 2 W. The owner confirmed the phone page, volume change and conversation. Offline access and live Wi-Fi onboarding remain unverified on this revision. See [phone access validation](docs/phone-setup.md#tested-on-the-zero-2-w).
 
 - [ ] **UI02 — Split the interface into task pages.**
   - Add Home, Timers, Reminders, Shopping, Settings and Privacy with consistent navigation and distinct URLs. Keep status and everyday controls on Home; place audio checks in Settings.

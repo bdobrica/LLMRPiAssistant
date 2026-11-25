@@ -24,7 +24,7 @@ from .openai_client import OpenAIClient
 from .playback import AudioPlayback
 from .voice_command import VoiceCommandHandler
 from .controls import LocalControls
-from .control_server import ControlServer
+from .control_listener import ControlListeners
 from .timers import Timers, TimerAlerts
 from .household import Household
 from .weather import Weather
@@ -221,8 +221,7 @@ def main():
         except Exception as exc:
             print(f"Control button unavailable ({type(exc).__name__}); local page and voice remain available.")
         if config.controls.enabled:
-            control_server = ControlServer(config.controls, controls)
-            print(f"Local controls listening on {config.controls.host}:{config.controls.port}.")
+            control_server = ControlListeners(config.controls, controls)
         recorder.start()
 
     except KeyboardInterrupt:

@@ -69,7 +69,7 @@ upgrade-os:
 install-deps:
 	@echo "=== Installing system dependencies ==="
 	sudo apt-get update
-	sudo apt-get install -y python3-venv python3-pip libportaudio2 portaudio19-dev alsa-utils git mpg123 build-essential libffi-dev python3-dev swig libspeexdsp-dev liblgpio-dev
+	sudo apt-get install -y python3-venv python3-pip libportaudio2 portaudio19-dev alsa-utils git mpg123 network-manager iproute2 build-essential libffi-dev python3-dev swig libspeexdsp-dev liblgpio-dev
 
 # Create Python virtual environment
 create-venv:
@@ -106,10 +106,7 @@ install-assistant:
 # Install rpi-assistant as systemd service
 install-service:
 	@echo "=== Installing rpi-assistant systemd service ==="
-	@# Create a temporary service file with correct paths
-	@sed -e 's|WorkingDirectory=.*|WorkingDirectory=$(dir $(APP_DIR))|' \
-	     -e 's|ExecStart=.*|ExecStart=$(PYTHON) -m rpi_assistant.app|' \
-	     $(SYSTEMD_DIR)/rpi-assistant.service | sudo tee /etc/systemd/system/rpi-assistant.service > /dev/null
+	sudo python3 "$(SCRIPTS_DIR)/install-control-service.py" "$(SHELL_PWD)" "$(PYTHON)"
 	sudo systemctl daemon-reload
 	@echo "Service installed. Enable with: sudo systemctl enable rpi-assistant.service"
 	@echo "Start with: sudo systemctl start rpi-assistant.service"

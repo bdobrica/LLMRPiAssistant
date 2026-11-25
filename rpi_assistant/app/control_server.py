@@ -1,4 +1,4 @@
-"""Opt-in trusted-LAN control page; no remote assets, cloud requests or CORS."""
+"""Trusted-LAN control page; no remote assets, cloud requests or CORS."""
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import ipaddress
@@ -13,8 +13,10 @@ from .phone_settings import SettingsError
 class ControlServer(HTTPServer):
     allow_reuse_address = True
 
-    def __init__(self, config, controls):
+    def __init__(self, config, controls, *, allowed_network=None):
         self.controls = controls
+        self.restrict_network = allowed_network is not None
+        self.allowed_network = allowed_network
         super().__init__((config.host, config.port), ControlHandler)
         self.thread = threading.Thread(target=self.serve_forever, name="local-controls", daemon=True)
         self.thread.start()
@@ -36,7 +38,13 @@ class ControlHandler(BaseHTTPRequestHandler):
 
     def _host_allowed(self):
         try:
+            if self.server.restrict_network:
+                network = self.server.allowed_network
+                if network is None or ipaddress.ip_address(self.client_address[0]) not in network:
+                    return False
             hostname = urlsplit('http://' + self.headers.get('Host', '')).hostname
+            if self.server.restrict_network and hostname != self.connection.getsockname()[0]:
+                return False
             if hostname == 'localhost':
                 return True
             ipaddress.ip_address(hostname)

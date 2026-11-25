@@ -12,15 +12,9 @@ This plan describes remaining work. Delivered behavior belongs in [the capabilit
 
 ## Next Priority: A Practical Phone Interface
 
-Complete **UI01–UI04**, then **S01 streaming playback**, before optional entertainment or SecondContext work. Improve the existing interface and voice pipeline in bounded deliveries.
+Normal administration now opens at the device IP. Keep its trusted-LAN access rules and the separate single-code Wi-Fi setup as the interface evolves. See [phone access and recovery](docs/phone-setup.md).
 
-### UI01 — Open the device IP, without a port number
-
-Serve normal administration at `http://<device-IP>/` on port 80. Make installation and upgrades configure this reliably without running the assistant as root. Keep the current trusted-LAN access model explicit; port 80 does not add authentication or HTTPS.
-
-Keep the existing single-code Wi-Fi setup at `http://192.168.4.1`. The admin listener binds to connected private LAN IPv4 addresses, accepts requests from the same subnet and closes when it detects the setup hotspot. A failed bind should retry while voice continues working. Keep private configuration and service backups for recovery.
-
-Verify the new address on the home LAN. Exercise hotspot detection, rebinding and port conflicts with controlled listener tests. A confirmed phone interaction and passing listener checks are sufficient for this change. Previous onboarding and offline-control trials provide background evidence. Reserve a live network interruption for a specific failure that needs reproduction.
+Complete **UI02–UI04**, then **S01 streaming playback**, before optional entertainment or SecondContext work.
 
 ### UI02 — Separate pages for separate tasks
 

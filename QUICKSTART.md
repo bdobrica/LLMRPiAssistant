@@ -74,7 +74,7 @@ count = 3
 interrupt_button_gpio = 17
 
 [controls]
-host = 0.0.0.0
+host = lan
 mixer_control = Speaker
 ```
 
@@ -86,7 +86,7 @@ phone later. Keep the file private.
 
 In nano, press **Ctrl+O**, **Enter** to save, then **Ctrl+X** to exit.
 Phone access is for a **trusted home network**: anyone on that network can control
-the assistant. Do not forward port 8767 to the Internet or expose it on public event Wi-Fi.
+the assistant. Do not forward port 80 to the Internet or expose it on public event Wi-Fi.
 
 ## 4. Install and start
 
@@ -115,7 +115,7 @@ before starting it.
 
 ## 5. Check sound and add your key
 
-Connect your phone to the same Wi-Fi and open **`http://<device-IP>:8767`**, replacing
+Connect your phone to the same Wi-Fi and open **`http://<device-IP>/`**, replacing
 `<device-IP>` with the address above. Use the address, not `assistant.local`, for this page.
 
 1. Open **Settings**, enter your OpenAI API key and choose **Save & apply**.

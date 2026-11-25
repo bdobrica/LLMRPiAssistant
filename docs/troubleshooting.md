@@ -5,11 +5,14 @@ speaker problems from cloud/account problems without sending a recording online.
 
 ## The phone page won't open
 
-Check that phone and Pi are on the same network and that `[controls] host = 0.0.0.0`
+Check that phone and Pi are on the same network and that `[controls] host = lan`
 is saved in `rpi_assistant/config.ini`. Restart after a manual edit. Use
-`http://<device-IP>:8767`, with a literal IP from `hostname -I` on the Pi or your
+`http://<device-IP>/`, with a literal IP from `hostname -I` on the Pi or your
 router's device list. Guest Wi-Fi may prevent devices from reaching each other.
-The Wi-Fi onboarding page at `192.168.4.1` is separate and only runs during setup.
+For port-80 permissions, occupied ports or upgrade rollback, see
+[phone access recovery](phone-setup.md#upgrade-or-recover-access). Voice keeps working
+while the web listener retries. The Wi-Fi onboarding page at `192.168.4.1` is
+separate and only runs during setup; normal administration is closed then.
 
 ## No sound or very quiet sound
 

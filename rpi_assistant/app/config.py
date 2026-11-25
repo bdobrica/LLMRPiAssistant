@@ -105,10 +105,10 @@ class AudioOutputConfig:
 
 @dataclass
 class ControlsConfig:
-    """Local controls; LAN access is an explicit deployment choice."""
+    """Local controls on a private LAN; the service grants low-port binding."""
 
-    host: str = "127.0.0.1"
-    port: int = 8767
+    host: str = "lan"
+    port: int = 80
     enabled: bool = True
     mixer_card: str = "seeed2micvoicec"
     mixer_control: str = "Speaker"
@@ -117,6 +117,14 @@ class ControlsConfig:
     def __post_init__(self):
         if not 1 <= self.port <= 65535:
             raise ValueError("controls port must be between 1 and 65535")
+        if self.host not in ("lan", "0.0.0.0", "127.0.0.1"):
+            import ipaddress
+            try:
+                address = ipaddress.IPv4Address(self.host)
+            except ipaddress.AddressValueError:
+                raise ValueError("controls host must be lan, 127.0.0.1 or a private LAN IPv4 address") from None
+            if not address.is_private or address.is_loopback or address.is_unspecified:
+                raise ValueError("controls host must be a private LAN IPv4 address")
 
 
 @dataclass
@@ -560,7 +568,7 @@ def load_config(config_path: Optional[str] = None, *, allow_missing_api_key: boo
         controls=ControlsConfig(**{
             name: get_value("controls", name, "CONTROLS_" + name.upper(), default, kind)
             for name, default, kind in (
-                ("host", "127.0.0.1", str), ("port", 8767, int), ("enabled", True, bool),
+                ("host", "lan", str), ("port", 80, int), ("enabled", True, bool),
                 ("mixer_card", "seeed2micvoicec", str), ("mixer_control", "Speaker", str),
                 ("state_path", "~/.local/state/rpi-assistant/controls.json", str),
             )

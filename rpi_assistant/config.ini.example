@@ -175,12 +175,14 @@ require_signature = true
 [controls]
 # Settings include write-only provider keys and local microphone/speaker checks.
 # Save & apply is explicit; the private config.ini.phone-undo.json supports undo.
-# Phone page: use host = 0.0.0.0 only on a trusted private LAN.
-# Open http://<device-IP>:8767 (literal IP). No cloud or external assets.
+# Phone page: host = lan binds connected private IPv4 LAN addresses only.
+# Open http://<device-IP>/ (literal IP). Closed during Wi-Fi setup.
+# Port 80 requires the installed systemd service; do not run the assistant as root.
+# For terminal-only development use host = 127.0.0.1 and port = 8767.
 # Everyone on that LAN can control it; never expose this port to the Internet.
 enabled = true
-host = 127.0.0.1
-port = 8767
+host = lan
+port = 80
 mixer_card = seeed2micvoicec
 # Speaker for the wired HAT speaker; Headphone for its 3.5 mm output.
 mixer_control = Speaker
