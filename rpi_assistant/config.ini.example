@@ -180,3 +180,9 @@ state_path = ~/.local/state/rpi-assistant/controls.json
 state_path = ~/.local/state/rpi-assistant/timers.sqlite3
 # Repeat the local chime for up to this many seconds, then show a missed timer.
 alert_seconds = 120
+
+[household]
+# IANA timezone for reminder interpretation and display; restart after changes.
+# Existing reminders keep their scheduled UTC instant when this is changed.
+timezone = Europe/Bucharest
+state_path = ~/.local/state/rpi-assistant/household.sqlite3

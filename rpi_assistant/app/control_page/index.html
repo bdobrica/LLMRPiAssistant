@@ -7,6 +7,15 @@
 <h2>Speaker volume</h2><div class="buttons"><button id="down">Quieter</button><output id="volume">—</output><button id="up">Louder</button></div>
 <label for="level">Set volume (0–100)</label><div class="buttons"><input id="level" type="number" min="0" max="100" value="70"><button id="set">Set volume</button></div>
 <button id="new">New conversation</button>
+<h2>Shopping</h2><p id="household-error" role="status"></p>
+<label for="shopping-item">Add an item</label><div class="buttons"><input id="shopping-item" maxlength="120" placeholder="Milk"><button id="shopping-add">Add</button></div>
+<ul id="shopping"></ul>
+<h2>Reminders</h2><p id="reminder-zone"></p>
+<label for="reminder-text">Remind me to</label><input id="reminder-text" maxlength="160" placeholder="Take the bread out">
+<label for="reminder-time">Date and time in the timezone above</label><input id="reminder-time" type="datetime-local" step="1">
+<details><summary>If the clocks change at this time</summary><label for="reminder-occurrence">If the time occurs twice</label><select id="reminder-occurrence"><option value="unspecified">Ask me</option><option value="first">First occurrence</option><option value="second">Second occurrence</option></select></details>
+<button id="reminder-add">Save reminder</button><ul id="reminders"></ul>
+<p class="hint">One-off reminders use the local chime and show their text here, even without Internet. Stop or the device button dismisses ringing timers and reminders. Microphone mute does not silence them.</p>
 <h2>Timers</h2><p id="timer-error" role="status"></p>
 <label for="timer-name">Name (optional)</label><input id="timer-name" maxlength="64" placeholder="Tea">
 <div class="buttons"><label for="timer-minutes">Minutes</label><input id="timer-minutes" type="number" min="0" max="10080" value="5">

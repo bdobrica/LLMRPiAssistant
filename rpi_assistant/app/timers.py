@@ -182,8 +182,10 @@ def timer_action(timers, name, arguments, request_id):
 
 
 class TimerAlerts:
-    def __init__(self, timers, controls):
+    def __init__(self, timers, controls, reminders=None):
         self.timers, self.controls = timers, controls
+        self.reminders = reminders
+        self.reminder_error = None
         self.stop_event = threading.Event()
         self.silenced = set()
         self.active = False
@@ -194,17 +196,34 @@ class TimerAlerts:
     def start(self):
         self.thread.start()
 
+    @staticmethod
+    def _key(row):
+        return (row.get('kind', 'timer'), row['id'])
+
+    def _reminder_rows(self, update=False):
+        if self.reminders is None:
+            return []
+        try:
+            rows = self.reminders.tick() if update else self.reminders.list()
+            if update:
+                self.reminder_error = None
+            return rows
+        except Exception:
+            self.reminder_error = 'Reminder storage is unavailable; alerts cannot be confirmed.'
+            return []
+
     def ringing(self):
-        return [r for r in self.timers.list() if r['state']=='ringing' and r['id'] not in self.silenced]
+        return [r for r in self.timers.list()+self._reminder_rows() if r['state']=='ringing' and self._key(r) not in self.silenced]
 
     def dismiss(self):
         with self.lock:
             rows = self.ringing()
             try:
                 for row in rows:
-                    self.timers.cancel(row['id'])
+                    store = self.reminders if row.get('kind') == 'reminder' else self.timers
+                    store.cancel(row['id'])
             finally:
-                self.silenced.update(r['id'] for r in rows)
+                self.silenced.update(self._key(r) for r in rows)
                 self.controls.playback.stop()
             return bool(rows)
 
@@ -216,8 +235,8 @@ class TimerAlerts:
                     self.stop_event.wait(.25)
                     continue
                 try:
-                    current = self.timers.tick()
-                    self.silenced.intersection_update(r["id"] for r in current)
+                    current = self.timers.tick()+self._reminder_rows(update=True)
+                    self.silenced.intersection_update(self._key(r) for r in current)
                     with self.controls.lock:
                         rows = self.ringing()
                         if rows and not self.active:

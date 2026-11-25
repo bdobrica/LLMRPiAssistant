@@ -124,6 +124,19 @@ class TimerConfig:
 
 
 @dataclass
+class HouseholdConfig:
+    state_path: str = "~/.local/state/rpi-assistant/household.sqlite3"
+    timezone: str = "Europe/Bucharest"
+
+    def __post_init__(self):
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(self.timezone)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("household timezone must be an installed IANA zone, e.g. Europe/Bucharest") from exc
+
+
+@dataclass
 class LEDConfig:
     """LED configuration."""
 
@@ -198,6 +211,7 @@ class Config:
     mcp: MCPConfig
     controls: ControlsConfig = field(default_factory=ControlsConfig)
     timers: TimerConfig = field(default_factory=TimerConfig)
+    household: HouseholdConfig = field(default_factory=HouseholdConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
@@ -475,6 +489,10 @@ def load_config(config_path: Optional[str] = None) -> Config:
         app_store=app_store_config,
         rpiface=rpiface_config,
         mcp=mcp_config,
+        household=HouseholdConfig(
+            state_path=get_value("household", "state_path", "HOUSEHOLD_STATE_PATH", "~/.local/state/rpi-assistant/household.sqlite3", str),
+            timezone=get_value("household", "timezone", "HOUSEHOLD_TIMEZONE", "Europe/Bucharest", str),
+        ),
         timers=TimerConfig(
             state_path=get_value("timers", "state_path", "TIMERS_STATE_PATH", "~/.local/state/rpi-assistant/timers.sqlite3", str),
             alert_seconds=get_value("timers", "alert_seconds", "TIMERS_ALERT_SECONDS", 120, int),

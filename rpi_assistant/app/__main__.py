@@ -25,6 +25,7 @@ from .voice_command import VoiceCommandHandler
 from .controls import LocalControls
 from .control_server import ControlServer
 from .timers import Timers, TimerAlerts
+from .household import Household
 from .rpiface_client import RPiFaceClient
 
 try:
@@ -193,7 +194,9 @@ def main():
         handler.controls = controls
         timers = Timers(config.timers.state_path, config.timers.alert_seconds)
         openai_client.timers = controls.timers = timers
-        timer_alerts = TimerAlerts(timers, controls)
+        household = Household(config.household.state_path, config.household.timezone, config.timers.alert_seconds)
+        openai_client.household = controls.household = household
+        timer_alerts = TimerAlerts(timers, controls, reminders=household)
         controls.timer_alerts = timer_alerts
         timer_alerts.start()
         try:

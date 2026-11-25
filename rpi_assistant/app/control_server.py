@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import threading
 from urllib.parse import urlsplit
+from .household import HouseholdInputError
 
 
 class ControlServer(HTTPServer):
@@ -82,6 +83,8 @@ class ControlHandler(BaseHTTPRequestHandler):
                 raise ValueError("Expected an object")
             message = self.server.controls.command(payload.get('action'), payload.get('value'))
             self._reply(200, {"message": message, **self.server.controls.status()})
+        except HouseholdInputError as exc:
+            self._reply(400, {"error": str(exc)})
         except (ValueError, TypeError):
             self._reply(400, {"error": "Invalid control request"})
         except Exception as exc:

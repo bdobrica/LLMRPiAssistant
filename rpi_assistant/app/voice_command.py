@@ -51,7 +51,7 @@ class VoiceCommandHandler:
                 usage = {"model": "local_control", "total_tokens": 0}
             else:
                 stage = "app routing"
-                timer_request = self.controls and self.controls.timers and re.search(r"\btimers?\b", transcription, re.I)
+                timer_request = self.controls and ((self.controls.timers and re.search(r"\btimers?\b", transcription, re.I)) or (self.controls.household and re.search(r"\b(remind|reminders?|shopping|groceries|grocery)\b", transcription, re.I)))
                 app_response = None if timer_request else self.apps.handle(transcription)
                 classifier_usage = None
                 if not timer_request and app_response is None and self.apps.should_classify_app_intent(transcription):

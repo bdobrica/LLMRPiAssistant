@@ -7,6 +7,7 @@ import subprocess
 import threading
 
 from .playback import PlaybackStopped
+from .household import HouseholdInputError
 
 
 def voice_control(text):
@@ -65,6 +66,7 @@ class LocalControls:
         self.state_path = Path(config.state_path).expanduser()
         self.error = None
         self.timers = None
+        self.household = None
         self.timer_alerts = None
         self.client.cancel_check = self.check
         # Fail closed for corrupt/unreadable persisted mute settings.
@@ -112,6 +114,30 @@ class LocalControls:
                         self.timer_alerts.dismiss()
                 finally:
                     self._stop()
+            elif action == "reminder_create":
+                if not self.household or not isinstance(value, dict):
+                    raise HouseholdInputError("Reminder text and date/time are required.")
+                row = self.household.create_reminder(value.get("text"), value.get("local_time", ""),
+                                                     occurrence=value.get("occurrence", "unspecified"))
+                return ("Reminder already scheduled for " if row["already_present"] else "Reminder scheduled for ") + row["due_local"]
+            elif action == "reminder_cancel":
+                if not self.household:
+                    raise HouseholdInputError("Reminders are unavailable.")
+                self.household.cancel(value)
+                if self.timer_alerts and self.timer_alerts.active:
+                    self.playback.stop()
+                return "Reminder cancelled."
+            elif action == "shopping_add":
+                if not self.household:
+                    raise HouseholdInputError("Shopping is unavailable.")
+                item = self.household.add_item(value)
+                return (f"{item['item']} is already on Shopping." if item['already_present']
+                        else f"Added {item['item']} to Shopping.")
+            elif action == "shopping_remove":
+                if not self.household:
+                    raise HouseholdInputError("Shopping is unavailable.")
+                item = self.household.remove_item(value)
+                return f"{item['item']} is no longer on Shopping."
             elif action == "timer_create":
                 if not self.timers or not isinstance(value, dict):
                     raise ValueError("Timer settings are required")
@@ -197,4 +223,13 @@ class LocalControls:
             except Exception:
                 state["timers"] = []
                 state["timer_error"] = "Timer storage is unavailable; no timer change can be confirmed."
+        if self.household:
+            state["timezone"] = str(self.household.zone)
+            try:
+                state["reminders"] = self.household.list()
+                state["shopping"] = self.household.shopping()
+                state["household_error"] = self.timer_alerts.reminder_error if self.timer_alerts else None
+            except Exception:
+                state["reminders"], state["shopping"] = [], []
+                state["household_error"] = "Reminder/Shopping storage is unavailable; changes cannot be confirmed."
         return state
