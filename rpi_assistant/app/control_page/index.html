@@ -11,6 +11,8 @@
 <div class="buttons"><button id="check-speaker">Play test sound</button><button id="check-microphone">Record 3 seconds and play back</button></div>
 <p id="audio-check" role="status"></p><p class="hint">Microphone checks stay on this device and are deleted after playback. Speak when the check starts; Stop cancels it. Unmute first to record. The test sound can play while muted.</p>
 <details id="settings"><summary>Settings</summary>
+<label class="check"><input id="conversation-logging" type="checkbox">Save conversation text and source evidence in private local log files</label>
+<p class="hint">Off by default. Console/journal output never includes conversation text. Turning this off keeps existing files until deletion or expiry.</p>
 <p class="hint">Use this page only on your trusted home Wi-Fi. It has no sign-in or HTTPS. Changes take effect only when you press Save &amp; apply.</p>
 <label for="follow-up">Follow-up listening (seconds; 0 disables)</label><input id="follow-up" type="number" min="0" max="15" step="0.5">
 <label for="timezone">Reminder timezone</label><input id="timezone" placeholder="Europe/Bucharest" maxlength="100">
@@ -25,6 +27,9 @@
 <div class="buttons"><button id="settings-save">Save &amp; apply</button><button id="settings-undo" disabled>Undo last change</button><button id="settings-reload">Reload settings</button></div>
 <p id="settings-message" role="status"></p>
 </details>
+<h2>Conversation privacy</h2><p id="privacy-status"></p>
+<button id="privacy-delete">Delete local conversation data</button>
+<p class="hint">Clears conversation memory and this installation's log/audio files. Keeps timers, reminders, Shopping, app data, settings and keys. Historical system journals, other installations and provider records are outside this action.</p>
 <h2>Shopping</h2><p id="household-error" role="status"></p>
 <label for="shopping-item">Add an item</label><div class="buttons"><input id="shopping-item" maxlength="120" placeholder="Milk"><button id="shopping-add">Add</button></div>
 <ul id="shopping"></ul>

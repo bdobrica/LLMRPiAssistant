@@ -69,7 +69,7 @@ async def _render(config, text: str, path: Path, voice: str) -> dict:
 def generate_realtime_speech(config, text: str, output_path: str, voice: str) -> dict:
     """Publish a WAV only after completion; close sessions on failure or timeout."""
     destination = Path(output_path)
-    fd, name = tempfile.mkstemp(prefix=".speech-", suffix=".wav", dir=destination.parent)
+    fd, name = tempfile.mkstemp(prefix=".assistant-speech-", suffix=".wav", dir=destination.parent)
     os.close(fd)
     temporary = Path(name)
     try:

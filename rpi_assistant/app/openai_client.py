@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from openai import OpenAI
 
 from .playback import PlaybackStopped
+from .privacy import private_audio
 from .config import OpenAIConfig
 from .timers import TIMER_TOOLS, TIMER_NAMES, TIMER_INSTRUCTIONS, timer_action
 from .household import HOUSEHOLD_TOOLS, HOUSEHOLD_NAMES, HOUSEHOLD_MUTATIONS, household_instructions, household_action
@@ -344,7 +345,7 @@ class OpenAIClient:
             parsed = json.loads(content)
             return _clamp_float(parsed.get("relatedness"))
         except Exception as e:
-            print(f"⚠️  Conversation relevance check skipped: {e}")
+            print(f"Conversation relevance check skipped ({type(e).__name__})")
             return None
 
     def classify_app_intent(self, user_message: str, app_context: dict) -> tuple[Optional[dict], dict]:
@@ -399,7 +400,13 @@ class OpenAIClient:
         response = self.client.audio.speech.create(
             model=self.config.tts_model, voice=voice, input=text,
         )
-        response.stream_to_file(output_path)
+        with private_audio(output_path):
+            pass
+        try:
+            response.stream_to_file(output_path)
+        except Exception:
+            Path(output_path).unlink(missing_ok=True)
+            raise
         return {}
 
     def process_voice_command(self, audio_file_path: str) -> tuple[str, str, dict]:

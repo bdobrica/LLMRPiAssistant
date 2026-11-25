@@ -5,7 +5,7 @@ from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock, patch
 
-from rpi_assistant.app.config import OpenAIConfig, load_config
+from rpi_assistant.app.config import OpenAIConfig, LoggingConfig, load_config
 from rpi_assistant.app.logger import InteractionLogger
 from rpi_assistant.app.openai_client import OpenAIClient
 from rpi_assistant.app.web_lookup import LOOKUP_NAME, UNAVAILABLE, lookup, parse_lookup
@@ -136,12 +136,12 @@ class WebLookupTests(unittest.TestCase):
         client.client.responses.create.assert_not_called()
 
     def test_interaction_log_keeps_cited_evidence_with_the_answer(self):
-        logger = object.__new__(InteractionLogger)
-        logger.logger = Mock()
         evidence = parse_lookup(search_response(), "latest Python")
-        logger.log_complete_interaction("synthetic.wav", "latest Python", evidence["answer"],
-                                        {"lookup": evidence, "spoken_response": evidence["spoken_answer"]})
-        entry = json.loads(logger.logger.info.call_args.args[0])
+        with TemporaryDirectory() as directory:
+            logger = InteractionLogger(LoggingConfig(log_file=str(Path(directory)/'interactions.log'), conversation_logging=True))
+            logger.log_complete_interaction("synthetic.wav", "latest Python", evidence["answer"],
+                                            {"lookup": evidence, "spoken_response": evidence["spoken_answer"]})
+            entry = logger.get_log_summary()[0]
         self.assertEqual(entry["lookup"], evidence)
         self.assertEqual(entry["spoken_response"], evidence["spoken_answer"])
 

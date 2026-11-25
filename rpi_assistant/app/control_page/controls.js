@@ -8,6 +8,7 @@ function loadSettings(s) {
   el('follow-up').value=s.follow_up_seconds;
   el('timezone').value=s.reminder_timezone;
   el('weather-city').value=s.weather_city;
+  el('conversation-logging').checked=Boolean(s.conversation_logging);
   for(const id of ['openai-key','weather-key','ipgeolocation-key']) el(id).value='';
   el('clear-weather-key').checked=el('clear-ipgeolocation-key').checked=false;
 }
@@ -35,6 +36,7 @@ function show(s) {
     el('weather-location').textContent=lastSettings.weather_location?'Last resolved city: '+lastSettings.weather_location:'City will be resolved on the next weather request.';
     if(lastSettings.error) el('settings-message').textContent=lastSettings.error;
   }
+  if(s.privacy) el('privacy-status').textContent=(s.privacy.conversation_logging?'Conversation text logging enabled. ':'Conversation text logging off. ')+s.privacy.retention_days+'-day retention, '+(s.privacy.max_bytes/1048576).toFixed(2)+' MiB file cap. '+(s.privacy.error||'');
   if(s.error) el('message').textContent = s.error;
   el('household-error').textContent = s.household_error || '';
   el('reminder-zone').textContent = s.timezone ? 'Timezone: ' + s.timezone : 'Reminder timezone unavailable';
@@ -112,6 +114,7 @@ el('settings-reload').onclick=()=>{if(lastSettings) {loadSettings(lastSettings);
 async function saveSettings(undo=false) {
   const value=undo?{revision:lastSettings?.revision}:{
     revision:settingsRevision,follow_up_seconds:Number(el('follow-up').value),reminder_timezone:el('timezone').value.trim(),weather_city:el('weather-city').value.trim(),
+    conversation_logging:el('conversation-logging').checked,
     openai_key:el('openai-key').value.trim(),weather_key:el('weather-key').value.trim(),ipgeolocation_key:el('ipgeolocation-key').value.trim(),
     clear_weather_key:el('clear-weather-key').checked,clear_ipgeolocation_key:el('clear-ipgeolocation-key').checked
   };
@@ -125,5 +128,10 @@ async function saveSettings(undo=false) {
 }
 el('settings-save').onclick=()=>saveSettings();
 el('settings-undo').onclick=()=>saveSettings(true);
+el('privacy-delete').onclick=async()=>{
+  if(!window.confirm("Delete conversation memory and this installation's logs/audio? Saved household data and settings stay. Historical journals, other installations and provider records are not deleted.")) return;
+  el('privacy-delete').disabled=true;
+  try {await command('privacy_delete',{confirm:true});} finally {el('privacy-delete').disabled=false;}
+};
 async function poll() { await refresh(); setTimeout(poll, 2500); }
 poll();

@@ -164,6 +164,7 @@ async def _session(server: MCPServerConfig, timeout: float) -> AsyncIterator[Any
     """Open and initialize one SDK session while keeping imports optional."""
     try:
         from mcp import Client, ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
         from mcp.client.streamable_http import streamable_http_client
     except ImportError as exc:
         raise RuntimeError("MCP support is not installed") from exc
@@ -179,12 +180,14 @@ async def _session(server: MCPServerConfig, timeout: float) -> AsyncIterator[Any
             args=list(server.args),
             env=environment,
         )
-        async with Client(parameters, read_timeout_seconds=timeout) as client:
-            yield client
+        # Server stderr is uncontrolled and may echo tool arguments/results.
+        with open(os.devnull, "w") as errors:
+            async with Client(stdio_client(parameters, errlog=errors), read_timeout_seconds=timeout, cache=None) as client:
+                yield client
         return
 
     if not server.token_env:
-        async with Client(server.url, read_timeout_seconds=timeout) as client:
+        async with Client(server.url, read_timeout_seconds=timeout, cache=None) as client:
             yield client
         return
 

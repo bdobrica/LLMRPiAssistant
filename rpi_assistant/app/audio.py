@@ -16,6 +16,7 @@ from openwakeword import MODELS as OWW_models
 
 from .config import AudioConfig, RecordingConfig, WakeWordConfig
 from .playback import PlaybackInterrupted
+from .privacy import private_audio
 
 
 def pick_input_device(match: str) -> int:
@@ -57,11 +58,12 @@ def save_wav(path: str, audio_float: np.ndarray, sample_rate: int) -> None:
         sample_rate: Sample rate in Hz.
     """
     audio_i16 = float_to_int16(audio_float)
-    with wave.open(path, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)  # int16
-        wf.setframerate(sample_rate)
-        wf.writeframes(audio_i16.tobytes())
+    with private_audio(path) as output:
+        with wave.open(output, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes(audio_i16.tobytes())
 
 
 class WakeWordRecorder:
@@ -225,7 +227,7 @@ class WakeWordRecorder:
                     # No audio available, just continue
                     continue
         except Exception as e:
-            print(f"\n❌ Audio stream error: {e}")
+            print(f"Audio stream failed ({type(e).__name__})")
             raise
         finally:
             self.stop()
@@ -391,12 +393,12 @@ class WakeWordRecorder:
                 if self.stream.active:
                     self.stream.stop()
             except Exception as e:
-                print(f"Warning: Error stopping audio stream: {e}")
+                print(f"Stopping audio stream failed ({type(e).__name__})")
             
             try:
                 self.stream.close()
             except Exception as e:
-                print(f"Warning: Error closing audio stream: {e}")
+                print(f"Closing audio stream failed ({type(e).__name__})")
             finally:
                 self.stream = None
         
@@ -450,7 +452,7 @@ class WakeWordRecorder:
                 # Drop frame if queue is full (overflow condition)
                 pass
         except Exception as e:
-            print(f"\n⚠️  Error in audio callback: {e}")
+            print(f"Audio callback failed ({type(e).__name__})")
             # Don't crash the callback thread - just log and continue
     
     def _process_chunk(self, mono: np.ndarray) -> None:
@@ -612,6 +614,10 @@ class WakeWordRecorder:
             except queue.Full:
                 print("\n⚠️  Recording worker is busy; dropping completed recording.")
 
+        try:
+            Path(self.recording_config.output_path).unlink(missing_ok=True)
+        except OSError:
+            print("Dropped recording cleanup failed; check storage permissions.")
         self._finish_processing()
 
     def _recording_worker(self) -> None:
@@ -630,9 +636,13 @@ class WakeWordRecorder:
                     except PlaybackInterrupted:
                         correction = True
                     except Exception as e:
-                        print(f"\n⚠️  Error processing recording: {e}")
+                        print(f"\n⚠️  Recording processing failed ({type(e).__name__})")
             finally:
                 if recording_path is not None:
+                    try:
+                        Path(recording_path).unlink(missing_ok=True)
+                    except OSError:
+                        print("Temporary recording cleanup failed; check storage permissions.")
                     try:
                         self._finish_processing(allow_follow_up=allow_follow_up, correction=correction)
                     finally:
@@ -770,7 +780,12 @@ class WakeWordRecorder:
 
         while not self.recording_queue.empty():
             try:
-                self.recording_queue.get_nowait()
+                discarded = self.recording_queue.get_nowait()
+                if discarded is not None:
+                    try:
+                        Path(discarded).unlink(missing_ok=True)
+                    except OSError:
+                        print("Queued recording cleanup failed; check storage permissions.")
                 self.recording_queue.task_done()
             except queue.Empty:
                 break

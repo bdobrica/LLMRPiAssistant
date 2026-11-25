@@ -84,9 +84,7 @@ class VoiceCommandHandler:
                 with wave.open(audio_path, "rb") as audio:
                     duration = audio.getnframes() / audio.getframerate()
             self.logger.log_complete_interaction(audio_path, transcription, response, usage, duration)
-            print(f'\n📝 You said: "{transcription}"')
-            print(f"\n💬 Assistant: {response}")
-            print(f"\n📊 Tokens: {usage['total_tokens']}")
+            print("Voice answer ready.")
 
             if not self.config.audio_output.enabled:
                 return False
@@ -128,6 +126,11 @@ class VoiceCommandHandler:
             self._feedback("offline.mp3" if self.is_online() is False else "request_failed.wav")
             return False
         finally:
+            for path in (Path(audio_path), Path(self.config.audio_output.tts_output_path)):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    print("Temporary voice audio cleanup failed; check storage permissions.")
             self.rpiface.set_state("idle")
             self.client.mark_response_output_finished()
             if self.controls and turn_started:

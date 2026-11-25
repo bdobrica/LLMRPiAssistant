@@ -22,6 +22,7 @@ class SettingsError(ValueError):
 
 
 FIELDS = {
+    "conversation_logging": ("logging", "conversation_logging"),
     "follow_up_seconds": ("recording", "follow_up_window_seconds"),
     "reminder_timezone": ("household", "timezone"),
     "weather_city": ("weather", "city"),
@@ -74,6 +75,7 @@ class PhoneSettings:
     def _values(self):
         c = self.config
         return {
+            "conversation_logging": c.logging.conversation_logging,
             "follow_up_seconds": c.recording.follow_up_window_seconds,
             "reminder_timezone": c.household.timezone, "weather_city": c.weather.city,
             "openai_key": c.openai.api_key, "weather_key": c.weather.api_key,
@@ -121,6 +123,8 @@ class PhoneSettings:
                     raise SettingsError("Choose either replacing or removing that key.")
                 values[key] = ""
         seconds = values["follow_up_seconds"]
+        if type(values["conversation_logging"]) is not bool:
+            raise SettingsError("Conversation logging must be explicitly enabled or disabled.")
         if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 0 <= seconds <= 15:
             raise SettingsError("Follow-up listening must be between 0 and 15 seconds; zero disables it.")
         try:
@@ -159,6 +163,7 @@ class PhoneSettings:
         sdk, weather, zone, vad = prepared
         c, controls = self.config, self.controls
         c.recording.follow_up_window_seconds = values["follow_up_seconds"]
+        c.logging.conversation_logging = values["conversation_logging"]
         c.household.timezone = values["reminder_timezone"]
         c.openai.api_key = values["openai_key"]
         c.weather = weather.config
@@ -192,7 +197,7 @@ class PhoneSettings:
                     backup = json.loads(self.backup.read_text())
                     if backup["applied_revision"] != revision(before):
                         raise ValueError()
-                    values = backup["values"]
+                    values = {**old, **backup["values"]}
                     after = backup["config_text"].encode() if backup["config_text"] is not None else None
                 except Exception:
                     raise SettingsError("No matching saved change is available to undo.") from None

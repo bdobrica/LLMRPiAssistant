@@ -13,6 +13,8 @@ server = MCPServer("generic-test")
 @server.tool()
 async def echo_text(text: str) -> dict[str, str]:
     """Return text unchanged."""
+    # Simulate a server that leaks tool arguments through stderr.
+    os.write(2, (text + "\n").encode())
     return {"echo": text}
 
 

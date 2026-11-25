@@ -7,6 +7,7 @@ A voice-controlled assistant using:
 - OpenAI Realtime for voice responses
 """
 import signal
+import os
 import sys
 import threading
 from pathlib import Path
@@ -29,6 +30,7 @@ from .household import Household
 from .weather import Weather
 from .phone_settings import PhoneSettings
 from .audio_checks import AudioChecks
+from .privacy import ConversationPrivacy, quiet_provider_logs
 from .rpiface_client import RPiFaceClient
 
 try:
@@ -41,6 +43,8 @@ except ImportError:
 
 def main():
     """Main application entry point."""
+    os.umask(0o077)
+    quiet_provider_logs()
     recorder = None
     pixels = None
     connection_monitor_thread = None
@@ -56,6 +60,8 @@ def main():
     def cleanup():
         """Cleanup resources before exit."""
         stop_monitor.set()
+        if controls is not None and controls.privacy is not None:
+            controls.privacy.close()
         if controls is not None and controls.audio_checks is not None:
             controls.audio_checks.close()
         if timer_alerts is not None:
@@ -119,7 +125,7 @@ def main():
                 pixels = Pixels(num_pixels=config.led.count)
                 print(f"✨ LED pixels initialized ({config.led.count} LEDs)")
             except Exception as e:
-                print(f"⚠️  Could not initialize pixels: {e}")
+                print(f"Could not initialize pixels ({type(e).__name__})")
                 pixels = None
 
         print("=" * 60)
@@ -200,6 +206,8 @@ def main():
         controls.connection_status = lambda: connection_state["online"]
         controls.settings = PhoneSettings(config, Path(__file__).resolve().parents[1] / "config.ini", controls)
         controls.audio_checks = AudioChecks(controls)
+        controls.privacy = ConversationPrivacy(config, logger, controls)
+        controls.privacy.start()
         handler.controls = controls
         timers = Timers(config.timers.state_path, config.timers.alert_seconds)
         openai_client.timers = controls.timers = timers
@@ -222,7 +230,7 @@ def main():
         cleanup()
         sys.exit(0)
     except Exception as e:
-        print(f"\n❌ Fatal error: {e}")
+        print(f"Fatal assistant error ({type(e).__name__}); check configuration and hardware.")
         cleanup()
         sys.exit(1)
     finally:

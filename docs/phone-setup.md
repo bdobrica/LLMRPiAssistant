@@ -19,6 +19,8 @@ Expand **Settings** to edit:
 - OpenAI key, optional Open-Meteo paid key, and optional ipgeolocation.io key.
   Keys are write-only. Blank fields keep existing values; optional keys have explicit
   removal checkboxes. Other reasoning providers require an integration first.
+- Optional conversation logging, off by default. Content goes only to private,
+  bounded files; see [retention and deletion](conversation-privacy.md).
 
 Typing does nothing until **Save & apply**. The settings apply without restarting
 capture or clearing conversation history. The page never returns a key, only whether
@@ -54,7 +56,8 @@ with access to that LAN can control the device and replace keys; traffic is not
 encrypted. Use it only on your own trusted network and never forward its port to
 the Internet. Cross-origin browser requests remain rejected. No secret is placed in
 status responses, rendered HTML, browser storage or application error messages.
-Broader onboarding security/privacy remains H02/H01, outside this item.
+Broader onboarding security remains H02. H01 adds local conversation-data deletion
+and private, opt-in content logs; see [privacy boundaries](conversation-privacy.md).
 
 ## Microphone and speaker checks
 

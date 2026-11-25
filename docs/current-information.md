@@ -42,12 +42,12 @@ before budgeting. Model selection and source quality still affect results.
   is not proof that a claim is correct. Live access does not guarantee every result
   is newly fetched. Retrieval time is distinct from a source's publication date.
 - Spoken answers name up to two source domains. Displayed answers preserve Markdown
-  links. The existing structured interaction log retains the query, retrieval time,
+  links. With conversation logging explicitly enabled, the private interaction log retains the query, retrieval time,
   original provider-cited answer text (a summary, not a page snapshot), citation
   titles/URLs, up to 20 consulted URLs, provider response
   ID and lookup usage. Consulted URLs are not necessarily cited supporting evidence.
-  Logging privacy/retention remains the separate H01 item; no new logging service is
-  introduced. Raw pages are not downloaded or stored on the Pi.
+  Default logs contain no queries or evidence. See [privacy and retention](conversation-privacy.md).
+  Raw pages are not downloaded or stored on the Pi.
 - The lookup reader has only read-only web search, with no app/MCP/action tools.
   Its result returns directly as the answer; it cannot trigger another action call
   within that lookup. Co-requested actions are blocked and reported as unperformed;

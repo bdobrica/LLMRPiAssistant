@@ -149,6 +149,15 @@ class LoggingConfig:
 
     log_file: str = "openai_interactions.log"
     log_level: str = "INFO"
+    conversation_logging: bool = False
+    retention_days: int = 7
+    max_bytes: int = 1048576
+
+    def __post_init__(self):
+        if type(self.conversation_logging) is not bool:
+            raise ValueError("conversation_logging must be boolean")
+        if not 1 <= self.retention_days <= 30 or not 4096 <= self.max_bytes <= 16777216:
+            raise ValueError("log retention must be 1-30 days and 4096-16777216 bytes")
 
 
 @dataclass
@@ -450,6 +459,9 @@ def load_config(config_path: Optional[str] = None, *, allow_missing_api_key: boo
     logging_config = LoggingConfig(
         log_file=get_value("logging", "log_file", "LOG_FILE", "openai_interactions.log", str),
         log_level=get_value("logging", "log_level", "LOG_LEVEL", "INFO", str),
+        conversation_logging=get_value("logging", "conversation_logging", "CONVERSATION_LOGGING", False, bool),
+        retention_days=get_value("logging", "retention_days", "LOG_RETENTION_DAYS", 7, int),
+        max_bytes=get_value("logging", "max_bytes", "LOG_MAX_BYTES", 1048576, int),
     )
 
     from .app_repository import load_default_repository_public_key

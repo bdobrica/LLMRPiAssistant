@@ -115,6 +115,11 @@ tts_output_path = /tmp/response.wav
 
 [logging]
 # Logging configuration
+# Conversation content stays out of console/journal even when file logging is enabled.
+# Phone Settings can opt into private file content; deletion is a separate action.
+conversation_logging = false
+retention_days = 7
+max_bytes = 1048576
 # Where to save interaction logs
 log_file = openai_interactions.log
 # Logging level (DEBUG, INFO, WARNING, ERROR)

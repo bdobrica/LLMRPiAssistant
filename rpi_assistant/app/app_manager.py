@@ -647,7 +647,7 @@ class AppManager:
                 )
             except Exception as exc:
                 self.repository_load_errors.append((str(root), str(exc)))
-                print(f"⚠️  Could not load app store repository {root}: {exc}")
+                print(f"App store repository unavailable ({type(exc).__name__})")
                 continue
 
             if repository is not None:

@@ -54,8 +54,8 @@ Optional [ipgeolocation.io v3](https://ipgeolocation.io/documentation/ip-locatio
 uses its separate key and current account allowance. It receives the public source
 IP and returns city coordinates/timezone; the assistant neither saves nor logs the
 returned IP. Only the resolved city/coordinates are passed to the weather provider.
-Keep keys in private config/environment. Existing interaction logs retain city and
-weather evidence; broader transcript privacy/retention remains H01.
+Keep keys in private config/environment. City and weather evidence enter private
+interaction logs only with explicit opt-in; see [privacy and retention](conversation-privacy.md).
 
 Weather is fetched per request, without polling or a cached forecast fallback. Each
 HTTP operation has an eight-second default socket timeout, no automatic retries and
@@ -74,7 +74,7 @@ and whole-week summaries are outside this item.
 
 Answers are formatted directly from validated numbers. Provider strings never
 become executable instructions or app actions. Conversation history and the existing
-`lookup` log retain values, source, validity/retrieval times and selected date. Model
+opt-in `lookup` log retain values, source, validity/retrieval times and selected date. Model
 selection of a tool, city intent and relative dates still needs correct interpretation.
 An explicitly named other city can use F04 web lookup without changing home location;
 that route retains F04's source-quality limits. Co-requested actions are not executed.

@@ -70,6 +70,7 @@ class LocalControls:
         self.timer_alerts = None
         self.settings = None
         self.audio_checks = None
+        self.privacy = None
         self.connection_status = lambda: None
         self.client.cancel_check = self.check
         # Fail closed for corrupt/unreadable persisted mute settings.
@@ -113,7 +114,11 @@ class LocalControls:
 
     def command(self, action, value=None):
         with self.lock:
-            if action in ("settings_apply", "settings_undo"):
+            if action == "privacy_delete":
+                if self.privacy is None:
+                    raise ValueError("Privacy controls unavailable")
+                return self.privacy.delete(value)
+            elif action in ("settings_apply", "settings_undo"):
                 if self.settings is None:
                     raise ValueError("Phone settings unavailable")
                 return self.settings.change(value, undo=action == "settings_undo")
@@ -250,4 +255,6 @@ class LocalControls:
             state["settings"] = self.settings.status()
         if self.audio_checks:
             state["audio_check"] = {"active": self.audio_checks.active, **self.audio_checks.result}
+        if self.privacy:
+            state["privacy"] = self.privacy.status()
         return state

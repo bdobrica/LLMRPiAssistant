@@ -105,6 +105,10 @@ sudo journalctl -u piwifi-manager.service -f
 tail -f rpi_assistant/openai_interactions.log
 ```
 
+Conversation content is excluded from new logs by default. Phone Settings can enable
+private content logs; the page also provides confirmed local conversation-data deletion.
+See [privacy, retention and historical-log limits](docs/conversation-privacy.md).
+
 ### Audio Testing
 ```bash
 # Test speaker
